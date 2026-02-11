@@ -1,0 +1,7 @@
+{
+  "name": "ColmaFacil POS",
+  "description": "Sistema de gestión y facturación para colmados dominicanos.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

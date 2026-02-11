@@ -1,0 +1,65 @@
+import React, { useState, useEffect } from 'react';
+import { DataService } from '../services/data';
+import { PointOfSale } from '../types';
+import { Globe, MapPin, ExternalLink, Search } from 'lucide-react';
+
+interface ClientDiscoveryProps {
+    onSwitchPos: (id: number) => void;
+}
+
+const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({ onSwitchPos }) => {
+    const [posList, setPosList] = useState<PointOfSale[]>([]);
+    const [searchTerm, setSearchTerm] = useState('');
+
+    useEffect(() => {
+        DataService.getPointsOfSale().then(list => setPosList(list.filter(p => p.isActive)));
+    }, []);
+
+    const filtered = posList.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    return (
+        <div className="space-y-6">
+            <div className="text-center mb-10 mt-6">
+                <h2 className="text-3xl font-bold text-slate-800 mb-2">Descubre Barberías Afiliadas</h2>
+                <p className="text-slate-500">Encuentra y agenda con los mejores profesionales cerca de ti</p>
+            </div>
+
+            <div className="max-w-xl mx-auto mb-8 relative">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
+                <input 
+                    type="text" 
+                    placeholder="Buscar barbería..." 
+                    className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-[#ffd427] text-lg"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filtered.map(pos => (
+                    <div key={pos.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-lg transition-all group">
+                        <div className="h-32 bg-gradient-to-r from-[#ffd427] to-amber-500 flex items-center justify-center">
+                            <Globe size={48} className="text-slate-900 opacity-50 group-hover:scale-110 transition-transform duration-500" />
+                        </div>
+                        <div className="p-6">
+                            <h3 className="text-xl font-bold text-slate-800 mb-2">{pos.name}</h3>
+                            <div className="flex items-start text-slate-500 text-sm mb-4">
+                                <MapPin size={16} className="mr-1 mt-0.5 flex-shrink-0" />
+                                <span>{pos.address}</span>
+                            </div>
+                            <button 
+                                onClick={() => onSwitchPos(pos.id)}
+                                className="w-full py-2 bg-slate-50 hover:bg-[#ffd427] hover:text-slate-900 text-slate-600 font-medium rounded-lg transition-colors flex items-center justify-center group-hover:bg-[#ffd427] group-hover:text-slate-900 border border-transparent hover:border-[#e6be23]"
+                            >
+                                <span>Visitar Perfil</span>
+                                <ExternalLink size={16} className="ml-2" />
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+export default ClientDiscovery;
