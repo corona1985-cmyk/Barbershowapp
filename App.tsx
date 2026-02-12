@@ -249,6 +249,17 @@ const App: React.FC = () => {
         setCurrentView('shop');
     };
 
+    /** Al volver a Descubrir Barberías, el cliente debe limpiar la barbería seleccionada para que tenga que entrar de nuevo para ver las opciones. */
+    const handleChangeView = (view: ViewState) => {
+        if (userRole === 'cliente' && view === 'client_discovery') {
+            DataService.setActivePosId(null);
+            setCurrentPosId(null);
+            setCurrentPosName('');
+            DataService.clearCart();
+        }
+        setCurrentView(view);
+    };
+
     const renderView = () => {
         // Force re-render when POS changes using key
         const viewProps = { key: currentPosId }; 
@@ -435,7 +446,7 @@ const App: React.FC = () => {
         <div className="flex min-h-screen bg-slate-100 font-sans">
             <Sidebar 
                 currentView={currentView} 
-                onChangeView={setCurrentView} 
+                onChangeView={handleChangeView} 
                 onLogout={handleLogout}
                 userRole={userRole}
                 isOpen={isSidebarOpen}
