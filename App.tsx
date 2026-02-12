@@ -86,22 +86,29 @@ const App: React.FC = () => {
                     return;
                 }
                 const userData = JSON.parse(user);
+                const role = userData.role === 'empleado' ? 'barbero' : userData.role;
                 setIsAuthenticated(true);
-                setUserRole(userData.role);
+                setUserRole(role);
                 setFullName(userData.name);
 
-                if (userData.role === 'platform_owner') {
+                if (role === 'platform_owner') {
                     setCurrentView('master_dashboard');
-                } else if (userData.role === 'superadmin') {
+                } else if (role === 'superadmin') {
                     const posList = await DataService.getPointsOfSale();
                     setPointsOfSale(posList);
                     if (posList.length > 0) await handleSwitchPos(posList[0].id);
                     setCurrentView('admin_pos');
                 } else {
-                    const assignedPosId = userData.posId;
-                    if (assignedPosId) await handleSwitchPos(assignedPosId);
-                    if (userData.role === 'cliente') setCurrentView('client_discovery');
-                    else setCurrentView('dashboard');
+                    if (role === 'cliente') {
+                        DataService.setActivePosId(null);
+                        setCurrentPosId(null);
+                        setCurrentPosName('');
+                        setCurrentView('client_discovery');
+                    } else {
+                        const assignedPosId = userData.posId;
+                        if (assignedPosId) await handleSwitchPos(assignedPosId);
+                        setCurrentView('dashboard');
+                    }
                 }
             } catch (err) {
                 console.error('Error al restaurar sesión:', err);
@@ -148,25 +155,28 @@ const App: React.FC = () => {
                 return;
             }
 
-            const userData = { username: user.username, role: user.role, name: user.name, posId: user.posId, loginTime: new Date().toISOString() };
+            const role = user.role === 'empleado' ? 'barbero' : user.role;
+            const userData = { username: user.username, role, name: user.name, posId: user.posId, barberId: (user as any).barberId, loginTime: new Date().toISOString() };
             localStorage.setItem('currentUser', JSON.stringify(userData));
             setIsAuthenticated(true);
-            setUserRole(user.role);
+            setUserRole(role);
             setFullName(user.name);
 
-            if (user.role === 'platform_owner') setCurrentView('master_dashboard');
-            else if (user.role === 'superadmin') {
+            if (role === 'platform_owner') setCurrentView('master_dashboard');
+            else if (role === 'superadmin') {
                 const posList = await DataService.getPointsOfSale();
                 setPointsOfSale(posList);
                 if (posList.length > 0) await handleSwitchPos(posList[0].id);
                 setCurrentView('admin_pos');
             } else {
-                if (user.posId != null) {
-                    await handleSwitchPos(user.posId);
-                    setCurrentView(user.role === 'cliente' ? 'shop' : 'dashboard');
-                } else if (user.role === 'cliente') {
-                    await handleSwitchPos(1);
+                if (role === 'cliente') {
+                    DataService.setActivePosId(null);
+                    setCurrentPosId(null);
+                    setCurrentPosName('');
                     setCurrentView('client_discovery');
+                } else if (user.posId != null) {
+                    await handleSwitchPos(user.posId);
+                    setCurrentView('dashboard');
                 } else {
                     setLoginError('Usuario no tiene una Sede asignada. Contacte al administrador.');
                     setIsAuthenticated(false);
@@ -374,7 +384,7 @@ const App: React.FC = () => {
                                         className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
                                         value={username}
                                         onChange={e => setUsername(e.target.value)}
-                                        placeholder={loginTab === 'general' ? "Ej: dueno, cliente" : "master"}
+                                        placeholder={loginTab === 'general' ? "Ej: barbero, cliente" : "master"}
                                         required
                                     />
                                 </div>
@@ -405,7 +415,7 @@ const App: React.FC = () => {
                                 {loginTab === 'general' && (
                                     <div className="text-xs text-center text-slate-400 mt-4 space-y-1">
                                         <p><strong>SuperAdmin:</strong> superadmin / admin</p>
-                                        <p><strong>Sede 1:</strong> dueno / 123</p>
+                                        <p><strong>Sede 1:</strong> barbero / 123</p>
                                     </div>
                                 )}
                             </form>

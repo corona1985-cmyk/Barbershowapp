@@ -45,14 +45,23 @@ const Reports: React.FC = () => {
         { name: 'Pendientes', value: appointments.filter(a => a.estado === 'confirmada' || a.estado === 'pendiente').length },
     ];
 
-    // 3. Top Products
-    const productSales = products.map(p => {
-        return {
+    // 3. Top Products (ventas reales: unidades vendidas por producto)
+    const productUnitsSold: Record<number, number> = {};
+    sales.forEach(sale => {
+        (sale.items || []).forEach(item => {
+            if (item.type === 'producto') {
+                productUnitsSold[item.id] = (productUnitsSold[item.id] || 0) + item.quantity;
+            }
+        });
+    });
+    const productSales = products
+        .map(p => ({
             name: p.producto,
             stock: p.stock,
-            sales: Math.floor(Math.random() * 20)
-        };
-    }).sort((a, b) => b.sales - a.sales).slice(0, 5);
+            sales: productUnitsSold[p.id] || 0
+        }))
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 5);
 
     return (
         <div className="space-y-6 print-container">
@@ -160,7 +169,7 @@ const Reports: React.FC = () => {
                             <XAxis type="number" />
                             <YAxis dataKey="name" type="category" width={100} />
                             <Tooltip />
-                            <Bar dataKey="sales" fill="#ffd427" radius={[0, 4, 4, 0]} name="Ventas Estimadas" />
+                            <Bar dataKey="sales" fill="#ffd427" radius={[0, 4, 4, 0]} name="Unidades vendidas" />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>

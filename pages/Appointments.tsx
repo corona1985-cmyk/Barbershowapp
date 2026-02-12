@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
 import { Appointment, Barber, Client, Service, AppointmentForSale, SaleItem } from '../types';
 import { ViewState } from '../types';
-import { Calendar, Clock, User, Scissors, Check, X, Trash2, Printer, ChevronLeft, ChevronRight, MessageCircle, MapPin } from 'lucide-react';
+import { Calendar, Clock, User, Scissors, Check, X, Trash2, Printer, MessageCircle, MapPin } from 'lucide-react';
 
 interface AppointmentsProps {
     onChangeView?: (view: ViewState) => void;
@@ -38,7 +38,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         (async () => {
             const role = DataService.getCurrentUserRole();
             setUserRole(role);
-            const clientsLoader = role === 'empleado' ? DataService.getClientsWithActivity() : DataService.getClients();
+            const clientsLoader = role === 'barbero' ? DataService.getClientsWithActivity() : DataService.getClients();
             const [appts, barbersList, clientsList, servicesList, posList] = await Promise.all([
                 DataService.getAppointments(),
                 DataService.getBarbers(),
@@ -192,6 +192,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                 appointmentId: apt.id,
                 clienteId: apt.clienteId,
                 clienteNombre,
+                barberoId: apt.barberoId,
                 fecha: apt.fecha,
                 hora: apt.hora,
                 items,
@@ -292,8 +293,12 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         setShowModal(true);
     };
 
-    // Render for Clients (Visual Grid)
-    if (userRole === 'cliente') {
+    // Solo clientes ven "Reservar Cita" (elegir barbero/fecha/hora). Superadmin, admin y barbero ven "Agenda de Citas" para agendar.
+    const role = (userRole || '').toLowerCase();
+    const isClientView = role === 'cliente';
+
+    // Render for Clients (Visual Grid - Reservar Cita)
+    if (isClientView) {
         const slots = generateTimeSlots(selectedDate, selectedBarberForView);
         const currentBarber = barbers.find(b => b.id === selectedBarberForView);
         

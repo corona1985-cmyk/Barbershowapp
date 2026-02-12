@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Credenciales Twilio (no subir a Git)
+configurar-twilio.ps1
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

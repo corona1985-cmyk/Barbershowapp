@@ -1,23 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
-import { SystemUser, Permissions, UserRole, PointOfSale } from '../types';
-import { Shield, Plus, Edit2, Trash2, CheckSquare, Square, MapPin, X } from 'lucide-react';
+import { SystemUser, Permissions, UserRole, PointOfSale, Barber } from '../types';
+import { Shield, Plus, Edit2, Trash2, CheckSquare, Square, MapPin, X, Scissors } from 'lucide-react';
 
-const ROLES_WITH_SEDE: UserRole[] = ['dueno', 'admin', 'empleado', 'cliente'];
+const ROLES_WITH_SEDE: UserRole[] = ['admin', 'barbero', 'cliente'];
 
 const UserAdmin: React.FC = () => {
     const [users, setUsers] = useState<SystemUser[]>([]);
     const [pointsOfSale, setPointsOfSale] = useState<PointOfSale[]>([]);
+    const [barbersByPos, setBarbersByPos] = useState<Barber[]>([]);
     const [showModal, setShowModal] = useState(false);
-    const [currentUser, setCurrentUser] = useState<Partial<SystemUser>>({ username: '', role: 'empleado', permissions: {} });
+    const [currentUser, setCurrentUser] = useState<Partial<SystemUser>>({ username: '', role: 'barbero', permissions: {} });
 
     useEffect(() => {
-        DataService.getUsers().then(setUsers);
+        const role = DataService.getCurrentUserRole();
+        const loader = role === 'superadmin' ? DataService.getAllUsersGlobal() : DataService.getUsers();
+        loader.then(setUsers);
     }, []);
 
     useEffect(() => {
         DataService.getPointsOfSale().then(setPointsOfSale);
     }, []);
+
+    useEffect(() => {
+        if (currentUser.role !== 'barbero' || !currentUser.posId) {
+            setBarbersByPos([]);
+            return;
+        }
+        DataService.getBarbersForPos(currentUser.posId).then(setBarbersByPos);
+    }, [currentUser.role, currentUser.posId, showModal]);
 
     const handleSave = async () => {
         if (!currentUser.username || !currentUser.name) return;
@@ -27,7 +38,8 @@ const UserAdmin: React.FC = () => {
             return;
         }
         await DataService.saveUser(currentUser as SystemUser);
-        const list = await DataService.getUsers();
+        const role = DataService.getCurrentUserRole();
+        const list = role === 'superadmin' ? await DataService.getAllUsersGlobal() : await DataService.getUsers();
         setUsers(list);
         setShowModal(false);
     };
@@ -35,7 +47,8 @@ const UserAdmin: React.FC = () => {
     const handleDelete = async (username: string) => {
         if (confirm(`¿Borrar usuario ${username}?`)) {
             await DataService.deleteUser(username);
-            const list = await DataService.getUsers();
+            const role = DataService.getCurrentUserRole();
+            const list = role === 'superadmin' ? await DataService.getAllUsersGlobal() : await DataService.getUsers();
             setUsers(list);
         }
     };
@@ -55,7 +68,7 @@ const UserAdmin: React.FC = () => {
         if (user) {
             setCurrentUser(JSON.parse(JSON.stringify(user)));
         } else {
-            setCurrentUser({ username: '', name: '', role: 'empleado', password: '', permissions: {} });
+            setCurrentUser({ username: '', name: '', role: 'barbero', password: '', permissions: {} });
         }
         setShowModal(true);
     };
@@ -101,7 +114,7 @@ const UserAdmin: React.FC = () => {
                                     <span className={`px-2 py-1 rounded-full text-xs font-semibold uppercase ${
                                         u.role === 'superadmin' ? 'bg-purple-100 text-purple-700' :
                                         u.role === 'admin' ? 'bg-indigo-100 text-indigo-700' :
-                                        'bg-blue-100 text-blue-700'
+                                        u.role === 'barbero' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
                                     }`}>
                                         {u.role}
                                     </span>
@@ -151,41 +164,66 @@ const UserAdmin: React.FC = () => {
                             <div>
                                 <label className="block text-sm font-medium mb-1">Rol</label>
                                 <select className="w-full border rounded-lg p-2" value={currentUser.role} onChange={e => setCurrentUser({...currentUser, role: e.target.value as UserRole})}>
-                                    <option value="empleado">Empleado</option>
                                     <option value="admin">Administrador</option>
-                                    <option value="dueno">Dueño</option>
+                                    <option value="barbero">Barbero</option>
                                     <option value="cliente">Cliente</option>
                                 </select>
                             </div>
                         </div>
                         {showSedeSelector && (
                             <div className="mb-4">
-                                <label className="block text-sm font-medium mb-1 flex items-center">
+                                <label className="block text-sm font-medium mb-1 flex items-center text-slate-800">
                                     <MapPin size={16} className="mr-1.5 text-slate-500" />
                                     Barbería / Sede de acceso
                                 </label>
                                 <select
-                                    className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#ffd427]"
+                                    className="w-full border border-slate-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-[#ffd427] text-slate-800"
                                     value={currentUser.posId === undefined || currentUser.posId === null ? '' : currentUser.posId}
-                                    onChange={e => setCurrentUser({ ...currentUser, posId: e.target.value === '' ? null : Number(e.target.value) })}
+                                    onChange={e => setCurrentUser({ ...currentUser, posId: e.target.value === '' ? null : Number(e.target.value), barberId: undefined })}
                                 >
-                                    <option value="">— Sin sede asignada —</option>
+                                    <option value="">Sin sede asignada</option>
                                     {pointsOfSale.filter(p => p.isActive).map(pos => (
                                         <option key={pos.id} value={pos.id}>{pos.name}</option>
                                     ))}
                                 </select>
-                                <p className="text-xs text-slate-500 mt-1">Define a qué barbería tiene acceso este usuario (dueño, admin o empleado).</p>
+                                <p className="text-xs text-slate-500 mt-1">Barbería a la que tiene acceso este usuario.</p>
+                            </div>
+                        )}
+                        {currentUser.role === 'barbero' && currentUser.posId && (
+                            <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                <label className="block text-sm font-medium mb-1 flex items-center text-slate-800">
+                                    <Scissors size={16} className="mr-1.5 text-slate-500" />
+                                    Perfil de barbero
+                                </label>
+                                <select
+                                    className="w-full border border-slate-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-[#ffd427] text-slate-800"
+                                    value={currentUser.barberId === undefined || currentUser.barberId === null ? '' : currentUser.barberId}
+                                    onChange={e => setCurrentUser({ ...currentUser, barberId: e.target.value === '' ? undefined : Number(e.target.value) })}
+                                >
+                                    <option value="">Seleccione el perfil de barbero</option>
+                                    {barbersByPos.map(b => (
+                                        <option key={b.id} value={b.id}>{b.name}</option>
+                                    ))}
+                                </select>
+                                {barbersByPos.length === 0 ? (
+                                    <p className="text-xs text-amber-600 mt-1">
+                                        No hay barberos en esta sede. Vaya a <strong>Configuración</strong> (menú) → pestaña <strong>Barberos</strong> → <strong>Nuevo Barbero</strong> y cree el perfil (nombre y especialidad). Luego vuelva aquí y selecciónelo.
+                                    </p>
+                                ) : (
+                                    <p className="text-xs text-slate-500 mt-1">Así solo verá sus citas y ventas, no las de otros barberos.</p>
+                                )}
                             </div>
                         )}
                         <div className="mb-4">
-                            <label className="block text-sm font-medium mb-1">Nombre Completo</label>
-                            <input type="text" className="w-full border rounded-lg p-2" value={currentUser.name} onChange={e => setCurrentUser({...currentUser, name: e.target.value})} />
+                            <label className="block text-sm font-medium mb-1 text-slate-800">Nombre Completo</label>
+                            <input type="text" className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#ffd427]" value={currentUser.name} onChange={e => setCurrentUser({...currentUser, name: e.target.value})} />
                         </div>
                         <div className="mb-4">
-                            <label className="block text-sm font-medium mb-1">Contraseña</label>
-                            <input type="password" className="w-full border rounded-lg p-2" value={currentUser.password} onChange={e => setCurrentUser({...currentUser, password: e.target.value})} placeholder={currentUser.username ? "Sin cambios" : "Contraseña inicial"} />
+                            <label className="block text-sm font-medium mb-1 text-slate-800">Contraseña</label>
+                            <input type="password" className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#ffd427]" value={currentUser.password} onChange={e => setCurrentUser({...currentUser, password: e.target.value})} placeholder={currentUser.username ? "Sin cambios" : "Contraseña inicial"} />
                         </div>
 
+                        {currentUser.role !== 'barbero' && (
                         <div className="border-t border-slate-100 pt-4 mt-4">
                             <h4 className="text-sm font-bold text-slate-700 mb-3">Privilegios Granulares</h4>
                             <div className="space-y-2">
@@ -196,15 +234,16 @@ const UserAdmin: React.FC = () => {
                                     { key: 'canManageInventory', label: 'Gestionar Inventario' },
                                     { key: 'canOverrideSchedule', label: 'Sobreescribir Horarios' }
                                 ].map(perm => (
-                                    <label key={perm.key} className="flex items-center space-x-2 cursor-pointer p-2 hover:bg-slate-50 rounded">
-                                        <div onClick={() => togglePermission(perm.key as keyof Permissions)} className={`text-slate-500 ${currentUser.permissions && (currentUser.permissions as any)[perm.key] ? 'text-yellow-600' : ''}`}>
-                                            {currentUser.permissions && (currentUser.permissions as any)[perm.key] ? <CheckSquare size={20} /> : <Square size={20} />}
+                                    <label key={perm.key} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-slate-50 rounded-lg">
+                                        <div onClick={() => togglePermission(perm.key as keyof Permissions)} className="flex-shrink-0 text-slate-500">
+                                            {currentUser.permissions && (currentUser.permissions as any)[perm.key] ? <CheckSquare size={20} className="text-amber-500" /> : <Square size={20} />}
                                         </div>
                                         <span className="text-sm text-slate-700">{perm.label}</span>
                                     </label>
                                 ))}
                             </div>
                         </div>
+                        )}
 
                         <div className="flex justify-end space-x-2 mt-6 border-t border-slate-100 pt-4">
                             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>

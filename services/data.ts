@@ -21,8 +21,8 @@ const ROOT = 'barbershow';
 
 // Mock Initial Data para primera carga / seed
 const INITIAL_POS: PointOfSale[] = [
-  { id: 1, name: 'Barbería Central', address: 'Av. Principal 123', ownerId: 'dueno', isActive: true },
-  { id: 2, name: 'Sucursal Norte', address: 'Calle Norte 456', ownerId: 'dueno2', isActive: true },
+  { id: 1, name: 'Barbería Central', address: 'Av. Principal 123', ownerId: 'barbero', isActive: true },
+  { id: 2, name: 'Sucursal Norte', address: 'Calle Norte 456', ownerId: 'barbero2', isActive: true },
 ];
 
 const INITIAL_CLIENTS: Client[] = [
@@ -57,9 +57,8 @@ const INITIAL_BARBERS: Barber[] = [
 const INITIAL_USERS: SystemUser[] = [
   { username: 'master', role: 'platform_owner', name: 'Master Admin', password: 'root', posId: null, status: 'active' },
   { username: 'superadmin', role: 'superadmin', name: 'Super Admin Global', password: 'admin', permissions: { canManageUsers: true, canViewReports: true }, status: 'active' },
-  { username: 'dueno', role: 'dueno', name: 'Roberto Dueño (Central)', password: '123', posId: 1, permissions: { canManageInventory: true, canViewReports: true }, status: 'active' },
-  { username: 'dueno2', role: 'dueno', name: 'Laura Dueña (Norte)', password: '123', posId: 2, status: 'active' },
-  { username: 'barbero', role: 'empleado', name: 'Carlos Barbero', password: '123', posId: 1, status: 'active' },
+  { username: 'barbero', role: 'barbero', name: 'Carlos Barbero', password: '123', posId: 1, barberId: 1, status: 'active' },
+  { username: 'barbero2', role: 'barbero', name: 'Laura Barbero (Norte)', password: '123', posId: 2, barberId: 3, status: 'active' },
   { username: 'cliente', role: 'cliente', name: 'Usuario Cliente', password: '123', posId: 1, status: 'active' },
 ];
 
@@ -213,7 +212,16 @@ export const DataService = {
   },
   getCurrentUserRole: (): string => {
     const userStr = localStorage.getItem('currentUser');
-    return userStr ? JSON.parse(userStr).role : '';
+    const role = userStr ? JSON.parse(userStr).role : '';
+    return role === 'empleado' ? 'barbero' : role;
+  },
+
+  /** Id del barbero (tabla Barber) cuando el usuario es rol barbero; null en caso contrario. */
+  getCurrentBarberId: (): number | null => {
+    const user = DataService.getCurrentUser();
+    if (!user || (user.role !== 'barbero' && user.role !== 'empleado')) return null;
+    const id = user.barberId;
+    return id != null && id !== undefined ? id : null;
   },
 
   saveUser: async (user: SystemUser): Promise<void> => {
@@ -314,7 +322,7 @@ export const DataService = {
     return found ? { ...found, id: Number(found.id) } : null;
   },
 
-  /** Solo clientes que tienen al menos una cita o una venta en esta sede (para barberos). */
+  /** Solo clientes que tienen al menos una cita o una venta en esta sede (para barberos: solo de este barbero). */
   getClientsWithActivity: async (): Promise<Client[]> => {
     if (ACTIVE_POS_ID == null) return [];
     const [clientsSnap, apptsSnap, salesSnap] = await Promise.all([
@@ -323,8 +331,13 @@ export const DataService = {
       get(ref(db, ROOT + '/sales')),
     ]);
     const allClients = snapshotToArray<Client>(clientsSnap.val()).filter((c) => c.posId === ACTIVE_POS_ID);
-    const appts = snapshotToArray<Appointment>(apptsSnap.val()).filter((a) => a.posId === ACTIVE_POS_ID);
-    const sales = snapshotToArray<Sale>(salesSnap.val()).filter((s) => s.posId === ACTIVE_POS_ID);
+    let appts = snapshotToArray<Appointment>(apptsSnap.val()).filter((a) => a.posId === ACTIVE_POS_ID);
+    let sales = snapshotToArray<Sale>(salesSnap.val()).filter((s) => s.posId === ACTIVE_POS_ID);
+    const barberId = DataService.getCurrentBarberId();
+    if (barberId != null) {
+      appts = appts.filter((a) => a.barberoId === barberId);
+      sales = sales.filter((s) => (s.barberoId ?? null) === barberId);
+    }
     const clientIdsWithAppt = new Set(appts.map((a) => a.clienteId));
     const clientIdsWithSale = new Set(sales.map((s) => s.clienteId).filter(Boolean));
     const activeIds = new Set([...clientIdsWithAppt, ...clientIdsWithSale]);
@@ -433,6 +446,13 @@ export const DataService = {
     return arr.filter((b) => b.posId === ACTIVE_POS_ID).map((b) => ({ ...b, id: Number(b.id) }));
   },
 
+  /** Barbers de una sede (para Admin al asignar usuario barbero). No depende de ACTIVE_POS_ID. */
+  getBarbersForPos: async (posId: number): Promise<Barber[]> => {
+    const snap = await get(ref(db, ROOT + '/barbers'));
+    const arr = snapshotToArray<Barber>(snap.val());
+    return arr.filter((b) => b.posId === posId).map((b) => ({ ...b, id: Number(b.id) }));
+  },
+
   addBarber: async (barber: Omit<Barber, 'id' | 'posId'>): Promise<Barber> => {
     if (ACTIVE_POS_ID == null) throw new Error('No Active POS');
     const newBarber = { ...barber, id: Date.now(), posId: ACTIVE_POS_ID } as Barber;
@@ -461,9 +481,14 @@ export const DataService = {
 
   getAppointments: async (): Promise<Appointment[]> => {
     if (ACTIVE_POS_ID == null) return [];
+    const role = DataService.getCurrentUserRole();
+    const barberId = DataService.getCurrentBarberId();
+    if ((role === 'barbero' || role === 'empleado') && barberId == null) return [];
     const snap = await get(ref(db, ROOT + '/appointments'));
     const arr = snapshotToArray<Appointment>(snap.val());
-    return arr.filter((a) => a.posId === ACTIVE_POS_ID).map((a) => ({ ...a, id: Number(a.id) }));
+    let filtered = arr.filter((a) => a.posId === ACTIVE_POS_ID);
+    if (barberId != null) filtered = filtered.filter((a) => a.barberoId === barberId);
+    return filtered.map((a) => ({ ...a, id: Number(a.id) }));
   },
 
   checkAppointmentConflict: async (posId: number, barberId: number, date: string, time: string): Promise<boolean> => {
@@ -475,24 +500,41 @@ export const DataService = {
   setAppointments: async (data: Appointment[]): Promise<void> => {
     const snap = await get(ref(db, ROOT + '/appointments'));
     const all: Record<string, Appointment> = snap.val() || {};
+    const barberId = DataService.getCurrentBarberId();
+    let toMerge = data;
+    if (ACTIVE_POS_ID != null && barberId != null) {
+      const othersSamePos = Object.entries(all).filter(([, a]) => a.posId === ACTIVE_POS_ID && a.barberoId !== barberId);
+      toMerge = [...Object.values(Object.fromEntries(othersSamePos)), ...data];
+    }
     const other = Object.fromEntries(Object.entries(all).filter(([, a]) => a.posId !== ACTIVE_POS_ID));
-    const merged = { ...other, ...toObjectById(data) };
+    const merged = { ...other, ...toObjectById(toMerge) };
     await set(ref(db, ROOT + '/appointments'), merged);
   },
 
   getSales: async (): Promise<Sale[]> => {
     if (ACTIVE_POS_ID == null) return [];
+    const role = DataService.getCurrentUserRole();
+    const barberId = DataService.getCurrentBarberId();
+    if ((role === 'barbero' || role === 'empleado') && barberId == null) return [];
     const snap = await get(ref(db, ROOT + '/sales'));
     const arr = snapshotToArray<Sale>(snap.val());
-    return arr.filter((s) => s.posId === ACTIVE_POS_ID).map((s) => ({ ...s, id: Number(s.id) }));
+    let filtered = arr.filter((s) => s.posId === ACTIVE_POS_ID);
+    if (barberId != null) filtered = filtered.filter((s) => (s.barberoId ?? null) === barberId);
+    return filtered.map((s) => ({ ...s, id: Number(s.id) }));
   },
 
   setSales: async (data: Sale[]): Promise<void> => {
     const snap = await get(ref(db, ROOT + '/sales'));
     const all: Record<string, Sale> = snap.val() || {};
-    const other = Object.fromEntries(Object.entries(all).filter(([, s]) => s.posId !== ACTIVE_POS_ID));
-    const processed = data.map((s) => ({ ...s, posId: s.posId || ACTIVE_POS_ID! }));
-    const merged = { ...other, ...toObjectById(processed) };
+    const barberId = DataService.getCurrentBarberId();
+    const currentPosId = ACTIVE_POS_ID!;
+    let toMerge = data.map((s) => ({ ...s, posId: s.posId || currentPosId, barberoId: barberId ?? s.barberoId ?? undefined }));
+    if (currentPosId != null && barberId != null) {
+      const othersSamePos = Object.entries(all).filter(([, s]) => s.posId === currentPosId && (s.barberoId ?? null) !== barberId);
+      toMerge = [...Object.values(Object.fromEntries(othersSamePos)), ...toMerge];
+    }
+    const other = Object.fromEntries(Object.entries(all).filter(([, s]) => s.posId !== currentPosId));
+    const merged = { ...other, ...toObjectById(toMerge) };
     await set(ref(db, ROOT + '/sales'), merged);
   },
 

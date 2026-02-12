@@ -9,6 +9,8 @@ const CalendarView: React.FC = () => {
     const [selectedBarber, setSelectedBarber] = useState<number | 'all'>('all');
     const [currentDate, setCurrentDate] = useState(new Date());
     const [currentBarberiaName, setCurrentBarberiaName] = useState<string>('');
+    const currentBarberId = DataService.getCurrentBarberId();
+    const isBarberoView = currentBarberId != null;
 
     useEffect(() => {
         Promise.all([
@@ -23,6 +25,10 @@ const CalendarView: React.FC = () => {
             setCurrentBarberiaName(pos ? pos.name : '');
         });
     }, []);
+
+    useEffect(() => {
+        if (isBarberoView && currentBarberId != null) setSelectedBarber(currentBarberId);
+    }, [isBarberoView, currentBarberId]);
 
     const daysInMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
     const firstDayOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
@@ -48,6 +54,7 @@ const CalendarView: React.FC = () => {
             const dayAppointments = appointments.filter(a => {
                 if (a.fecha !== dateStr) return false;
                 if (a.estado === 'cancelada') return false;
+                if (isBarberoView && currentBarberId != null) return a.barberoId === currentBarberId;
                 if (selectedBarber !== 'all' && a.barberoId !== selectedBarber) return false;
                 return true;
             });
@@ -86,19 +93,29 @@ const CalendarView: React.FC = () => {
                     <Clock className="mr-2" /> Calendario Mensual
                 </h2>
                 <div className="flex items-center space-x-4 bg-white p-2 rounded-lg shadow-sm border border-slate-200">
-                    <div className="flex items-center space-x-2">
-                        <User size={16} className="text-slate-400"/>
-                        <select 
-                            className="bg-transparent text-sm font-medium focus:outline-none text-slate-700"
-                            value={selectedBarber}
-                            onChange={(e) => setSelectedBarber(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-                        >
-                            <option value="all">Todos los Barberos</option>
-                            {barbers.map(b => (
-                                <option key={b.id} value={b.id}>{b.name}</option>
-                            ))}
-                        </select>
-                    </div>
+                    {!isBarberoView ? (
+                        <div className="flex items-center space-x-2">
+                            <User size={16} className="text-slate-400"/>
+                            <select 
+                                className="bg-transparent text-sm font-medium focus:outline-none text-slate-700"
+                                value={selectedBarber}
+                                onChange={(e) => setSelectedBarber(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                            >
+                                <option value="all">Todos los Barberos</option>
+                                {barbers.map(b => (
+                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    ) : (
+                        <div className="flex items-center space-x-2 text-slate-700">
+                            <User size={16} className="text-slate-400"/>
+                            <span className="text-sm font-medium">Mis citas</span>
+                            {barbers.find(b => b.id === currentBarberId) && (
+                                <span className="text-xs text-slate-500">({barbers.find(b => b.id === currentBarberId)?.name})</span>
+                            )}
+                        </div>
+                    )}
                     <div className="h-6 w-px bg-slate-200"></div>
                     <div className="flex items-center space-x-2">
                         <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-slate-100 rounded text-slate-600"><ChevronLeft size={20} /></button>

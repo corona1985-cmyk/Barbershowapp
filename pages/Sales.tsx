@@ -116,6 +116,7 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
             posId: DataService.getActivePosId() || 0,
             numeroVenta: saleNumber,
             clienteId: selectedClient,
+            barberoId: salesFromAppointment?.barberoId ?? DataService.getCurrentBarberId() ?? undefined,
             items: [...cart],
             metodoPago: paymentMethod,
             subtotal,
@@ -136,7 +137,11 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
         if (selectedClient) {
             const client = clients.find(c => c.id === selectedClient);
             if (client) {
-                const pointsEarned = DataService.calculatePoints(total, 'product');
+                let pointsEarned = 0;
+                cart.forEach(item => {
+                    if (item.type === 'servicio') pointsEarned += 20;
+                    else pointsEarned += Math.floor(item.price * item.quantity);
+                });
                 client.puntos = (client.puntos || 0) + pointsEarned;
                 await DataService.updateClient(client);
             }

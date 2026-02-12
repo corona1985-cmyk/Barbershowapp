@@ -105,7 +105,7 @@ const Settings: React.FC = () => {
         if (user) {
             setCurrentUser({ ...user }); // Editing
         } else {
-            setCurrentUser({ username: '', name: '', role: 'empleado', password: '' }); // Creating
+            setCurrentUser({ username: '', name: '', role: 'barbero', password: '' }); // Creating
         }
         setShowUserModal(true);
     };
@@ -135,11 +135,11 @@ const Settings: React.FC = () => {
     };
 
     // Solo admin, dueño y superadmin pueden acceder a Configuración
-    const canAccessSettings = ['admin', 'dueno', 'superadmin'].includes(currentUserRole);
+    const canAccessSettings = ['admin', 'superadmin'].includes(currentUserRole);
     if (!canAccessSettings) {
         return (
             <div className="p-8 text-center text-slate-500">
-                No tienes permisos para acceder a esta sección. Solo administradores, dueños y superadmin pueden ver Configuración y gestionar servicios.
+                No tienes permisos para acceder a esta sección. Solo administradores y superadmin pueden ver Configuración y gestionar servicios.
             </div>
         );
     }
@@ -223,7 +223,7 @@ const Settings: React.FC = () => {
                                 <img 
                                     src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getRegistrationUrl())}`} 
                                     alt="QR de Registro" 
-                                    className="w-48 h-48"
+                                    className="w-48 h-48 rounded-full object-cover"
                                 />
                             </div>
                             <h3 className="text-xl font-bold text-slate-900 mb-1">Escanea para Registrarte</h3>
@@ -277,8 +277,7 @@ const Settings: React.FC = () => {
                                             <td className="py-3">
                                                 <span className={`px-2 py-0.5 rounded-full text-xs font-semibold uppercase ${
                                                     u.role === 'admin' ? 'bg-purple-100 text-purple-700' :
-                                                    u.role === 'dueno' ? 'bg-indigo-100 text-indigo-700' :
-                                                    u.role === 'empleado' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                                                    u.role === 'barbero' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
                                                 }`}>
                                                     {u.role}
                                                 </span>
@@ -431,9 +430,8 @@ const Settings: React.FC = () => {
                             <div>
                                 <label className="block text-sm font-medium mb-1">Rol / Privilegios</label>
                                 <select className="w-full border rounded-lg p-2" value={currentUser.role} onChange={e => setCurrentUser({...currentUser, role: e.target.value as UserRole})}>
-                                    {currentUserRole === 'superadmin' && <option value="dueno">Dueño (Admin Local)</option>}
-                                    <option value="empleado">Empleado</option>
                                     <option value="admin">Administrador</option>
+                                    <option value="barbero">Barbero</option>
                                     <option value="cliente">Cliente</option>
                                 </select>
                             </div>

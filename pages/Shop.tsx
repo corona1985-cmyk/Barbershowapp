@@ -41,15 +41,15 @@ const Shop: React.FC = () => {
         const taxRate = settings.taxRate;
         const tax = subtotal * taxRate;
         const total = subtotal + tax;
-        const currentUser = await DataService.authenticate('cliente');
-        const client = clients.find(c => c.nombre === currentUser?.name) || clients[0];
+        const currentUser = DataService.getCurrentUser();
+        const client = currentUser ? clients.find(c => c.nombre === currentUser.name) : null;
         const newId = sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1;
         const saleNumber = `ORD${String(newId).padStart(4, '0')}`;
         const newSale: Sale = {
             id: newId,
             posId: DataService.getActivePosId() || 0,
             numeroVenta: saleNumber,
-            clienteId: client?.id || 1,
+            clienteId: client?.id ?? null,
             items: cart.map(c => ({ ...c, type: 'producto' as const })),
             metodoPago: 'online',
             subtotal,

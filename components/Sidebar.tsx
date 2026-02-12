@@ -34,7 +34,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
             icon: <LayoutDashboard size={18} />,
             items: [
                 { id: 'admin_pos', label: 'Sedes Globales', icon: <MapPin size={18} />, roles: ['superadmin'] },
-                { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, roles: ['superadmin', 'admin', 'dueno', 'empleado'] },
+                { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
                 { id: 'client_discovery', label: 'Descubrir Barberías', icon: <Globe size={18} />, roles: ['cliente'] },
             ]
         },
@@ -43,12 +43,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
             label: 'Operaciones',
             icon: <Briefcase size={18} />,
             items: [
-                { id: 'sales', label: 'Ventas (POS)', icon: <DollarSign size={18} />, roles: ['superadmin', 'admin', 'dueno', 'empleado'] },
+                { id: 'sales', label: 'Ventas (POS)', icon: <DollarSign size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
                 { id: 'shop', label: 'Tienda Online', icon: <ShoppingBag size={18} />, roles: ['cliente'] },
-                { id: 'appointments', label: 'Agenda Citas', icon: <Calendar size={18} />, roles: ['superadmin', 'admin', 'dueno', 'empleado', 'cliente'] },
-                { id: 'calendar', label: 'Calendario Mensual', icon: <Calendar size={18} />, roles: ['superadmin', 'admin', 'dueno', 'empleado', 'cliente'] },
-                { id: 'whatsapp_console', label: 'Consola WhatsApp', icon: <MessageCircle size={18} />, roles: ['empleado', 'dueno', 'admin'] },
-                { id: 'clients', label: 'Clientes', icon: <Users size={18} />, roles: ['superadmin', 'admin', 'dueno', 'empleado'] },
+                { id: 'appointments', label: 'Agenda Citas', icon: <Calendar size={18} />, roles: ['superadmin', 'admin', 'barbero', 'cliente'] },
+                { id: 'calendar', label: 'Calendario Mensual', icon: <Calendar size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
+                { id: 'whatsapp_console', label: 'Consola WhatsApp', icon: <MessageCircle size={18} />, roles: ['barbero', 'admin'] },
+                { id: 'clients', label: 'Clientes', icon: <Users size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
             ]
         },
         {
@@ -56,11 +56,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
             label: 'Administración',
             icon: <BarChart2 size={18} />,
             items: [
-                { id: 'inventory', label: 'Inventario', icon: <Package size={18} />, roles: ['superadmin', 'admin', 'dueno'] },
-                { id: 'finance', label: 'Finanzas', icon: <DollarSign size={18} />, roles: ['superadmin', 'admin', 'dueno'] },
-                { id: 'reports', label: 'Reportes', icon: <FileText size={18} />, roles: ['superadmin', 'admin', 'dueno'] },
+                { id: 'inventory', label: 'Inventario', icon: <Package size={18} />, roles: ['superadmin', 'admin'] },
+                { id: 'finance', label: 'Finanzas', icon: <DollarSign size={18} />, roles: ['superadmin', 'admin'] },
+                { id: 'reports', label: 'Reportes', icon: <FileText size={18} />, roles: ['superadmin', 'admin'] },
                 { id: 'user_admin', label: 'Admin Usuarios', icon: <Shield size={18} />, roles: ['superadmin'] },
-                { id: 'settings', label: 'Configuración', icon: <Settings size={18} />, roles: ['superadmin', 'admin', 'dueno'] },
+                { id: 'settings', label: 'Configuración', icon: <Settings size={18} />, roles: ['superadmin', 'admin'] },
             ]
         }
     ];
@@ -100,14 +100,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                     </div>
                     <h1 className="text-lg font-bold tracking-tight text-[#ffd427]">BarberShow</h1>
                     <span className="text-[10px] text-slate-400 uppercase tracking-widest mt-1 px-2 py-0.5 rounded bg-slate-800">
-                        {userRole === 'dueno' ? 'Dueño' : userRole}
+                        {(userRole === 'barbero' || userRole === 'empleado') ? 'Barbero' : userRole}
                     </span>
                 </div>
                 
                 <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 custom-scrollbar">
                     {navGroups.map(group => {
                         // Filter items for this group based on permissions
-                        const filteredItems = group.items.filter(item => item.roles.includes(userRole as UserRole));
+                        const effectiveRole = userRole === 'empleado' ? 'barbero' : userRole;
+                        const filteredItems = group.items.filter(item => item.roles.includes(effectiveRole as UserRole));
                         
                         if (filteredItems.length === 0) return null;
 

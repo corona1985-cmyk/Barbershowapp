@@ -29,8 +29,8 @@ export const Clients: React.FC = () => {
     useEffect(() => {
         const role = DataService.getCurrentUserRole();
         setUserRole(role);
-        setIsAdmin(['admin', 'dueno', 'superadmin'].includes(role));
-        const loadClients = role === 'empleado'
+        setIsAdmin(['admin', 'superadmin'].includes(role));
+        const loadClients = role === 'barbero'
             ? DataService.getClientsWithActivity()
             : DataService.getClients();
         Promise.all([loadClients, DataService.getPointsOfSale()]).then(([clientsList, posList]) => {
@@ -111,14 +111,14 @@ export const Clients: React.FC = () => {
     return (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             <div className="lg:col-span-3 space-y-6">
-                {userRole === 'empleado' && (
+                {userRole === 'barbero' && (
                     <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded-lg text-sm">
                         Solo se muestran clientes que ya se han agendado o atendido en esta barbería.
                     </div>
                 )}
                 <div className="flex justify-between items-center">
                     <h2 className="text-2xl font-bold text-slate-800">Gestión de Clientes</h2>
-                    {userRole !== 'empleado' && (
+                    {userRole !== 'barbero' && (
                         <button onClick={handleCreateClick} className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2 rounded-lg font-bold flex items-center space-x-2 transition-colors shadow-sm">
                             <Plus size={18} />
                             <span>Nuevo Cliente</span>

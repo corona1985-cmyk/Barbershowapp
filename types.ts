@@ -1,5 +1,5 @@
 
-export type UserRole = 'superadmin' | 'admin' | 'dueno' | 'empleado' | 'cliente' | 'platform_owner' | 'support' | 'financial' | 'commercial';
+export type UserRole = 'superadmin' | 'admin' | 'barbero' | 'cliente' | 'platform_owner' | 'support' | 'financial' | 'commercial';
 
 export interface PointOfSale {
     id: number;
@@ -52,6 +52,7 @@ export interface SystemUser {
     password?: string; // Optional for mock
     name: string;
     posId?: number | null; // Null for superadmin or global users, specific ID for tenant users
+    barberId?: number | null; // Solo para rol barbero: id del registro en Barber (barbers table)
     permissions?: Permissions;
     lastLogin?: string;
     ip?: string;
@@ -129,6 +130,7 @@ export interface AppointmentForSale {
     appointmentId: number;
     clienteId: number;
     clienteNombre: string;
+    barberoId?: number; // Barbero que atendió (para asignar la venta)
     fecha: string;
     hora: string;
     items: SaleItem[];
@@ -144,6 +146,7 @@ export interface Sale {
     posId: number;
     numeroVenta: string;
     clienteId: number | null;
+    barberoId?: number | null; // Barbero que realizó la venta (para aislamiento por barbero)
     items: SaleItem[];
     metodoPago: string;
     subtotal: number;

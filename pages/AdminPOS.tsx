@@ -49,7 +49,7 @@ const AdminPOS: React.FC = () => {
         setShowModal(true);
     };
 
-    const owners = users.filter(u => u.role === 'dueno' || u.role === 'admin');
+    const owners = users.filter(u => u.role === 'admin');
 
     return (
         <div className="space-y-6">
