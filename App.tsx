@@ -17,6 +17,7 @@ import { Clients, Inventory, Finance } from './pages/InventoryClientsFinance';
 import { ViewState, UserRole, PointOfSale, SystemUser, AppointmentForSale } from './types';
 import { Scissors, Cookie, MapPin, Globe, LogOut, Menu, UserPlus, CheckCircle, ArrowLeft, Shield } from 'lucide-react';
 import { DataService } from './services/data';
+import { authenticateMasterWithPassword } from './services/firebase';
 
 const App: React.FC = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -131,11 +132,9 @@ const App: React.FC = () => {
         let user: SystemUser | null = null;
         try {
             if (loginTab === 'master') {
-                user = await DataService.authenticateMaster(trimmedUsername);
-                if (user && password !== 'root') {
-                    setLoginError('Contraseña incorrecta para Master Admin.');
-                    return;
-                }
+                const result = await authenticateMasterWithPassword(trimmedUsername, password);
+                user = result.user as SystemUser;
+                await DataService.logAuditAction('master_login', 'master', 'Platform Owner Access');
             } else {
                 user = await DataService.authenticate(trimmedUsername);
                 if (user) {

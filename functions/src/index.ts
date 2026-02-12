@@ -1,5 +1,43 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
+/** Payload de usuario Master devuelto al frontend (sin contraseña). */
+const MASTER_USER = {
+  username: "master",
+  role: "platform_owner" as const,
+  name: "Master Admin",
+  posId: null as number | null,
+};
+
+/**
+ * Valida credenciales Master en el servidor. La contraseña NUNCA se valida en el cliente.
+ * Config: firebase functions:config:set master.password="tu_password_seguro"
+ * o variable de entorno MASTER_PASSWORD.
+ */
+export const authenticateMasterWithPassword = onCall(
+  { region: "us-central1" },
+  async (request): Promise<{ user: typeof MASTER_USER }> => {
+    const { config } = await import("firebase-functions");
+    const masterPassword =
+      process.env.MASTER_PASSWORD || config().master?.password;
+    if (!masterPassword) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Master no está configurado. Ejecuta: firebase functions:config:set master.password=\"tu_password\""
+      );
+    }
+    const data = request.data as { username?: string; password?: string } | undefined;
+    const username = String(data?.username ?? "").trim().toLowerCase();
+    const password = data?.password ?? "";
+    if (username !== "master" || password !== masterPassword) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Usuario o contraseña incorrectos para Master Admin."
+      );
+    }
+    return { user: MASTER_USER };
+  }
+);
+
 /**
  * Envía un mensaje de WhatsApp vía API REST de Twilio (2ª Gen).
  * Config: firebase functions:config:set twilio.sid="ACxxx" twilio.token="xxx" twilio.whatsapp_from="whatsapp:+14155238886"

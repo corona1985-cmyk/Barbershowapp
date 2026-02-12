@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "barbershow": {
+      ".read": "true",
+      ".write": "true"
+    }
+  }
+}

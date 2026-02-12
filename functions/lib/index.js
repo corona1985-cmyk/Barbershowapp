@@ -23,8 +23,35 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendWhatsAppMessage = void 0;
+exports.sendWhatsAppMessage = exports.authenticateMasterWithPassword = void 0;
 const https_1 = require("firebase-functions/v2/https");
+/** Payload de usuario Master devuelto al frontend (sin contraseña). */
+const MASTER_USER = {
+    username: "master",
+    role: "platform_owner",
+    name: "Master Admin",
+    posId: null,
+};
+/**
+ * Valida credenciales Master en el servidor. La contraseña NUNCA se valida en el cliente.
+ * Config: firebase functions:config:set master.password="tu_password_seguro"
+ * o variable de entorno MASTER_PASSWORD.
+ */
+exports.authenticateMasterWithPassword = (0, https_1.onCall)({ region: "us-central1" }, async (request) => {
+    var _a, _b, _c;
+    const { config } = await Promise.resolve().then(() => __importStar(require("firebase-functions")));
+    const masterPassword = process.env.MASTER_PASSWORD || ((_a = config().master) === null || _a === void 0 ? void 0 : _a.password);
+    if (!masterPassword) {
+        throw new https_1.HttpsError("failed-precondition", "Master no está configurado. Ejecuta: firebase functions:config:set master.password=\"tu_password\"");
+    }
+    const data = request.data;
+    const username = String((_b = data === null || data === void 0 ? void 0 : data.username) !== null && _b !== void 0 ? _b : "").trim().toLowerCase();
+    const password = (_c = data === null || data === void 0 ? void 0 : data.password) !== null && _c !== void 0 ? _c : "";
+    if (username !== "master" || password !== masterPassword) {
+        throw new https_1.HttpsError("unauthenticated", "Usuario o contraseña incorrectos para Master Admin.");
+    }
+    return { user: MASTER_USER };
+});
 /**
  * Envía un mensaje de WhatsApp vía API REST de Twilio (2ª Gen).
  * Config: firebase functions:config:set twilio.sid="ACxxx" twilio.token="xxx" twilio.whatsapp_from="whatsapp:+14155238886"
