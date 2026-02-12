@@ -440,6 +440,7 @@ const App: React.FC = () => {
                 userRole={userRole}
                 isOpen={isSidebarOpen}
                 onClose={() => setIsSidebarOpen(false)}
+                clientHasSelectedBarberia={userRole === 'cliente' ? currentPosId != null : true}
             />
             {/* Adjusted margin to be responsive: ml-0 on mobile, ml-64 on desktop */}
             <main className="flex-1 md:ml-64 p-4 md:p-8 overflow-y-auto h-screen transition-all duration-300">

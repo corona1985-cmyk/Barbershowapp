@@ -8,12 +8,14 @@ interface SidebarProps {
     onLogout: () => void;
     userRole: UserRole | string;
     isOpen: boolean;        
-    onClose: () => void;    
+    onClose: () => void;
+    /** Solo para rol cliente: true cuando ya eligió una barbería (Visitar Perfil). Si false, no se muestra Operaciones. */
+    clientHasSelectedBarberia?: boolean;
 }
 
 type NavGroup = 'principal' | 'operaciones' | 'administracion';
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, userRole, isOpen, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, userRole, isOpen, onClose, clientHasSelectedBarberia = true }) => {
     
     // State for collapsible groups
     const [expandedGroups, setExpandedGroups] = useState<Record<NavGroup, boolean>>({
@@ -106,10 +108,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                 
                 <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 custom-scrollbar">
                     {navGroups.map(group => {
-                        // Filter items for this group based on permissions
+                        // Cliente: no mostrar Operaciones hasta que haya elegido una barbería
                         const effectiveRole = userRole === 'empleado' ? 'barbero' : userRole;
+                        if (group.id === 'operaciones' && effectiveRole === 'cliente' && !clientHasSelectedBarberia) return null;
+                        // Filter items for this group based on permissions
                         const filteredItems = group.items.filter(item => item.roles.includes(effectiveRole as UserRole));
-                        
                         if (filteredItems.length === 0) return null;
 
                         return (
