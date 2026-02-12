@@ -659,50 +659,67 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Cliente</label>
-                                <select
-                                    className="w-full border border-slate-300 rounded-lg p-2"
-                                    value={isNewClient ? 'new' : (newApt.clienteId ?? '')}
-                                    onChange={e => {
-                                        if (e.target.value === 'new') {
-                                            setIsNewClient(true);
-                                            setNewApt({ ...newApt, clienteId: undefined });
-                                        } else {
-                                            setIsNewClient(false);
-                                            setNewApt({ ...newApt, clienteId: Number(e.target.value) || undefined });
-                                        }
-                                    }}
-                                >
-                                    <option value="">Seleccionar Cliente</option>
-                                    <option value="new">➕ Nuevo cliente (no registrado)</option>
-                                    {clients.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.telefono || 'Sin teléfono'}</option>)}
-                                </select>
-                                {newApt.clienteId && (() => {
-                                    const sel = clients.find(c => c.id === newApt.clienteId);
-                                    return sel && !(sel.telefono || '').trim() ? (
-                                        <p className="mt-1 text-amber-600 text-sm">Este cliente no tiene teléfono. Agregue uno en Gestión de Clientes o busque por otro.</p>
-                                    ) : null;
-                                })()}
-                                {isNewClient && (
-                                    <div className="grid grid-cols-2 gap-3 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                                        <div>
-                                            <label className="block text-xs font-medium text-amber-800 mb-1">Nombre</label>
-                                            <input
-                                                type="text"
-                                                className="w-full border border-amber-300 rounded-lg p-2 text-sm"
-                                                placeholder="Nombre del cliente"
-                                                value={newClientName}
-                                                onChange={e => setNewClientName(e.target.value)}
-                                            />
+                                {!isNewClient ? (
+                                    <>
+                                        <select
+                                            className="w-full border border-slate-300 rounded-lg p-2"
+                                            value={newApt.clienteId ?? ''}
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                setNewApt({ ...newApt, clienteId: val ? Number(val) : undefined });
+                                            }}
+                                        >
+                                            <option value="">Seleccionar Cliente</option>
+                                            {clients.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.telefono || 'Sin teléfono'}</option>)}
+                                        </select>
+                                        {newApt.clienteId && (() => {
+                                            const sel = clients.find(c => c.id === newApt.clienteId);
+                                            return sel && !(sel.telefono || '').trim() ? (
+                                                <p className="mt-1 text-amber-600 text-sm">Este cliente no tiene teléfono. Agregue uno en Gestión de Clientes o busque por otro.</p>
+                                            ) : null;
+                                        })()}
+                                        <button
+                                            type="button"
+                                            onClick={() => { setIsNewClient(true); setNewApt({ ...newApt, clienteId: undefined }); }}
+                                            className="mt-2 flex items-center gap-1.5 text-sm text-amber-700 hover:text-amber-800 font-medium"
+                                        >
+                                            <User size={16} />
+                                            ¿No está en la lista? Agregar cliente nuevo (sin registro)
+                                        </button>
+                                    </>
+                                ) : (
+                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm font-medium text-amber-800">Cliente nuevo (sin registro)</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setIsNewClient(false); setNewClientName(''); setNewClientPhone(''); }}
+                                                className="text-sm text-amber-700 hover:text-amber-900 underline"
+                                            >
+                                                ← Elegir de la lista de clientes
+                                            </button>
                                         </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-amber-800 mb-1">Teléfono</label>
-                                            <input
-                                                type="tel"
-                                                className="w-full border border-amber-300 rounded-lg p-2 text-sm"
-                                                placeholder="Teléfono / WhatsApp"
-                                                value={newClientPhone}
-                                                onChange={e => setNewClientPhone(e.target.value)}
-                                            />
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs font-medium text-amber-800 mb-1">Nombre</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full border border-amber-300 rounded-lg p-2 text-sm"
+                                                    placeholder="Nombre del cliente"
+                                                    value={newClientName}
+                                                    onChange={e => setNewClientName(e.target.value)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-amber-800 mb-1">Teléfono</label>
+                                                <input
+                                                    type="tel"
+                                                    className="w-full border border-amber-300 rounded-lg p-2 text-sm"
+                                                    placeholder="Teléfono / WhatsApp"
+                                                    value={newClientPhone}
+                                                    onChange={e => setNewClientPhone(e.target.value)}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 )}
