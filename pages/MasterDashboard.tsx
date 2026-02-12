@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
-import { PointOfSale, SystemUser, AuditLog, GlobalSettings, Sale } from '../types';
+import { PointOfSale, SystemUser, AuditLog, GlobalSettings, Sale, PosPlan } from '../types';
 import { LayoutDashboard, Trash2, Globe, DollarSign, Users, Building, LogOut, Activity, Shield, Settings, FileText, Search, Plus, Save, Monitor, AlertTriangle, Eye, Lock } from 'lucide-react';
 
 interface MasterDashboardProps {
@@ -51,6 +51,11 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
             await DataService.deletePointOfSale(id);
             loadData();
         }
+    };
+
+    const handleUpdateSedePlan = async (sede: PointOfSale, plan: PosPlan) => {
+        await DataService.updatePointOfSale({ ...sede, plan });
+        loadData();
     };
 
     const handleDeleteUser = async (username: string) => {
@@ -447,6 +452,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                                         <th className="px-6 py-4">Nombre</th>
                                         <th className="px-6 py-4">Dirección</th>
                                         <th className="px-6 py-4">Dueño</th>
+                                        <th className="px-6 py-4 text-center">Plan</th>
                                         <th className="px-6 py-4 text-center">Estado</th>
                                         <th className="px-6 py-4 text-right">Acciones</th>
                                     </tr>
@@ -458,6 +464,19 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                                             <td className="px-6 py-4 font-bold text-white">{sede.name}</td>
                                             <td className="px-6 py-4">{sede.address}</td>
                                             <td className="px-6 py-4 text-[#ffd427]">{sede.ownerId}</td>
+                                            <td className="px-6 py-4 text-center">
+                                                <select
+                                                    value={sede.plan || 'basic'}
+                                                    onChange={(e) => handleUpdateSedePlan(sede, e.target.value as PosPlan)}
+                                                    className="bg-slate-900 border border-slate-600 text-white rounded px-2 py-1 text-xs font-bold cursor-pointer"
+                                                >
+                                                    <option value="basic">Basic</option>
+                                                    <option value="pro">Pro</option>
+                                                </select>
+                                                {sede.plan === 'pro' && (
+                                                    <span className="ml-1 text-[10px] text-amber-400" title="Incluye notificaciones de citas para barbero">🔔</span>
+                                                )}
+                                            </td>
                                             <td className="px-6 py-4 text-center">
                                                 <span className={`px-2 py-1 rounded text-xs font-bold ${sede.isActive ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`}>
                                                     {sede.isActive ? 'ACTIVO' : 'INACTIVO'}

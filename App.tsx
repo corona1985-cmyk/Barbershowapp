@@ -16,6 +16,7 @@ import MasterDashboard from './pages/MasterDashboard';
 import { Clients, Inventory, Finance } from './pages/InventoryClientsFinance';
 import { ViewState, UserRole, PointOfSale, SystemUser, AppointmentForSale } from './types';
 import { Scissors, Cookie, MapPin, Globe, LogOut, Menu, UserPlus, CheckCircle, ArrowLeft, Shield } from 'lucide-react';
+import BarberNotificationBell from './components/BarberNotificationBell';
 import { DataService } from './services/data';
 import { authenticateMasterWithPassword } from './services/firebase';
 
@@ -52,6 +53,8 @@ const App: React.FC = () => {
     const [isLoadingSession, setIsLoadingSession] = useState(true);
     /** Cita completada que se envía a facturación (Punto de Venta) */
     const [salesFromAppointment, setSalesFromAppointment] = useState<AppointmentForSale | null>(null);
+    /** Plan de la sede activa: solo 'pro' muestra campana de notificaciones para el barbero */
+    const [isPlanPro, setIsPlanPro] = useState(false);
 
     const handleSwitchPos = async (posId: number) => {
         DataService.setActivePosId(posId);
@@ -60,8 +63,10 @@ const App: React.FC = () => {
             const posList = await DataService.getPointsOfSale();
             const pos = posList.find(p => p.id === posId);
             setCurrentPosName(pos ? pos.name : 'Desconocido');
+            setIsPlanPro(pos?.plan === 'pro');
         } catch {
             setCurrentPosName('Desconocido');
+            setIsPlanPro(false);
         }
     };
 
@@ -483,6 +488,12 @@ const App: React.FC = () => {
                     </div>
                     
                     <div className="flex items-center space-x-2 md:space-x-4">
+                        {/* Campana de notificaciones (solo Plan Pro, barbero/admin) */}
+                        <BarberNotificationBell
+                            isPlanPro={isPlanPro}
+                            userRole={userRole}
+                            onChangeView={setCurrentView}
+                        />
                         <div className="text-right hidden md:block">
                             <p className="text-sm font-bold text-slate-800">{fullName || username}</p>
                             <p className="text-xs text-slate-500 capitalize">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</p>

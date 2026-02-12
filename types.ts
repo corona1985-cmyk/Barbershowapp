@@ -1,12 +1,17 @@
 
 export type UserRole = 'superadmin' | 'admin' | 'barbero' | 'cliente' | 'platform_owner' | 'support' | 'financial' | 'commercial';
 
+/** Plan de la sede: basic = funciones estándar, pro = incluye notificaciones de citas para barbero */
+export type PosPlan = 'basic' | 'pro';
+
 export interface PointOfSale {
     id: number;
     name: string;
     address: string;
     ownerId: string; // Username of the owner
     isActive: boolean;
+    /** Plan de suscripción; solo 'pro' habilita campana de notificaciones de citas para el barbero */
+    plan?: PosPlan;
 }
 
 export interface AppSettings {

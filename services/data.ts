@@ -21,8 +21,8 @@ const ROOT = 'barbershow';
 
 // Mock Initial Data para primera carga / seed
 const INITIAL_POS: PointOfSale[] = [
-  { id: 1, name: 'Barbería Central', address: 'Av. Principal 123', ownerId: 'barbero', isActive: true },
-  { id: 2, name: 'Sucursal Norte', address: 'Calle Norte 456', ownerId: 'barbero2', isActive: true },
+  { id: 1, name: 'Barbería Central', address: 'Av. Principal 123', ownerId: 'barbero', isActive: true, plan: 'pro' },
+  { id: 2, name: 'Sucursal Norte', address: 'Calle Norte 456', ownerId: 'barbero2', isActive: true, plan: 'basic' },
 ];
 
 const INITIAL_CLIENTS: Client[] = [
@@ -145,7 +145,15 @@ export const DataService = {
   getPointsOfSale: async (): Promise<PointOfSale[]> => {
     const snap = await get(ref(db, ROOT + '/pointsOfSale'));
     const arr = snapshotToArray<PointOfSale>(snap.val());
-    return arr.map((p) => ({ ...p, id: Number(p.id) }));
+    return arr.map((p) => ({ ...p, id: Number(p.id), plan: p.plan || 'basic' }));
+  },
+
+  /** Plan de la sede activa; usado para habilitar funciones Pro (ej. notificaciones barbero). */
+  getCurrentPosPlan: async (): Promise<'basic' | 'pro'> => {
+    if (ACTIVE_POS_ID == null) return 'basic';
+    const list = await DataService.getPointsOfSale();
+    const pos = list.find((p) => p.id === ACTIVE_POS_ID);
+    return pos?.plan === 'pro' ? 'pro' : 'basic';
   },
 
   addPointOfSale: async (pos: Omit<PointOfSale, 'id'>): Promise<PointOfSale> => {
