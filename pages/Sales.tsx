@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
 import { Product, Service, Client, SaleItem, Sale, AppointmentForSale } from '../types';
-import { Search, Plus, Minus, Trash2, User, CreditCard, Banknote, Smartphone, CheckCircle, Package, Scissors, ShoppingCart, FileText } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, User, CreditCard, Banknote, Smartphone, CheckCircle, Package, Scissors, ShoppingCart, FileText, Loader2 } from 'lucide-react';
 
 interface SalesProps {
     salesFromAppointment?: AppointmentForSale | null;
@@ -14,6 +14,7 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
     const [clients, setClients] = useState<Client[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<'products' | 'services'>('services');
+    const [loadingCatalog, setLoadingCatalog] = useState(true);
     
     // Config
     const [taxRate, setTaxRate] = useState(0.16);
@@ -37,16 +38,21 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
     }, [salesFromAppointment]);
 
     const loadData = async () => {
-        const [productsData, servicesData, clientsData, settingsData] = await Promise.all([
-            DataService.getProducts(),
-            DataService.getServices(),
-            DataService.getClients(),
-            DataService.getSettings(),
-        ]);
-        setProducts(productsData);
-        setServices(servicesData);
-        setClients(clientsData);
-        setTaxRate(settingsData.taxRate);
+        setLoadingCatalog(true);
+        try {
+            const [productsData, servicesData, clientsData, settingsData] = await Promise.all([
+                DataService.getProducts(),
+                DataService.getServices(),
+                DataService.getClients(),
+                DataService.getSettings(),
+            ]);
+            setProducts(productsData);
+            setServices(servicesData);
+            setClients(clientsData);
+            setTaxRate(settingsData.taxRate);
+        } finally {
+            setLoadingCatalog(false);
+        }
     };
 
     const addToCart = (item: Product | Service, type: 'producto' | 'servicio') => {
@@ -199,6 +205,12 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
+                    {loadingCatalog ? (
+                        <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+                            <Loader2 className="animate-spin mb-4" size={40} />
+                            <p className="font-medium">Cargando servicios y productos...</p>
+                        </div>
+                    ) : (
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         {activeTab === 'services' ? (
                             filteredServices.map(service => (
@@ -242,6 +254,7 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
                             ))
                         )}
                     </div>
+                    )}
                 </div>
             </div>
 
