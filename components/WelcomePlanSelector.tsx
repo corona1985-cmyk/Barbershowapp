@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AccountTier } from '../types';
-import { Scissors, User, Users, MapPin, MessageCircle, Mail, LogIn, ArrowLeft, UserCircle, Store } from 'lucide-react';
+import { Scissors, User, Users, MapPin, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send } from 'lucide-react';
 import { DataService } from '../services/data';
 
 /** Configuración de contacto: pon aquí tu número WhatsApp (código país + número sin +) para mostrar el botón. Ej: '5215512345678' */
@@ -72,6 +72,13 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
     const [userType, setUserType] = useState<UserType | null>(null);
     const [selectedPlan, setSelectedPlan] = useState<AccountTier | null>(null);
     const [supportEmail, setSupportEmail] = useState(CONTACT.email);
+    /** Formulario solicitud de acceso (estilo ICC Tech) */
+    const [formNombre, setFormNombre] = useState('');
+    const [formNegocio, setFormNegocio] = useState('');
+    const [formEmail, setFormEmail] = useState('');
+    const [formTelefono, setFormTelefono] = useState('');
+    const [formMotivo, setFormMotivo] = useState('');
+    const [formAceptoTerminos, setFormAceptoTerminos] = useState(false);
 
     useEffect(() => {
         DataService.getGlobalSettings().then((s) => setSupportEmail(s?.supportEmail || CONTACT.email)).catch(() => {});
@@ -93,9 +100,175 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
         } else if (step === 'barber_registered') {
             setStep('barber_plan');
             setSelectedPlan(null);
-        } else if (step === 'barber_contact') setStep('barber_registered');
+        } else if (step === 'barber_contact') { setStep('barber_plan'); setSelectedPlan(null); }
         else if (step === 'client_new') setStep('client_registered');
     };
+
+    const handleEnviarSolicitud = () => {
+        if (!formAceptoTerminos) {
+            alert('Debes aceptar los Términos de Servicio y la Política de Privacidad.');
+            return;
+        }
+        const body = [
+            `Plan solicitado: ${plan?.label ?? selectedPlan}`,
+            '',
+            `Nombre: ${formNombre}`,
+            `Negocio/Barbería: ${formNegocio}`,
+            `Correo: ${formEmail}`,
+            `Teléfono: ${formTelefono}`,
+            '',
+            'Motivo / Mensaje:',
+            formMotivo || '(Sin mensaje adicional)',
+        ].join('\n');
+        window.location.href = `mailto:${supportEmail}?subject=Solicitud de acceso - ${plan?.label ?? selectedPlan} - BarberShow&body=${encodeURIComponent(body)}`;
+    };
+
+    /** Layout dos paneles como ICC Tech: izquierda = plan elegido, derecha = formulario solicitud */
+    if (step === 'barber_contact' && plan) {
+        return (
+            <div className="min-h-screen min-h-[100dvh] flex flex-col lg:flex-row">
+                {/* Panel izquierdo oscuro — plan que quiere */}
+                <div className="lg:w-[45%] xl:w-[40%] bg-slate-900 text-white p-6 lg:p-10 flex flex-col justify-between">
+                    <div>
+                        <button type="button" onClick={goBack} className="flex items-center gap-1 text-slate-400 hover:text-white text-sm mb-8">
+                            <ArrowLeft size={16} /> Volver
+                        </button>
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-12 h-12 bg-[#ffd427] rounded-xl flex items-center justify-center">
+                                <Scissors size={24} className="text-slate-900" />
+                            </div>
+                            <div>
+                                <h1 className="text-xl font-semibold text-white">BarberShow</h1>
+                                <p className="text-slate-400 text-sm">Sistema para barberías</p>
+                            </div>
+                        </div>
+                        <h2 className="text-2xl lg:text-3xl font-bold text-white mb-3">Solicitud de acceso</h2>
+                        <p className="text-slate-300 text-sm lg:text-base mb-8">
+                            Gestione citas, ventas y clientes con el plan que mejor se adapte a su negocio.
+                        </p>
+                        {/* Plan elegido — visible en el lado */}
+                        <div className="bg-white/10 rounded-xl border border-white/20 p-5 mb-4">
+                            <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Plan seleccionado</p>
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="w-12 h-12 rounded-lg bg-[#ffd427] flex items-center justify-center [&>svg]:w-6 [&>svg]:h-6 text-slate-900">
+                                    {plan.icon}
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-white">{plan.label}</h3>
+                                    <p className="text-slate-400 text-sm">{plan.description}</p>
+                                </div>
+                            </div>
+                            <ul className="space-y-2 text-slate-300 text-sm">
+                                {plan.benefits.slice(0, 4).map((b, i) => (
+                                    <li key={i} className="flex items-start gap-2">
+                                        <CheckCircle size={16} className="text-[#ffd427] flex-shrink-0 mt-0.5" />
+                                        <span>{b}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-500 text-sm mt-6">
+                        <CheckCircle size={18} className="text-green-500 flex-shrink-0" />
+                        <span>Soporte por correo y WhatsApp</span>
+                    </div>
+                </div>
+
+                {/* Panel derecho claro — formulario */}
+                <div className="flex-1 bg-slate-50 lg:bg-white p-6 lg:p-10 flex flex-col justify-center">
+                    <div className="max-w-lg mx-auto w-full">
+                        <h2 className="text-2xl font-bold text-slate-800 mb-1">Solicitud de acceso empresarial</h2>
+                        <p className="text-slate-500 text-sm mb-6">Complete el formulario para registrar su negocio. Nos pondremos en contacto a la brevedad.</p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del representante</label>
+                                <input
+                                    type="text"
+                                    value={formNombre}
+                                    onChange={(e) => setFormNombre(e.target.value)}
+                                    placeholder="Su nombre completo"
+                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#ffd427] focus:border-[#ffd427] text-slate-800"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del negocio / Barbería</label>
+                                <input
+                                    type="text"
+                                    value={formNegocio}
+                                    onChange={(e) => setFormNegocio(e.target.value)}
+                                    placeholder="Ej: Barbería El Corte"
+                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#ffd427] focus:border-[#ffd427] text-slate-800"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Correo electrónico</label>
+                                <input
+                                    type="email"
+                                    value={formEmail}
+                                    onChange={(e) => setFormEmail(e.target.value)}
+                                    placeholder="correo@ejemplo.com"
+                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#ffd427] focus:border-[#ffd427] text-slate-800"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Teléfono</label>
+                                <input
+                                    type="tel"
+                                    value={formTelefono}
+                                    onChange={(e) => setFormTelefono(e.target.value)}
+                                    placeholder="Ej: +52 55 1234 5678"
+                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#ffd427] focus:border-[#ffd427] text-slate-800"
+                                />
+                            </div>
+                        </div>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Motivo de solicitud</label>
+                            <textarea
+                                value={formMotivo}
+                                onChange={(e) => setFormMotivo(e.target.value)}
+                                rows={4}
+                                placeholder="Describa brevemente su negocio y por qué desea acceder a BarberShow..."
+                                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#ffd427] focus:border-[#ffd427] text-slate-800 resize-none"
+                            />
+                        </div>
+                        <div className="mb-6">
+                            <label className="flex items-start gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={formAceptoTerminos}
+                                    onChange={(e) => setFormAceptoTerminos(e.target.checked)}
+                                    className="mt-1 rounded border-slate-300 text-[#ffd427] focus:ring-[#ffd427]"
+                                />
+                                <span className="text-sm text-slate-600">
+                                    Acepto los <button type="button" onClick={() => {}} className="text-[#ffd427] hover:underline font-medium">Términos de Servicio</button> y la <button type="button" onClick={() => {}} className="text-[#ffd427] hover:underline font-medium">Política de Privacidad</button>. Entiendo que mi solicitud será revisada.
+                                </span>
+                            </label>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-end gap-3">
+                            <button type="button" onClick={goBack} className="px-4 py-2.5 text-slate-600 hover:text-slate-800 font-medium text-sm">
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleEnviarSolicitud}
+                                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors text-sm"
+                            >
+                                Enviar solicitud <Send size={18} />
+                            </button>
+                        </div>
+                        <p className="mt-6 text-center">
+                            <button type="button" onClick={onGoToLogin} className="text-slate-500 hover:text-[#ffd427] text-sm font-medium">
+                                Ya tengo cuenta – Iniciar sesión
+                            </button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom">
@@ -153,7 +326,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 <button
                                     key={opt.value}
                                     type="button"
-                                    onClick={() => { setSelectedPlan(opt.value); setStep('barber_registered'); }}
+                                    onClick={() => { setSelectedPlan(opt.value); setStep('barber_contact'); }}
                                     className="w-full flex flex-col sm:flex-row lg:flex-col items-start gap-3 p-4 rounded-lg bg-white/10 hover:bg-white/15 border border-white/20 text-left transition-colors group h-full"
                                 >
                                     <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#ffd427]/20 flex items-center justify-center group-hover:bg-[#ffd427]/30 [&>svg]:w-5 [&>svg]:h-5">
@@ -201,48 +374,6 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 Soy nuevo – quiero que me den de alta
                             </button>
                         </div>
-                    </div>
-                )}
-
-                {/* Barbero nuevo: contacto con plan — mismo equilibrio */}
-                {step === 'barber_contact' && plan && (
-                    <div className="max-w-lg mx-auto">
-                        <button type="button" onClick={goBack} className="flex items-center gap-1 text-slate-400 hover:text-white text-sm mb-4">
-                            <ArrowLeft size={14} /> Volver
-                        </button>
-                        <div className="bg-white/10 rounded-lg border border-white/20 p-5 mb-5">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="w-11 h-11 rounded-lg bg-[#ffd427] flex items-center justify-center [&>svg]:w-6 [&>svg]:h-6">{plan.icon}</div>
-                                <div>
-                                    <h2 className="text-base font-semibold text-white">{plan.label}</h2>
-                                    <p className="text-slate-400 text-sm">{plan.description}</p>
-                                </div>
-                            </div>
-                            <ul className="space-y-2 text-slate-300 text-sm">
-                                {plan.benefits.map((b, i) => (
-                                    <li key={i} className="flex items-center gap-2"><span className="text-[#ffd427]">✓</span> {b}</li>
-                                ))}
-                            </ul>
-                        </div>
-                        <p className="text-slate-400 text-center text-sm mb-5">
-                            Contáctanos y te creamos tu usuario con el plan <strong className="text-white">{plan.label}</strong>.
-                        </p>
-                        <div className="flex flex-col gap-3 mb-5">
-                            {waLink && (
-                                <a href={waLink} target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center gap-2 py-4 rounded-lg bg-green-600 hover:bg-green-700 text-white font-medium text-base transition-colors">
-                                    <MessageCircle size={18} /> Contactar por WhatsApp
-                                </a>
-                            )}
-                            <a
-                                href={`mailto:${supportEmail}?subject=Solicitud plan ${plan.label} - BarberShow&body=${encodeURIComponent(whatsappMessage || 'Hola, quiero activar un plan en BarberShow.')}`}
-                                className="w-full flex items-center justify-center gap-2 py-4 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-medium text-base transition-colors"
-                            >
-                                <Mail size={18} /> Enviar correo
-                            </a>
-                        </div>
-                        <button type="button" onClick={onGoToLogin} className="w-full flex items-center justify-center gap-2 py-3 text-[#ffd427] hover:text-amber-300 font-medium text-sm">
-                            <LogIn size={16} /> Ya tengo cuenta – Iniciar sesión
-                        </button>
                     </div>
                 )}
 
