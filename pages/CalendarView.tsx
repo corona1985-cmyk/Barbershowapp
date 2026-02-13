@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
 import { Appointment, Barber } from '../types';
-import { ChevronLeft, ChevronRight, Clock, User, MapPin } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, User, MapPin, Loader2 } from 'lucide-react';
 
 const CalendarView: React.FC = () => {
+    const [loading, setLoading] = useState(true);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [barbers, setBarbers] = useState<Barber[]>([]);
     const [selectedBarber, setSelectedBarber] = useState<number | 'all'>('all');
@@ -13,6 +14,7 @@ const CalendarView: React.FC = () => {
     const isBarberoView = currentBarberId != null;
 
     useEffect(() => {
+        setLoading(true);
         Promise.all([
             DataService.getAppointments(),
             DataService.getBarbers(),
@@ -23,7 +25,7 @@ const CalendarView: React.FC = () => {
             const activePosId = DataService.getActivePosId();
             const pos = posList.find(p => p.id === activePosId);
             setCurrentBarberiaName(pos ? pos.name : '');
-        });
+        }).finally(() => setLoading(false));
     }, []);
 
     useEffect(() => {
@@ -79,6 +81,15 @@ const CalendarView: React.FC = () => {
         }
         return days;
     };
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center py-24 text-slate-500">
+                <Loader2 className="animate-spin mb-4" size={48} />
+                <p className="font-medium">Cargando calendario...</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">

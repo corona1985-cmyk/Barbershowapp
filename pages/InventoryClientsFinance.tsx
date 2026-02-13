@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
 import { Client, Product, PointOfSale } from '../types';
-import { Search, Plus, X, Edit2, User, Star, Upload, Image as ImageIcon, Ban, CheckCircle, Trophy, Crown, MapPin } from 'lucide-react';
+import { Search, Plus, X, Edit2, User, Star, Upload, Image as ImageIcon, Ban, CheckCircle, Trophy, Crown, MapPin, Loader2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 
 // --- Clients Component ---
 export const Clients: React.FC = () => {
+    const [loading, setLoading] = useState(true);
     const [clients, setClients] = useState<Client[]>([]);
     const [search, setSearch] = useState('');
     const [showModal, setShowModal] = useState(false);
@@ -33,10 +34,11 @@ export const Clients: React.FC = () => {
         const loadClients = role === 'barbero'
             ? DataService.getClientsWithActivity()
             : DataService.getClients();
+        setLoading(true);
         Promise.all([loadClients, DataService.getPointsOfSale()]).then(([clientsList, posList]) => {
             setClients(clientsList);
             setPointsOfSale(posList);
-        });
+        }).finally(() => setLoading(false));
     }, []);
 
     const handleEditClick = (client: Client) => {
@@ -107,6 +109,15 @@ export const Clients: React.FC = () => {
     
     // Sort for leaderboard
     const topClients = [...clients].sort((a, b) => b.puntos - a.puntos).slice(0, 5);
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center py-24 text-slate-500">
+                <Loader2 className="animate-spin mb-4" size={48} />
+                <p className="font-medium">Cargando clientes...</p>
+            </div>
+        );
+    }
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
 import { Appointment, Barber, Client, Service, AppointmentForSale, SaleItem, AccountTier } from '../types';
 import { ViewState } from '../types';
-import { Calendar, Clock, User, Scissors, Check, X, Trash2, Printer, MessageCircle, MapPin } from 'lucide-react';
+import { Calendar, Clock, User, Scissors, Check, X, Trash2, Printer, MessageCircle, MapPin, Loader2 } from 'lucide-react';
 
 interface AppointmentsProps {
     onChangeView?: (view: ViewState) => void;
@@ -11,6 +11,7 @@ interface AppointmentsProps {
 }
 
 const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteForBilling, accountTier = 'barberia' }) => {
+    const [loading, setLoading] = useState(true);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [barbers, setBarbers] = useState<Barber[]>([]);
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -37,31 +38,36 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
 
     useEffect(() => {
         (async () => {
-            const role = DataService.getCurrentUserRole();
-            setUserRole(role);
-            const clientsLoader = role === 'barbero' ? DataService.getClientsWithActivity() : DataService.getClients();
-            const [appts, barbersList, clientsList, servicesList, posList] = await Promise.all([
-                DataService.getAppointments(),
-                DataService.getBarbers(),
-                clientsLoader,
-                DataService.getServices(),
-                DataService.getPointsOfSale(),
-            ]);
-            setAppointments(appts);
-            setBarbers(barbersList);
-            setClients(clientsList);
-            setServices(servicesList);
-            const activePosId = DataService.getActivePosId();
-            const pos = posList.find(p => p.id === activePosId);
-            setCurrentBarberiaName(pos ? pos.name : '');
-            const activeBarbers = barbersList.filter(b => b.active);
-            if (activeBarbers.length > 0) setSelectedBarberForView(activeBarbers[0].id);
-            if (role === 'cliente') {
-                const currUser = DataService.getCurrentUser();
-                if (currUser) {
-                    const clientRecord = clientsList.find(c => c.nombre === currUser.name);
-                    if (clientRecord) setNewApt(prev => ({ ...prev, clienteId: clientRecord.id }));
+            setLoading(true);
+            try {
+                const role = DataService.getCurrentUserRole();
+                setUserRole(role);
+                const clientsLoader = role === 'barbero' ? DataService.getClientsWithActivity() : DataService.getClients();
+                const [appts, barbersList, clientsList, servicesList, posList] = await Promise.all([
+                    DataService.getAppointments(),
+                    DataService.getBarbers(),
+                    clientsLoader,
+                    DataService.getServices(),
+                    DataService.getPointsOfSale(),
+                ]);
+                setAppointments(appts);
+                setBarbers(barbersList);
+                setClients(clientsList);
+                setServices(servicesList);
+                const activePosId = DataService.getActivePosId();
+                const pos = posList.find(p => p.id === activePosId);
+                setCurrentBarberiaName(pos ? pos.name : '');
+                const activeBarbers = barbersList.filter(b => b.active);
+                if (activeBarbers.length > 0) setSelectedBarberForView(activeBarbers[0].id);
+                if (role === 'cliente') {
+                    const currUser = DataService.getCurrentUser();
+                    if (currUser) {
+                        const clientRecord = clientsList.find(c => c.nombre === currUser.name);
+                        if (clientRecord) setNewApt(prev => ({ ...prev, clienteId: clientRecord.id }));
+                    }
                 }
+            } finally {
+                setLoading(false);
             }
         })();
     }, []);
@@ -301,6 +307,15 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     // Solo clientes ven "Reservar Cita" (elegir barbero/fecha/hora). Superadmin, admin y barbero ven "Agenda de Citas" para agendar.
     const role = (userRole || '').toLowerCase();
     const isClientView = role === 'cliente';
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center py-24 text-slate-500">
+                <Loader2 className="animate-spin mb-4" size={48} />
+                <p className="font-medium">Cargando citas...</p>
+            </div>
+        );
+    }
 
     // Render for Clients (Visual Grid - Reservar Cita)
     if (isClientView) {
