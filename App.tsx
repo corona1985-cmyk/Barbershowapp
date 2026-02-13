@@ -294,7 +294,7 @@ const App: React.FC = () => {
 
     const handleClientPosSwitch = (id: number) => {
         handleSwitchPos(id);
-        setCurrentView('shop');
+        setCurrentView('appointments');
     };
 
     /** Al volver a Descubrir Barberías, el cliente debe limpiar la barbería seleccionada para que tenga que entrar de nuevo para ver las opciones. */
