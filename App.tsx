@@ -309,26 +309,25 @@ const App: React.FC = () => {
     };
 
     const renderView = () => {
-        // Force re-render when POS changes using key
-        const viewProps = { key: currentPosId };
-        const planProps = { ...viewProps, accountTier };
-        
+        // Force re-render when POS changes: key must be passed directly to JSX, not spread
+        const k = currentPosId;
+        const planProps = { accountTier };
         switch (currentView) {
-            case 'admin_pos': return <AdminPOS {...viewProps} />;
-            case 'dashboard': return <Dashboard onChangeView={setCurrentView} {...viewProps} />;
-            case 'sales': return <Sales salesFromAppointment={salesFromAppointment} onClearSalesFromAppointment={() => setSalesFromAppointment(null)} {...planProps} />;
-            case 'shop': return <Shop {...viewProps} />;
-            case 'appointments': return <Appointments onChangeView={setCurrentView} onCompleteForBilling={(data) => { setSalesFromAppointment(data); setCurrentView('sales'); }} {...planProps} />;
-            case 'clients': return <Clients {...viewProps} />;
-            case 'inventory': return <Inventory {...viewProps} />;
-            case 'finance': return <Finance {...viewProps} />;
-            case 'reports': return <Reports {...viewProps} accountTier={accountTier} posListForOwner={accountTier === 'multisede' ? posListForOwner : []} />;
-            case 'settings': return <Settings {...planProps} />;
-            case 'calendar': return <CalendarView {...viewProps} />;
-            case 'whatsapp_console': return <WhatsAppConsole {...viewProps} />;
-            case 'user_admin': return <UserAdmin {...viewProps} />;
-            case 'client_discovery': return <ClientDiscovery onSwitchPos={handleClientPosSwitch} />;
-            default: return <Dashboard onChangeView={setCurrentView} {...viewProps} />;
+            case 'admin_pos': return <AdminPOS key={k} />;
+            case 'dashboard': return <Dashboard key={k} onChangeView={setCurrentView} />;
+            case 'sales': return <Sales key={k} salesFromAppointment={salesFromAppointment} onClearSalesFromAppointment={() => setSalesFromAppointment(null)} {...planProps} />;
+            case 'shop': return <Shop key={k} />;
+            case 'appointments': return <Appointments key={k} onChangeView={setCurrentView} onCompleteForBilling={(data) => { setSalesFromAppointment(data); setCurrentView('sales'); }} {...planProps} />;
+            case 'clients': return <Clients key={k} />;
+            case 'inventory': return <Inventory key={k} />;
+            case 'finance': return <Finance key={k} />;
+            case 'reports': return <Reports key={k} accountTier={accountTier} posListForOwner={accountTier === 'multisede' ? posListForOwner : []} />;
+            case 'settings': return <Settings key={k} {...planProps} />;
+            case 'calendar': return <CalendarView key={k} />;
+            case 'whatsapp_console': return <WhatsAppConsole key={k} />;
+            case 'user_admin': return <UserAdmin key={k} />;
+            case 'client_discovery': return <ClientDiscovery key={k} onSwitchPos={handleClientPosSwitch} />;
+            default: return <Dashboard key={k} onChangeView={setCurrentView} />;
         }
     };
 
