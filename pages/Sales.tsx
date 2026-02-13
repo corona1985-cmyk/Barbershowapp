@@ -179,9 +179,9 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
     const { subtotal, tax, total } = calculateTotal();
 
     return (
-        <div className="flex flex-col lg:flex-row h-auto lg:h-[calc(100vh-theme(spacing.24))] gap-6">
+        <div className="flex flex-col lg:flex-row gap-4 md:gap-6 min-h-0 lg:h-[calc(100vh-8rem)]">
             {/* Left Column: Catalog */}
-            <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden h-[80vh] lg:h-auto">
+            <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[280px] lg:min-h-0">
                 <div className="p-4 border-b border-slate-200">
                     <div className="flex items-center space-x-4 mb-4">
                         <div className="relative flex-1">
@@ -268,7 +268,7 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
             </div>
 
             {/* Right Column: Cart */}
-            <div className="w-full lg:w-96 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-[50vh] lg:h-full">
+            <div className="w-full lg:w-96 flex-shrink-0 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col min-h-[320px] lg:min-h-0 lg:h-full">
                 <div className="p-4 border-b border-slate-200">
                     {salesFromAppointment && (
                         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
