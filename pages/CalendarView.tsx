@@ -139,15 +139,19 @@ const CalendarView: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
-                    {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
-                        <div key={day} className="py-2 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">
-                            {day}
+                <div className="overflow-x-auto table-wrapper">
+                    <div className="min-w-[280px]">
+                        <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
+                            {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
+                                <div key={day} className="py-2 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                    {day}
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
-                <div className="grid grid-cols-7 bg-slate-100 gap-px">
-                    {renderCalendar()}
+                        <div className="grid grid-cols-7 bg-slate-100 gap-px">
+                            {renderCalendar()}
+                        </div>
+                    </div>
                 </div>
             </div>
             

@@ -412,8 +412,8 @@ const App: React.FC = () => {
             );
         }
         return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative overflow-hidden border-t-8 border-[#ffd427]">
+            <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4 overflow-y-auto">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 sm:p-8 relative overflow-hidden border-t-8 border-[#ffd427] my-4">
                     <button
                         type="button"
                         onClick={() => setShowLoginScreen(false)}
@@ -557,7 +557,7 @@ const App: React.FC = () => {
 
     // 4. MAIN APP RENDER (General Users)
     return (
-        <div className="flex min-h-screen bg-slate-100 font-sans">
+        <div className="flex h-screen min-h-0 bg-slate-100 font-sans overflow-hidden">
             {showOnboardingTier && userRole !== 'cliente' && (
                 <OnboardingTier
                     businessName={currentPosName || undefined}
@@ -574,10 +574,10 @@ const App: React.FC = () => {
                 clientHasSelectedBarberia={userRole === 'cliente' ? currentPosId != null : true}
                 accountTier={accountTier}
             />
-            {/* Adjusted margin to be responsive: ml-0 on mobile, ml-64 on desktop */}
-            <main className="flex-1 md:ml-64 p-4 md:p-8 overflow-y-auto h-screen transition-all duration-300">
-                <header className="flex justify-between items-center mb-6 md:mb-8 no-print gap-3">
-                    <div className="flex items-center space-x-3 md:space-x-4">
+            {/* Área principal: flex para que el scroll sea solo en el contenido */}
+            <main className="flex-1 flex flex-col min-w-0 min-h-0 md:ml-64 overflow-hidden transition-all duration-300">
+                <header className="flex-shrink-0 flex flex-wrap justify-between items-center p-4 md:p-6 lg:p-8 pb-2 md:pb-4 no-print gap-3 bg-slate-100">
+                    <div className="flex items-center space-x-2 sm:space-x-3 md:space-x-4 min-w-0">
                         {/* Hamburger Button for Mobile */}
                         <button 
                             className="md:hidden text-slate-700 p-2 bg-white rounded-lg shadow-sm"
@@ -586,7 +586,7 @@ const App: React.FC = () => {
                             <Menu size={24} />
                         </button>
 
-                        <h1 className="text-xl md:text-2xl font-bold text-slate-800 capitalize truncate max-w-[150px] md:max-w-none">
+                        <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 capitalize truncate max-w-[140px] sm:max-w-[200px] md:max-w-none">
                             {currentView === 'shop' ? 'Tienda Online' : 
                              currentView === 'sales' ? 'Punto de Venta' : 
                              currentView === 'admin_pos' ? 'Gestión Global' :
@@ -664,47 +664,51 @@ const App: React.FC = () => {
                     </div>
                 </header>
                 
-                {/* Mobile Tenant Selector (Superadmin o Multi-Sede con varias sedes) */}
-                {userRole === 'superadmin' && (
-                    <div className="md:hidden mb-4">
-                         <div className="flex items-center bg-slate-800 text-white px-3 py-2 rounded-lg shadow-md border border-slate-700 w-full">
-                            <Globe size={16} className="text-[#ffd427] mr-2" />
-                            <select 
-                                value={currentPosId || ''} 
-                                onChange={(e) => handleSwitchPos(Number(e.target.value))}
-                                className="bg-slate-900 border-none text-white text-sm font-bold focus:ring-0 cursor-pointer rounded w-full"
-                            >
-                                {pointsOfSale.map(pos => (
-                                    <option key={pos.id} value={pos.id}>{pos.name}</option>
-                                ))}
-                            </select>
+                {/* Zona con scroll: única área que hace scroll */}
+                <div className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto scroll-touch px-4 md:px-6 lg:px-8 pb-6">
+                    {/* Mobile Tenant Selector (Superadmin o Multi-Sede con varias sedes) */}
+                    {userRole === 'superadmin' && (
+                        <div className="md:hidden mb-4">
+                             <div className="flex items-center bg-slate-800 text-white px-3 py-2 rounded-lg shadow-md border border-slate-700 w-full">
+                                <Globe size={16} className="text-[#ffd427] mr-2" />
+                                <select 
+                                    value={currentPosId || ''} 
+                                    onChange={(e) => handleSwitchPos(Number(e.target.value))}
+                                    className="bg-slate-900 border-none text-white text-sm font-bold focus:ring-0 cursor-pointer rounded w-full"
+                                >
+                                    {pointsOfSale.map(pos => (
+                                        <option key={pos.id} value={pos.id}>{pos.name}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
-                    </div>
-                )}
-                {accountTier === 'multisede' && posListForOwner.length > 1 && userRole !== 'superadmin' && (
-                    <div className="md:hidden mb-4">
-                        <div className="flex items-center bg-slate-800 text-white px-3 py-2 rounded-lg shadow-md border border-slate-700 w-full">
-                            <MapPin size={16} className="text-[#ffd427] mr-2" />
-                            <select 
-                                value={currentPosId || ''} 
-                                onChange={(e) => handleSwitchPos(Number(e.target.value))}
-                                className="bg-slate-900 border-none text-white text-sm font-bold focus:ring-0 cursor-pointer rounded w-full"
-                            >
-                                {posListForOwner.map(pos => (
-                                    <option key={pos.id} value={pos.id}>{pos.name}</option>
-                                ))}
-                            </select>
+                    )}
+                    {accountTier === 'multisede' && posListForOwner.length > 1 && userRole !== 'superadmin' && (
+                        <div className="md:hidden mb-4">
+                            <div className="flex items-center bg-slate-800 text-white px-3 py-2 rounded-lg shadow-md border border-slate-700 w-full">
+                                <MapPin size={16} className="text-[#ffd427] mr-2" />
+                                <select 
+                                    value={currentPosId || ''} 
+                                    onChange={(e) => handleSwitchPos(Number(e.target.value))}
+                                    className="bg-slate-900 border-none text-white text-sm font-bold focus:ring-0 cursor-pointer rounded w-full"
+                                >
+                                    {posListForOwner.map(pos => (
+                                        <option key={pos.id} value={pos.id}>{pos.name}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
+                    )}
+                    <div className="responsive-container">
+                        {renderView()}
                     </div>
-                )}
-                
-                {renderView()}
+                </div>
             </main>
 
             {/* Cookie Consent Banner */}
             {!acceptedCookies && (
-                <div className="fixed bottom-0 left-0 w-full bg-slate-900 text-white p-4 z-50 shadow-2xl animate-in slide-in-from-bottom duration-500">
-                    <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="fixed bottom-0 left-0 right-0 w-full bg-slate-900 text-white p-4 z-50 shadow-2xl animate-in slide-in-from-bottom duration-500 safe-area-bottom">
+                    <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div className="flex items-center space-x-3">
                             <Cookie className="text-[#ffd427]" size={24} />
                             <p className="text-sm">

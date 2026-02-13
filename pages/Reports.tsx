@@ -107,8 +107,8 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
 
     return (
         <div className="space-y-6 print-container">
-            <div className="flex justify-between items-center no-print">
-                <h2 className="text-2xl font-bold text-slate-800">Reportes y Estadísticas</h2>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 no-print">
+                <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Reportes y Estadísticas</h2>
                 <button 
                     onClick={() => window.print()}
                     className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors shadow-sm"

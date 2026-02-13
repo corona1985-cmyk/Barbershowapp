@@ -53,18 +53,19 @@ const AdminPOS: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-slate-800 flex items-center">
-                    <MapPin className="mr-2" /> Administración de Sedes (Puntos de Venta)
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center">
+                    <MapPin className="mr-2 flex-shrink-0" /> <span className="min-w-0">Administración de Sedes (Puntos de Venta)</span>
                 </h2>
-                <button onClick={() => openModal()} className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2 rounded-lg font-bold flex items-center space-x-2">
+                <button onClick={() => openModal()} className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2.5 rounded-lg font-bold flex items-center justify-center space-x-2 w-full sm:w-auto">
                     <Plus size={18} />
                     <span>Nueva Sede</span>
                 </button>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <table className="w-full">
+                <div className="table-wrapper overflow-x-auto">
+                <table className="w-full min-w-[640px]">
                     <thead className="bg-slate-50 text-slate-600 text-sm font-semibold uppercase tracking-wider">
                         <tr>
                             <th className="px-6 py-4 text-left">Nombre de Sede</th>
@@ -110,6 +111,7 @@ const AdminPOS: React.FC = () => {
                         })}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             {/* Modal */}

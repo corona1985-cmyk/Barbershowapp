@@ -1,2 +1,56 @@
-/* Estilos base - ColmaFacil POS */
+/* Estilos base - BarberShow - Diseño adaptativo */
 /* Tailwind se carga desde CDN en index.html */
+
+/* Base para que el scroll funcione dentro de la app */
+html {
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    height: 100%;
+}
+
+body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    height: 100%;
+    overflow-x: hidden;
+    margin: 0;
+}
+
+#root {
+    height: 100%;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: visible;
+}
+
+/* Contenedor principal de vistas: no desbordar en móvil */
+.responsive-container {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+/* Scroll táctil suave (iOS y Android) */
+.scroll-touch {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Tablas: scroll horizontal en pantallas pequeñas */
+.table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.table-wrapper table {
+    min-width: 0;
+}
+
+/* Área segura para notches (móviles) */
+@supports (padding: env(safe-area-inset-bottom)) {
+    .safe-area-bottom {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    .safe-area-top {
+        padding-top: env(safe-area-inset-top);
+    }
+}

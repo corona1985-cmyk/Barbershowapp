@@ -95,9 +95,9 @@ const Shop: React.FC = () => {
     const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
     return (
-        <div className="flex flex-col lg:flex-row h-[calc(100vh-theme(spacing.32))] gap-6">
+        <div className="flex flex-col lg:flex-row min-h-0 lg:h-[calc(100vh-8rem)] gap-4 md:gap-6">
             {/* Product Grid */}
-            <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="flex-1 flex flex-col min-h-[280px] lg:min-h-0 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-4 border-b border-slate-200 flex justify-between items-center">
                     <div className="relative flex-1 max-w-md">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />

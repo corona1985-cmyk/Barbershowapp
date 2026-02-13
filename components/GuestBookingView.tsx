@@ -150,8 +150,8 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
     }
 
     return (
-        <div className="max-w-2xl mx-auto">
-            <button type="button" onClick={onBack} className="flex items-center gap-1 text-slate-600 hover:text-slate-800 mb-6">
+        <div className="w-full max-w-2xl mx-auto px-0 sm:px-2">
+            <button type="button" onClick={onBack} className="flex items-center gap-1 text-slate-600 hover:text-slate-800 mb-4 sm:mb-6 py-2 min-h-[44px]">
                 <ArrowLeft size={20} /> Volver
             </button>
             <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">

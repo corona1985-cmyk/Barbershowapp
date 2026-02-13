@@ -165,8 +165,9 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                         />
                     </div>
                 </div>
-                <div className="max-h-[600px] overflow-y-auto">
-                    <table className="w-full text-left text-sm text-slate-300">
+                <div className="max-h-[600px] overflow-auto">
+                    <div className="overflow-x-auto table-wrapper">
+                    <table className="w-full text-left text-sm text-slate-300 min-w-[640px]">
                         <thead className="bg-slate-900/50 text-xs uppercase font-bold text-slate-500 sticky top-0">
                             <tr>
                                 <th className="px-6 py-4">Usuario</th>
@@ -205,6 +206,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
 
@@ -293,8 +295,9 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                         <input type="text" placeholder="Buscar en logs..." className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-600 rounded text-white focus:border-red-500" />
                     </div>
                 </div>
-                <div className="flex-1 overflow-y-auto">
-                    <table className="w-full text-left text-sm text-slate-300">
+                <div className="flex-1 overflow-auto">
+                    <div className="overflow-x-auto table-wrapper">
+                    <table className="w-full text-left text-sm text-slate-300 min-w-[640px]">
                         <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500 sticky top-0">
                             <tr>
                                 <th className="px-4 py-3">Timestamp</th>
@@ -318,6 +321,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -425,7 +429,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
             </aside>
 
             {/* Content Area */}
-            <main className="flex-1 bg-slate-950 p-8 overflow-y-auto h-screen">
+            <main className="flex-1 min-w-0 bg-slate-950 p-4 md:p-6 lg:p-8 overflow-x-hidden overflow-y-auto h-screen">
                 <header className="flex justify-between items-center mb-8">
                     <div>
                         <h2 className="text-xl font-bold text-white capitalize">{currentModule}</h2>
@@ -445,7 +449,8 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                     <div className="space-y-6 animate-in fade-in duration-500">
                          <h2 className="text-2xl font-bold text-white flex items-center"><Building className="mr-3 text-[#ffd427]" /> Gestión de Sedes (Barberías)</h2>
                          <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-                             <table className="w-full text-left text-sm text-slate-300">
+                             <div className="overflow-x-auto table-wrapper">
+                             <table className="w-full text-left text-sm text-slate-300 min-w-[640px]">
                                 <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
                                     <tr>
                                         <th className="px-6 py-4">ID</th>
@@ -489,6 +494,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                                     ))}
                                 </tbody>
                             </table>
+                             </div>
                          </div>
                     </div>
                 )}

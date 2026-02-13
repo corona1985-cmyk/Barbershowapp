@@ -144,8 +144,8 @@ export const Clients: React.FC = () => {
                             <input type="text" placeholder="Buscar por nombre o teléfono..." className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ffd427]" value={search} onChange={e => setSearch(e.target.value)} />
                         </div>
                     </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
+                    <div className="overflow-x-auto table-wrapper">
+                        <table className="w-full min-w-[640px]">
                             <thead className="bg-slate-50 text-slate-600 text-sm font-semibold uppercase tracking-wider">
                                 <tr>
                                     <th className="px-6 py-4 text-left">Cliente</th>
@@ -399,7 +399,8 @@ export const Inventory: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <table className="w-full">
+                <div className="overflow-x-auto table-wrapper">
+                <table className="w-full min-w-[640px]">
                     <thead className="bg-slate-50 text-slate-600 text-sm font-semibold uppercase tracking-wider">
                         <tr>
                             <th className="px-6 py-4 text-left">Producto</th>
@@ -433,6 +434,7 @@ export const Inventory: React.FC = () => {
                         ))}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             {/* Product Modal */}
