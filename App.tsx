@@ -6,6 +6,7 @@ import Sales from './pages/Sales';
 import Shop from './pages/Shop';
 import Appointments from './pages/Appointments';
 import Reports from './pages/Reports';
+import SalesRecords from './pages/SalesRecords';
 import Settings from './pages/Settings';
 import AdminPOS from './pages/AdminPOS';
 import CalendarView from './pages/CalendarView';
@@ -294,7 +295,7 @@ const App: React.FC = () => {
 
     const handleClientPosSwitch = (id: number) => {
         handleSwitchPos(id);
-        setCurrentView('shop');
+        setCurrentView('appointments');
     };
 
     /** Al volver a Descubrir Barberías, el cliente debe limpiar la barbería seleccionada para que tenga que entrar de nuevo para ver las opciones. */
@@ -322,6 +323,7 @@ const App: React.FC = () => {
             case 'inventory': return <Inventory key={k} />;
             case 'finance': return <Finance key={k} />;
             case 'reports': return <Reports key={k} accountTier={accountTier} posListForOwner={accountTier === 'multisede' ? posListForOwner : []} />;
+            case 'sales_records': return <SalesRecords key={k} accountTier={accountTier} />;
             case 'settings': return <Settings key={k} {...planProps} />;
             case 'calendar': return <CalendarView key={k} />;
             case 'whatsapp_console': return <WhatsAppConsole key={k} />;
@@ -591,6 +593,7 @@ const App: React.FC = () => {
                              currentView === 'sales' ? 'Punto de Venta' : 
                              currentView === 'admin_pos' ? 'Gestión Global' :
                              currentView === 'client_discovery' ? 'Barberías' :
+                             currentView === 'sales_records' ? 'Registros de cortes' :
                              currentView.replace('_', ' ')}
                         </h1>
                         

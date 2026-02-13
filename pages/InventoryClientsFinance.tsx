@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
-import { Client, Product, PointOfSale } from '../types';
+import { Client, Product, PointOfSale, FinanceRecord, Sale } from '../types';
 import { Search, Plus, X, Edit2, User, Star, Upload, Image as ImageIcon, Ban, CheckCircle, Trophy, Crown, MapPin, Loader2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
@@ -486,64 +486,236 @@ export const Inventory: React.FC = () => {
 };
 
 // --- Finance Component ---
+const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+function buildChartData(sales: Sale[], financeRecords: FinanceRecord[], days: number = 7): { name: string; ingresos: number; egresos: number }[] {
+    const today = new Date();
+    const result: { name: string; ingresos: number; egresos: number }[] = [];
+    const ingresosByDate: Record<string, number> = {};
+    const egresosByDate: Record<string, number> = {};
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().split('T')[0];
+        ingresosByDate[key] = 0;
+        egresosByDate[key] = 0;
+    }
+    sales.filter((s) => s.estado === 'completada').forEach((s) => {
+        if (ingresosByDate[s.fecha] !== undefined) ingresosByDate[s.fecha] += s.total;
+    });
+    financeRecords.forEach((f) => {
+        if (egresosByDate[f.fecha] !== undefined) egresosByDate[f.fecha] = f.egresos || 0;
+    });
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().split('T')[0];
+        result.push({
+            name: DAY_NAMES[d.getDay()] + ' ' + key.slice(5),
+            ingresos: ingresosByDate[key] || 0,
+            egresos: egresosByDate[key] || 0,
+        });
+    }
+    return result;
+}
+
 export const Finance: React.FC = () => {
-    const [data, setData] = useState<{name: string, ingresos: number, egresos: number}[]>([]);
+    const [sales, setSales] = useState<Sale[]>([]);
+    const [financeRecords, setFinanceRecords] = useState<FinanceRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [showGastoModal, setShowGastoModal] = useState(false);
+    const [gastoFecha, setGastoFecha] = useState(() => new Date().toISOString().split('T')[0]);
+    const [gastoDescripcion, setGastoDescripcion] = useState('');
+    const [gastoMonto, setGastoMonto] = useState('');
+
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const [s, f] = await Promise.all([DataService.getSales(), DataService.getFinances()]);
+            setSales(s);
+            setFinanceRecords(f);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        // Mock chart data generation
-        const mockData = [
-            { name: 'Lun', ingresos: 400, egresos: 240 },
-            { name: 'Mar', ingresos: 300, egresos: 139 },
-            { name: 'Mie', ingresos: 200, egresos: 980 },
-            { name: 'Jue', ingresos: 278, egresos: 390 },
-            { name: 'Vie', ingresos: 589, egresos: 480 },
-            { name: 'Sab', ingresos: 839, egresos: 380 },
-            { name: 'Dom', ingresos: 349, egresos: 430 },
-        ];
-        setData(mockData);
+        loadData();
     }, []);
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
+    const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
+
+    const salesThisMonth = sales.filter((s) => s.estado === 'completada' && s.fecha >= firstDay && s.fecha <= lastDay);
+    const ingresosMes = salesThisMonth.reduce((sum, s) => sum + s.total, 0);
+    const recordsThisMonth = financeRecords.filter((r) => r.fecha >= firstDay && r.fecha <= lastDay);
+    const egresosMes = recordsThisMonth.reduce((sum, r) => sum + (r.egresos || 0), 0);
+    const beneficioNeto = ingresosMes - egresosMes;
+
+    const chartData = buildChartData(sales, financeRecords, 7);
+
+    const handleAddGasto = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const monto = Number.parseFloat(gastoMonto);
+        if (!gastoDescripcion.trim() || Number.isNaN(monto) || monto <= 0) {
+            alert('Indica descripción y monto mayor a 0.');
+            return;
+        }
+        const posId = DataService.getActivePosId();
+        if (posId == null) {
+            alert('No hay sede activa.');
+            return;
+        }
+        const existing = financeRecords.find((r) => r.fecha === gastoFecha);
+        const newGasto = { descripcion: gastoDescripcion.trim(), monto };
+        let updated: FinanceRecord[];
+        if (existing) {
+            const gastos = [...(existing.gastos || []), newGasto];
+            const egresos = gastos.reduce((s, g) => s + (typeof g === 'object' && 'monto' in g ? Number(g.monto) : 0), 0);
+            updated = financeRecords.map((r) =>
+                r.fecha === gastoFecha ? { ...r, gastos, egresos } : r
+            );
+        } else {
+            const newRecord: FinanceRecord = {
+                id: Date.now(),
+                posId,
+                fecha: gastoFecha,
+                ingresos: 0,
+                egresos: monto,
+                ventas: [],
+                gastos: [newGasto],
+            };
+            updated = [...financeRecords, newRecord];
+        }
+        await DataService.setFinances(updated);
+        setFinanceRecords(updated);
+        setShowGastoModal(false);
+        setGastoDescripcion('');
+        setGastoMonto('');
+    };
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center py-24 text-slate-500">
+                <Loader2 className="animate-spin mb-4" size={48} />
+                <p className="font-medium">Cargando finanzas...</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-slate-800">Finanzas</h2>
-            
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <h2 className="text-2xl font-bold text-slate-800">Finanzas</h2>
+                <button
+                    type="button"
+                    onClick={() => setShowGastoModal(true)}
+                    className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2 rounded-lg font-bold flex items-center justify-center space-x-2 transition-colors shadow-sm"
+                >
+                    <Plus size={18} />
+                    <span>Registrar gasto</span>
+                </button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                    <p className="text-slate-500 text-sm font-medium mb-1">Ingresos Totales (Mes)</p>
+                    <p className="text-slate-500 text-sm font-medium mb-1">Ingresos (este mes)</p>
                     <h3 className="text-3xl font-bold text-emerald-600 flex items-center">
-                        <TrendingUp className="mr-2" /> $12,450.00
+                        <TrendingUp className="mr-2" /> ${ingresosMes.toFixed(2)}
                     </h3>
+                    <p className="text-xs text-slate-400 mt-1">Por ventas registradas en el POS</p>
                 </div>
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                    <p className="text-slate-500 text-sm font-medium mb-1">Gastos Operativos</p>
+                    <p className="text-slate-500 text-sm font-medium mb-1">Gastos operativos (este mes)</p>
                     <h3 className="text-3xl font-bold text-red-500 flex items-center">
-                        <TrendingDown className="mr-2" /> $4,200.00
+                        <TrendingDown className="mr-2" /> ${egresosMes.toFixed(2)}
                     </h3>
+                    <p className="text-xs text-slate-400 mt-1">Gastos registrados manualmente</p>
                 </div>
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                    <p className="text-slate-500 text-sm font-medium mb-1">Beneficio Neto</p>
-                    <h3 className="text-3xl font-bold text-[#e6be23] flex items-center">
-                        <DollarSign className="mr-2" /> $8,250.00
+                    <p className="text-slate-500 text-sm font-medium mb-1">Beneficio neto</p>
+                    <h3 className={`text-3xl font-bold flex items-center ${beneficioNeto >= 0 ? 'text-[#e6be23]' : 'text-red-500'}`}>
+                        <DollarSign className="mr-2" /> ${beneficioNeto.toFixed(2)}
                     </h3>
                 </div>
             </div>
 
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-96">
-                <h3 className="text-lg font-bold text-slate-800 mb-6">Balance Semanal</h3>
+                <h3 className="text-lg font-bold text-slate-800 mb-6">Últimos 7 días (ingresos por ventas vs egresos)</h3>
                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data}>
+                    <BarChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b'}} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b'}} dx={-10} />
-                        <Tooltip 
-                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', padding: '12px' }}
-                        />
-                        <Legend wrapperStyle={{paddingTop: '20px'}} />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} dy={10} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} dx={-10} />
+                        <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', padding: '12px' }} />
+                        <Legend wrapperStyle={{ paddingTop: '20px' }} />
                         <Bar dataKey="ingresos" fill="#ffd427" radius={[4, 4, 0, 0]} name="Ingresos" />
                         <Bar dataKey="egresos" fill="#ef4444" radius={[4, 4, 0, 0]} name="Egresos" />
                     </BarChart>
                 </ResponsiveContainer>
             </div>
+
+            {recordsThisMonth.length > 0 && (
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 className="text-lg font-bold text-slate-800 mb-4">Gastos del mes</h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="text-slate-500 text-sm border-b border-slate-200">
+                                    <th className="py-2">Fecha</th>
+                                    <th className="py-2">Descripción</th>
+                                    <th className="py-2 text-right">Monto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {recordsThisMonth.flatMap((r) =>
+                                    (r.gastos || []).map((g: any, i: number) => (
+                                        <tr key={`${r.fecha}-${i}`} className="border-b border-slate-50">
+                                            <td className="py-2 text-slate-700">{r.fecha}</td>
+                                            <td className="py-2 text-slate-700">{typeof g === 'object' && g.descripcion != null ? g.descripcion : String(g)}</td>
+                                            <td className="py-2 text-right font-medium text-red-600">${(typeof g === 'object' && g.monto != null ? Number(g.monto) : 0).toFixed(2)}</td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {showGastoModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+                        <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-4">
+                            <h3 className="text-xl font-bold text-slate-800">Registrar gasto</h3>
+                            <button type="button" onClick={() => setShowGastoModal(false)} className="text-slate-400 hover:text-slate-600">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleAddGasto} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Fecha</label>
+                                <input type="date" required className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#ffd427]" value={gastoFecha} onChange={(e) => setGastoFecha(e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Descripción</label>
+                                <input type="text" required className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#ffd427]" placeholder="Ej: Alquiler, insumos, servicios" value={gastoDescripcion} onChange={(e) => setGastoDescripcion(e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Monto ($)</label>
+                                <input type="number" step="0.01" min="0.01" required className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#ffd427]" value={gastoMonto} onChange={(e) => setGastoMonto(e.target.value)} />
+                            </div>
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button type="button" onClick={() => setShowGastoModal(false)} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg">Cancelar</button>
+                                <button type="submit" className="px-4 py-2 bg-[#ffd427] text-slate-900 font-bold rounded-lg hover:bg-[#e6be23]">Guardar gasto</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

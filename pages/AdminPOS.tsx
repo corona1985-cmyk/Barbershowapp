@@ -24,10 +24,13 @@ const AdminPOS: React.FC = () => {
             alert('Por favor complete todos los campos');
             return;
         }
+        const tier = currentPos.tier ?? 'solo';
+        const plan = tier === 'solo' ? 'basic' : 'pro';
+        const toSave = { ...currentPos, tier, plan } as PointOfSale;
         if (currentPos.id) {
-            await DataService.updatePointOfSale(currentPos as PointOfSale);
+            await DataService.updatePointOfSale(toSave);
         } else {
-            await DataService.addPointOfSale(currentPos as any);
+            await DataService.addPointOfSale(toSave as any);
         }
         setShowModal(false);
         await loadData();
@@ -44,7 +47,7 @@ const AdminPOS: React.FC = () => {
         if (pos) {
             setCurrentPos(pos);
         } else {
-            setCurrentPos({ name: '', address: '', ownerId: '', isActive: true, tier: 'barberia' });
+            setCurrentPos({ name: '', address: '', ownerId: '', isActive: true, tier: 'solo' });
         }
         setShowModal(true);
     };
@@ -71,6 +74,7 @@ const AdminPOS: React.FC = () => {
                             <th className="px-6 py-4 text-left">Nombre de Sede</th>
                             <th className="px-6 py-4 text-left">Dirección</th>
                             <th className="px-6 py-4 text-left">Dueño Asignado</th>
+                            <th className="px-6 py-4 text-center">Plan</th>
                             <th className="px-6 py-4 text-center">Estado</th>
                             <th className="px-6 py-4 text-right">Acciones</th>
                         </tr>
@@ -92,6 +96,11 @@ const AdminPOS: React.FC = () => {
                                                 <div className="text-xs text-slate-500">{owner?.username}</div>
                                             </div>
                                         </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                        <span className={`px-2 py-1 rounded text-xs font-medium ${pos.tier === 'multisede' ? 'bg-indigo-100 text-indigo-800' : pos.tier === 'barberia' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
+                                            {pos.tier === 'multisede' ? 'Multi-Sede' : pos.tier === 'barberia' ? 'Barbería' : 'Solo'}
+                                        </span>
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${pos.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -159,17 +168,17 @@ const AdminPOS: React.FC = () => {
                                 <p className="text-xs text-slate-500 mt-1">Solo aparecen usuarios con rol 'Dueño' o 'Admin'.</p>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de negocio</label>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Plan</label>
                                 <select
                                     className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#ffd427]"
-                                    value={currentPos.tier ?? 'barberia'}
+                                    value={currentPos.tier ?? 'solo'}
                                     onChange={e => setCurrentPos({ ...currentPos, tier: e.target.value as AccountTier })}
                                 >
-                                    <option value="solo">Solo – Un barbero, una sede</option>
-                                    <option value="barberia">Barbería – Varios barberos, una sede</option>
-                                    <option value="multisede">Multi-Sede – Varias ubicaciones</option>
+                                    <option value="solo">Solo – Una persona, un local. Menú simplificado (Dashboard, Citas, Clientes, Ventas, Configuración, Reportes, Registros de cortes).</option>
+                                    <option value="barberia">Barbería – Varios barberos, una sede. Incluye agenda por barbero, reportes por barbero, inventario, finanzas, WhatsApp, admin usuarios.</option>
+                                    <option value="multisede">Multi-Sede – Varias ubicaciones o cadena. Selector de sede, reportes por sede, administración centralizada.</option>
                                 </select>
-                                <p className="text-xs text-slate-500 mt-1">Define el menú y las opciones disponibles para esta sede.</p>
+                                <p className="text-xs text-slate-500 mt-1">El plan define el menú y las opciones disponibles para esta sede.</p>
                             </div>
                             <div className="flex items-center space-x-2 pt-2">
                                 <input 
