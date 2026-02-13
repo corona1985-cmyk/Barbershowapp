@@ -58,6 +58,7 @@ export interface SystemUser {
     name: string;
     posId?: number | null; // Null for superadmin or global users, specific ID for tenant users
     barberId?: number | null; // Solo para rol barbero: id del registro en Barber (barbers table)
+    clientId?: number | null; // Solo para rol cliente: id del registro en Client (clients table)
     permissions?: Permissions;
     lastLogin?: string;
     ip?: string;

@@ -26,58 +26,69 @@ const Shop: React.FC = () => {
         const product = products.find(p => p.id === id);
         if (product && quantity > product.stock) return;
         
-        const updatedCart = DataService.updateCartQuantity(id, quantity);
+        const updatedCart = DataService.updateCartQuantity(id, quantity, 'producto');
         setCart([...updatedCart]);
     };
 
     const handleCheckout = async () => {
         if (cart.length === 0) return;
-        const [settings, clients, sales] = await Promise.all([
-            DataService.getSettings(),
-            DataService.getClients(),
-            DataService.getSales(),
-        ]);
-        const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        const taxRate = settings.taxRate;
-        const tax = subtotal * taxRate;
-        const total = subtotal + tax;
-        const currentUser = DataService.getCurrentUser();
-        const client = currentUser ? clients.find(c => c.nombre === currentUser.name) : null;
-        const newId = sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1;
-        const saleNumber = `ORD${String(newId).padStart(4, '0')}`;
-        const newSale: Sale = {
-            id: newId,
-            posId: DataService.getActivePosId() || 0,
-            numeroVenta: saleNumber,
-            clienteId: client?.id ?? null,
-            items: cart.map(c => ({ ...c, type: 'producto' as const })),
-            metodoPago: 'online',
-            subtotal,
-            iva: tax,
-            total,
-            fecha: new Date().toISOString().split('T')[0],
-            hora: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-            notas: 'Pedido Online - Pendiente de recojo',
-            estado: 'completada'
-        };
-        const updatedProducts = [...products];
-        cart.forEach(item => {
-            const prodIndex = updatedProducts.findIndex(p => p.id === item.id);
-            if (prodIndex >= 0) updatedProducts[prodIndex].stock -= item.quantity;
-        });
-        if (client) {
-            const pointsEarned = DataService.calculatePoints(total, 'product');
-            client.puntos = (client.puntos || 0) + pointsEarned;
-            await DataService.updateClient(client);
+        const activePosId = DataService.getActivePosId();
+        if (activePosId == null) {
+            alert('No hay barbería seleccionada. Entra a una barbería desde Descubrir Barberías para poder comprar.');
+            return;
         }
-        await DataService.setProducts(updatedProducts);
-        await DataService.setSales([...sales, newSale]);
-        DataService.clearCart();
-        setProducts(updatedProducts);
-        setCart([]);
-        setLastOrderId(saleNumber);
-        setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 3000);
+        try {
+            const [settings, clients, sales] = await Promise.all([
+                DataService.getSettings(),
+                DataService.getClients(),
+                DataService.getSales(),
+            ]);
+            const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const taxRate = settings.taxRate;
+            const tax = subtotal * taxRate;
+            const total = subtotal + tax;
+            const currentUser = DataService.getCurrentUser();
+            const client = currentUser
+                ? (currentUser.clientId != null ? clients.find(c => c.id === currentUser.clientId) : clients.find(c => c.nombre === currentUser.name))
+                : null;
+            const newId = sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1;
+            const saleNumber = `ORD${String(newId).padStart(4, '0')}`;
+            const newSale: Sale = {
+                id: newId,
+                posId: activePosId,
+                numeroVenta: saleNumber,
+                clienteId: client?.id ?? null,
+                items: cart.map(c => ({ ...c, type: 'producto' as const })),
+                metodoPago: 'online',
+                subtotal,
+                iva: tax,
+                total,
+                fecha: new Date().toISOString().split('T')[0],
+                hora: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+                notas: 'Pedido Online - Pendiente de recojo',
+                estado: 'completada'
+            };
+            const updatedProducts = [...products];
+            cart.forEach(item => {
+                const prodIndex = updatedProducts.findIndex(p => p.id === item.id);
+                if (prodIndex >= 0) updatedProducts[prodIndex].stock -= item.quantity;
+            });
+            if (client) {
+                const pointsEarned = DataService.calculatePoints(total, 'product');
+                client.puntos = (client.puntos || 0) + pointsEarned;
+                await DataService.updateClient(client);
+            }
+            await DataService.setProducts(updatedProducts);
+            await DataService.setSales([...sales, newSale]);
+            DataService.clearCart();
+            setProducts(updatedProducts);
+            setCart([]);
+            setLastOrderId(saleNumber);
+            setShowSuccess(true);
+            setTimeout(() => setShowSuccess(false), 3000);
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'No se pudo completar el pedido. Intenta de nuevo.');
+        }
     };
 
     const filteredProducts = products.filter(p => p.producto.toLowerCase().includes(searchTerm.toLowerCase()));

@@ -113,55 +113,64 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
 
     const handleCheckout = async () => {
         if (cart.length === 0) return;
-        const { subtotal, tax, total } = calculateTotal();
-        const sales = await DataService.getSales();
-        const newId = sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1;
-        const saleNumber = `V${String(newId).padStart(4, '0')}`;
-        const newSale: Sale = {
-            id: newId,
-            posId: DataService.getActivePosId() || 0,
-            numeroVenta: saleNumber,
-            clienteId: selectedClient,
-            barberoId: salesFromAppointment?.barberoId ?? DataService.getCurrentBarberId() ?? undefined,
-            items: [...cart],
-            metodoPago: paymentMethod,
-            subtotal,
-            iva: tax,
-            total,
-            fecha: new Date().toISOString().split('T')[0],
-            hora: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-            notas: '',
-            estado: 'completada'
-        };
-        const updatedProducts = [...products];
-        cart.forEach(item => {
-            if (item.type === 'producto') {
-                const prodIndex = updatedProducts.findIndex(p => p.id === item.id);
-                if (prodIndex >= 0) updatedProducts[prodIndex].stock -= item.quantity;
-            }
-        });
-        if (selectedClient) {
-            const client = clients.find(c => c.id === selectedClient);
-            if (client) {
-                let pointsEarned = 0;
-                cart.forEach(item => {
-                    if (item.type === 'servicio') pointsEarned += 20;
-                    else pointsEarned += Math.floor(item.price * item.quantity);
-                });
-                client.puntos = (client.puntos || 0) + pointsEarned;
-                await DataService.updateClient(client);
-            }
+        const activePosId = DataService.getActivePosId();
+        if (activePosId == null) {
+            alert('No hay sede activa. Selecciona una sede antes de registrar la venta.');
+            return;
         }
-        await DataService.setProducts(updatedProducts);
-        await DataService.setSales([...sales, newSale]);
-        setProducts(updatedProducts);
-        setLastSaleId(saleNumber);
-        setShowSuccess(true);
-        setCart([]);
-        setSelectedClient(null);
-        setPaymentMethod('efectivo');
-        onClearSalesFromAppointment?.();
-        setTimeout(() => setShowSuccess(false), 3000);
+        try {
+            const { subtotal, tax, total } = calculateTotal();
+            const sales = await DataService.getSales();
+            const newId = sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1;
+            const saleNumber = `V${String(newId).padStart(4, '0')}`;
+            const newSale: Sale = {
+                id: newId,
+                posId: activePosId,
+                numeroVenta: saleNumber,
+                clienteId: selectedClient,
+                barberoId: salesFromAppointment?.barberoId ?? DataService.getCurrentBarberId() ?? undefined,
+                items: [...cart],
+                metodoPago: paymentMethod,
+                subtotal,
+                iva: tax,
+                total,
+                fecha: new Date().toISOString().split('T')[0],
+                hora: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+                notas: '',
+                estado: 'completada'
+            };
+            const updatedProducts = [...products];
+            cart.forEach(item => {
+                if (item.type === 'producto') {
+                    const prodIndex = updatedProducts.findIndex(p => p.id === item.id);
+                    if (prodIndex >= 0) updatedProducts[prodIndex].stock -= item.quantity;
+                }
+            });
+            if (selectedClient) {
+                const client = clients.find(c => c.id === selectedClient);
+                if (client) {
+                    let pointsEarned = 0;
+                    cart.forEach(item => {
+                        if (item.type === 'servicio') pointsEarned += 20;
+                        else pointsEarned += Math.floor(item.price * item.quantity);
+                    });
+                    client.puntos = (client.puntos || 0) + pointsEarned;
+                    await DataService.updateClient(client);
+                }
+            }
+            await DataService.setProducts(updatedProducts);
+            await DataService.setSales([...sales, newSale]);
+            setProducts(updatedProducts);
+            setLastSaleId(saleNumber);
+            setShowSuccess(true);
+            setCart([]);
+            setSelectedClient(null);
+            setPaymentMethod('efectivo');
+            onClearSalesFromAppointment?.();
+            setTimeout(() => setShowSuccess(false), 3000);
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'No se pudo completar la venta. Intenta de nuevo.');
+        }
     };
 
     const filteredProducts = products.filter(p => p.producto.toLowerCase().includes(searchTerm.toLowerCase()));

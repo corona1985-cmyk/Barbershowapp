@@ -96,6 +96,7 @@ const App: React.FC = () => {
                 setIsAuthenticated(true);
                 setUserRole(role);
                 setFullName(userData.name);
+                setUsername(userData.username ?? '');
 
                 if (role === 'platform_owner') {
                     setCurrentView('master_dashboard');
@@ -160,7 +161,7 @@ const App: React.FC = () => {
             }
 
             const role = user.role === 'empleado' ? 'barbero' : user.role;
-            const userData = { username: user.username, role, name: user.name, posId: user.posId, barberId: (user as any).barberId, loginTime: new Date().toISOString() };
+            const userData = { username: user.username, role, name: user.name, posId: user.posId, barberId: (user as any).barberId, clientId: (user as any).clientId, loginTime: new Date().toISOString() };
             localStorage.setItem('currentUser', JSON.stringify(userData));
             setIsAuthenticated(true);
             setUserRole(role);
@@ -196,17 +197,15 @@ const App: React.FC = () => {
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!regUsername || !regPassword || !regName) return;
-        const existing = await DataService.authenticate(regUsername);
+        const existing = await DataService.findUserByUsername(regUsername);
         if (existing) {
             setLoginError('El usuario ya existe');
             return;
         }
         const targetPosId = referralPos ? referralPos.id : 1;
-        const newUser: SystemUser = { username: regUsername, password: regPassword, name: regName, role: 'cliente', posId: targetPosId };
         const prevPosId = DataService.getActivePosId();
         DataService.setActivePosId(targetPosId);
-        await DataService.saveUser(newUser);
-        await DataService.addClient({
+        const newClient = await DataService.addClient({
             nombre: regName,
             telefono: regPhone,
             email: `${regUsername}@example.com`,
@@ -217,6 +216,8 @@ const App: React.FC = () => {
             whatsappOptIn: true,
             ultimaVisita: 'N/A'
         });
+        const newUser: SystemUser = { username: regUsername, password: regPassword, name: regName, role: 'cliente', posId: targetPosId, clientId: newClient.id };
+        await DataService.saveUser(newUser);
         DataService.setActivePosId(prevPosId);
         setRegSuccess(true);
         setTimeout(() => {
@@ -511,7 +512,7 @@ const App: React.FC = () => {
                             <p className="text-xs text-slate-500 capitalize">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
                         </div>
                         <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-tr from-[#ffd427] to-amber-500 rounded-full flex items-center justify-center text-slate-900 font-bold border-2 border-white shadow-md overflow-hidden">
-                            {username.charAt(0).toUpperCase()}
+                            {(username || fullName).charAt(0).toUpperCase() || '?'}
                         </div>
                         
                         {/* Extra Logout Button in Header */}

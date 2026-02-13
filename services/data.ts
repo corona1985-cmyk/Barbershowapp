@@ -91,10 +91,16 @@ function toObjectByUsername(users: SystemUser[]): Record<string, SystemUser> {
   return o;
 }
 
-function snapshotToArray<T>(val: unknown): T[] {
-  if (val == null) return [];
-  const obj = val as Record<string, T>;
-  return Object.keys(obj).map((k) => ({ ...obj[k], id: obj[k] && typeof (obj[k] as any).id === 'number' ? (obj[k] as any).id : Number(k) || k }));
+function snapshotToArray<T extends { id?: number }>(val: unknown): T[] {
+  if (val == null || typeof val !== 'object') return [];
+  const obj = val as Record<string, T | null | undefined>;
+  return Object.keys(obj)
+    .filter((k) => obj[k] != null)
+    .map((k) => {
+      const item = obj[k]!;
+      const id = typeof item.id === 'number' ? item.id : Number(k) || k;
+      return { ...item, id } as T;
+    });
 }
 
 function snapshotToUsers(val: unknown): SystemUser[] {
@@ -193,13 +199,20 @@ export const DataService = {
     return snapshotToUsers(snap.val());
   },
 
-  authenticate: async (username: string): Promise<SystemUser | null> => {
+  /** Busca usuario por username sin modificar datos (para registro/comprobaciones). */
+  findUserByUsername: async (username: string): Promise<SystemUser | null> => {
     const searchUsername = String(username || '').trim().toLowerCase();
     if (!searchUsername) return null;
     const snap = await get(ref(db, ROOT + '/users'));
     const users = snapshotToUsers(snap.val());
     const user = users.find((u) => (u.username || '').trim().toLowerCase() === searchUsername);
     if (!user || user.status === 'suspended' || user.status === 'locked') return null;
+    return user;
+  },
+
+  authenticate: async (username: string): Promise<SystemUser | null> => {
+    const user = await DataService.findUserByUsername(username);
+    if (!user) return null;
     const updated = { ...user, lastLogin: new Date().toISOString(), loginAttempts: 0 };
     await set(ref(db, ROOT + '/users/' + user.username), updated);
     await DataService.logAuditAction('login', username, 'User Logged In', user.posId ?? undefined);
@@ -215,13 +228,25 @@ export const DataService = {
   },
 
   getCurrentUser: (): SystemUser | null => {
-    const userStr = localStorage.getItem('currentUser');
-    return userStr ? JSON.parse(userStr) : null;
+    try {
+      const userStr = localStorage.getItem('currentUser');
+      if (!userStr) return null;
+      const parsed = JSON.parse(userStr);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
   },
   getCurrentUserRole: (): string => {
-    const userStr = localStorage.getItem('currentUser');
-    const role = userStr ? JSON.parse(userStr).role : '';
-    return role === 'empleado' ? 'barbero' : role;
+    try {
+      const userStr = localStorage.getItem('currentUser');
+      if (!userStr) return '';
+      const parsed = JSON.parse(userStr);
+      const role = parsed?.role ?? '';
+      return role === 'empleado' ? 'barbero' : role;
+    } catch {
+      return '';
+    }
   },
 
   /** Id del barbero (tabla Barber) cuando el usuario es rol barbero; null en caso contrario. */
@@ -264,7 +289,8 @@ export const DataService = {
   },
 
   updateSettings: async (settings: AppSettings): Promise<void> => {
-    const posId = ACTIVE_POS_ID!;
+    if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa. Selecciona una sede para guardar la configuración.');
+    const posId = ACTIVE_POS_ID;
     await update(ref(db, ROOT + '/settings'), { [String(posId)]: { ...settings, posId } });
     await DataService.logAuditAction('update_settings', 'admin', 'Updated POS Settings', posId);
   },
@@ -402,7 +428,15 @@ export const DataService = {
     await set(ref(db, ROOT + '/products/' + product.id), product);
   },
 
-  getCart: (): CartItem[] => JSON.parse(localStorage.getItem('userCart') || '[]'),
+  getCart: (): CartItem[] => {
+    try {
+      const raw = localStorage.getItem('userCart') || '[]';
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  },
   addToCart: (product: Product): CartItem[] => {
     const cart = DataService.getCart();
     const existing = cart.find((i) => i.id === product.id && i.type === 'producto');
@@ -411,12 +445,12 @@ export const DataService = {
     localStorage.setItem('userCart', JSON.stringify(cart));
     return cart;
   },
-  updateCartQuantity: (itemId: number, quantity: number): CartItem[] => {
+  updateCartQuantity: (itemId: number, quantity: number, type?: 'producto' | 'servicio'): CartItem[] => {
     let cart = DataService.getCart();
-    const item = cart.find((i) => i.id === itemId);
+    const item = cart.find((i) => i.id === itemId && (type === undefined || i.type === type));
     if (item) {
       item.quantity = quantity;
-      if (item.quantity <= 0) cart = cart.filter((i) => i.id !== itemId);
+      if (item.quantity <= 0) cart = cart.filter((i) => !(i.id === itemId && (type === undefined || i.type === type)));
     }
     localStorage.setItem('userCart', JSON.stringify(cart));
     return cart;
@@ -532,10 +566,11 @@ export const DataService = {
   },
 
   setSales: async (data: Sale[]): Promise<void> => {
+    if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa. No se puede registrar la venta.');
     const snap = await get(ref(db, ROOT + '/sales'));
     const all: Record<string, Sale> = snap.val() || {};
     const barberId = DataService.getCurrentBarberId();
-    const currentPosId = ACTIVE_POS_ID!;
+    const currentPosId = ACTIVE_POS_ID;
     let toMerge = data.map((s) => ({ ...s, posId: s.posId || currentPosId, barberoId: barberId ?? s.barberoId ?? undefined }));
     if (currentPosId != null && barberId != null) {
       const othersSamePos = Object.entries(all).filter(([, s]) => s.posId === currentPosId && (s.barberoId ?? null) !== barberId);

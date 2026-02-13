@@ -42,8 +42,12 @@ const Settings: React.FC = () => {
     }, []);
 
     const handleSaveSettings = async () => {
-        await DataService.updateSettings(settings);
-        alert('Configuración guardada correctamente');
+        try {
+            await DataService.updateSettings(settings);
+            alert('Configuración guardada correctamente');
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'No se pudo guardar la configuración. Verifica que tengas una sede activa.');
+        }
     };
 
     const handleSaveUser = async () => {
