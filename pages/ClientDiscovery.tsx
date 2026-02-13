@@ -5,9 +5,12 @@ import { Globe, MapPin, ExternalLink, Search } from 'lucide-react';
 
 interface ClientDiscoveryProps {
     onSwitchPos: (id: number) => void;
+    /** Modo invitado: muestra "Agendar cita" (sin cuenta) y "Registrarme" */
+    guestMode?: boolean;
+    onBookAppointment?: (posId: number, posName: string) => void;
 }
 
-const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({ onSwitchPos }) => {
+const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({ onSwitchPos, guestMode, onBookAppointment }) => {
     const [posList, setPosList] = useState<PointOfSale[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -47,13 +50,23 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({ onSwitchPos }) => {
                                 <MapPin size={16} className="mr-1 mt-0.5 flex-shrink-0" />
                                 <span>{pos.address}</span>
                             </div>
-                            <button 
-                                onClick={() => onSwitchPos(pos.id)}
-                                className="w-full py-2 bg-slate-50 hover:bg-[#ffd427] hover:text-slate-900 text-slate-600 font-medium rounded-lg transition-colors flex items-center justify-center group-hover:bg-[#ffd427] group-hover:text-slate-900 border border-transparent hover:border-[#e6be23]"
-                            >
-                                <span>Visitar Perfil</span>
-                                <ExternalLink size={16} className="ml-2" />
-                            </button>
+                            <div className="flex flex-col gap-2">
+                                {guestMode && onBookAppointment && (
+                                    <button
+                                        onClick={() => onBookAppointment(pos.id, pos.name)}
+                                        className="w-full py-2.5 bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-bold rounded-lg transition-colors flex items-center justify-center"
+                                    >
+                                        Agendar cita (sin cuenta)
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => onSwitchPos(pos.id)}
+                                    className={`w-full py-2 rounded-lg font-medium transition-colors flex items-center justify-center border ${guestMode ? 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200' : 'bg-slate-50 hover:bg-[#ffd427] hover:text-slate-900 text-slate-600 border-transparent hover:border-[#e6be23]'}`}
+                                >
+                                    <span>{guestMode ? 'Registrarme en esta barbería' : 'Visitar Perfil'}</span>
+                                    <ExternalLink size={16} className="ml-2" />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 ))}

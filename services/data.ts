@@ -21,8 +21,8 @@ const ROOT = 'barbershow';
 
 // Mock Initial Data para primera carga / seed
 const INITIAL_POS: PointOfSale[] = [
-  { id: 1, name: 'Barbería Central', address: 'Av. Principal 123', ownerId: 'barbero', isActive: true, plan: 'pro' },
-  { id: 2, name: 'Sucursal Norte', address: 'Calle Norte 456', ownerId: 'barbero2', isActive: true, plan: 'basic' },
+  { id: 1, name: 'Barbería Central', address: 'Av. Principal 123', ownerId: 'barbero', isActive: true, plan: 'pro', tier: 'barberia' },
+  { id: 2, name: 'Sucursal Norte', address: 'Calle Norte 456', ownerId: 'barbero2', isActive: true, plan: 'basic', tier: 'solo' },
 ];
 
 const INITIAL_CLIENTS: Client[] = [
@@ -324,7 +324,8 @@ export const DataService = {
   getAuditLogs: async (): Promise<AuditLog[]> => {
     const snap = await get(ref(db, ROOT + '/auditLogs'));
     const obj = snap.val() || {};
-    return Object.values(obj).sort((a: AuditLog, b: AuditLog) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const arr = Object.values(obj) as AuditLog[];
+    return arr.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   },
 
   getGlobalFinancialHistory: async () => {
@@ -539,6 +540,14 @@ export const DataService = {
     return arr.some((a) => a.posId === posId && a.barberoId === barberId && a.fecha === date && a.hora === time && a.estado !== 'cancelada');
   },
 
+  /** Añade una cita sin reemplazar las demás (para reservas de invitados sin cuenta). */
+  addAppointment: async (appointment: Omit<Appointment, 'id'>): Promise<Appointment> => {
+    const id = Date.now();
+    const apt: Appointment = { ...appointment, id };
+    await update(ref(db, ROOT + '/appointments/' + id), apt);
+    return apt;
+  },
+
   setAppointments: async (data: Appointment[]): Promise<void> => {
     const snap = await get(ref(db, ROOT + '/appointments'));
     const all: Record<string, Appointment> = snap.val() || {};
@@ -565,16 +574,30 @@ export const DataService = {
     return filtered.map((s) => ({ ...s, id: Number(s.id) }));
   },
 
+  /** Ventas de una sede concreta (para reportes por sede en Multi-Sede). No depende de ACTIVE_POS_ID. */
+  getSalesForPos: async (posId: number): Promise<Sale[]> => {
+    const snap = await get(ref(db, ROOT + '/sales'));
+    const arr = snapshotToArray<Sale>(snap.val());
+    return arr.filter((s) => s.posId === posId).map((s) => ({ ...s, id: Number(s.id) }));
+  },
+
+  /** Citas de una sede concreta (para reportes por sede en Multi-Sede). No depende de ACTIVE_POS_ID. */
+  getAppointmentsForPos: async (posId: number): Promise<Appointment[]> => {
+    const snap = await get(ref(db, ROOT + '/appointments'));
+    const arr = snapshotToArray<Appointment>(snap.val());
+    return arr.filter((a) => a.posId === posId).map((a) => ({ ...a, id: Number(a.id) }));
+  },
+
   setSales: async (data: Sale[]): Promise<void> => {
     if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa. No se puede registrar la venta.');
     const snap = await get(ref(db, ROOT + '/sales'));
     const all: Record<string, Sale> = snap.val() || {};
     const barberId = DataService.getCurrentBarberId();
     const currentPosId = ACTIVE_POS_ID;
-    let toMerge = data.map((s) => ({ ...s, posId: s.posId || currentPosId, barberoId: barberId ?? s.barberoId ?? undefined }));
+    let toMerge: Sale[] = data.map((s) => ({ ...s, posId: s.posId || currentPosId, barberoId: barberId ?? s.barberoId ?? undefined }));
     if (currentPosId != null && barberId != null) {
       const othersSamePos = Object.entries(all).filter(([, s]) => s.posId === currentPosId && (s.barberoId ?? null) !== barberId);
-      toMerge = [...Object.values(Object.fromEntries(othersSamePos)), ...toMerge];
+      toMerge = [...Object.values(Object.fromEntries(othersSamePos)), ...toMerge] as Sale[];
     }
     const other = Object.fromEntries(Object.entries(all).filter(([, s]) => s.posId !== currentPosId));
     const merged = { ...other, ...toObjectById(toMerge) };
@@ -606,7 +629,8 @@ export const DataService = {
     if (ACTIVE_POS_ID == null) return [];
     const snap = await get(ref(db, ROOT + '/notificationLogs'));
     const obj = snap.val() || {};
-    return Object.values(obj).filter((l: NotificationLog) => l.posId === ACTIVE_POS_ID);
+    const arr = Object.values(obj) as NotificationLog[];
+    return arr.filter((l) => l.posId === ACTIVE_POS_ID);
   },
 
   logSecurityEvent: (event: string, details: unknown) => {

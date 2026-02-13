@@ -1,8 +1,11 @@
 
-export type UserRole = 'superadmin' | 'admin' | 'barbero' | 'cliente' | 'platform_owner' | 'support' | 'financial' | 'commercial';
+export type UserRole = 'superadmin' | 'admin' | 'barbero' | 'empleado' | 'cliente' | 'platform_owner' | 'support' | 'financial' | 'commercial';
 
 /** Plan de la sede: basic = funciones estándar, pro = incluye notificaciones de citas para barbero */
 export type PosPlan = 'basic' | 'pro';
+
+/** Tipo de negocio / tier de cuenta: determina menú y límites (solo → barbería → multi-sede) */
+export type AccountTier = 'solo' | 'barberia' | 'multisede';
 
 export interface PointOfSale {
     id: number;
@@ -12,6 +15,8 @@ export interface PointOfSale {
     isActive: boolean;
     /** Plan de suscripción; solo 'pro' habilita campana de notificaciones de citas para el barbero */
     plan?: PosPlan;
+    /** Tier de negocio: solo = un barbero una sede, barberia = varios barberos una sede, multisede = varias sedes */
+    tier?: AccountTier;
 }
 
 export interface AppSettings {

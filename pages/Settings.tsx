@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
-import { AppSettings, SystemUser, Service, UserRole, Barber } from '../types';
+import { AppSettings, SystemUser, Service, UserRole, Barber, AccountTier } from '../types';
 import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as SettingsIcon, UserCheck, Power, QrCode, Download, Printer } from 'lucide-react';
 
 type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'barbers';
 
-const Settings: React.FC = () => {
+interface SettingsProps {
+    accountTier?: AccountTier;
+}
+
+const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
     const [activeTab, setActiveTab] = useState<SettingsTab>('general');
     const [settings, setSettings] = useState<AppSettings>({ taxRate: 0.16, storeName: '', currencySymbol: '$' });
     const [users, setUsers] = useState<SystemUser[]>([]);
@@ -40,6 +44,11 @@ const Settings: React.FC = () => {
     useEffect(() => {
         loadData();
     }, []);
+
+    // En plan Solo no hay pestaña Barberos; si estaba en barbers, volver a general
+    useEffect(() => {
+        if (accountTier === 'solo' && activeTab === 'barbers') setActiveTab('general');
+    }, [accountTier, activeTab]);
 
     const handleSaveSettings = async () => {
         try {
@@ -168,12 +177,14 @@ const Settings: React.FC = () => {
                 >
                     <UserCog size={16} className="mr-2" /> Usuarios
                 </button>
-                <button 
-                    onClick={() => setActiveTab('barbers')}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'barbers' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                    <UserCheck size={16} className="mr-2" /> Barberos
-                </button>
+                {accountTier !== 'solo' && (
+                    <button 
+                        onClick={() => setActiveTab('barbers')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'barbers' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                    >
+                        <UserCheck size={16} className="mr-2" /> Barberos
+                    </button>
+                )}
                 <button 
                     onClick={() => setActiveTab('services')}
                     className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'services' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}

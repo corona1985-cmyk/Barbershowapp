@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
-import { Appointment, Barber, Client, Service, AppointmentForSale, SaleItem } from '../types';
+import { Appointment, Barber, Client, Service, AppointmentForSale, SaleItem, AccountTier } from '../types';
 import { ViewState } from '../types';
 import { Calendar, Clock, User, Scissors, Check, X, Trash2, Printer, MessageCircle, MapPin } from 'lucide-react';
 
 interface AppointmentsProps {
     onChangeView?: (view: ViewState) => void;
     onCompleteForBilling?: (data: AppointmentForSale) => void;
+    accountTier?: AccountTier;
 }
 
-const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteForBilling }) => {
+const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteForBilling, accountTier = 'barberia' }) => {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [barbers, setBarbers] = useState<Barber[]>([]);
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -83,8 +84,12 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         return slotMinutes <= nowMinutes;
     };
 
+    const isPlanSolo = accountTier === 'solo';
+    const defaultBarberId = barbers.filter(b => b.active).length > 0 ? barbers.filter(b => b.active)[0].id : barbers[0]?.id;
+
     const handleSave = async () => {
-        if (!newApt.barberoId) { alert('Seleccione un barbero.'); return; }
+        const barberoId = isPlanSolo ? (newApt.barberoId ?? defaultBarberId) : newApt.barberoId;
+        if (!barberoId) { alert('Seleccione un barbero.'); return; }
         if (!newApt.hora) { alert('Seleccione una hora.'); return; }
         if (!newApt.servicios?.length) { alert('Seleccione al menos un servicio.'); return; }
         if (newApt.fecha && isDateTimeInPast(newApt.fecha, newApt.hora)) {
@@ -148,7 +153,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             id: Date.now(),
             posId: DataService.getActivePosId() || 0,
             clienteId: finalClientId,
-            barberoId: newApt.barberoId,
+            barberoId: barberoId,
             fecha: newApt.fecha!,
             hora: newApt.hora!,
             servicios: newApt.servicios!,
@@ -317,30 +322,32 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
 
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <div className="flex flex-col md:flex-row gap-6 mb-8">
-                        <div className="flex-1">
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Seleccionar Barbero</label>
-                            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                                {barbers.map(b => (
-                                    <button 
-                                        key={b.id}
-                                        disabled={!b.active}
-                                        onClick={() => setSelectedBarberForView(b.id)}
-                                        className={`px-4 py-3 rounded-lg border text-sm font-medium whitespace-nowrap transition-all flex flex-col items-center min-w-[100px] ${
-                                            !b.active 
-                                            ? 'bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed opacity-70' 
-                                            : selectedBarberForView === b.id 
-                                                ? 'bg-[#ffd427] text-slate-900 border-[#ffd427] shadow-md transform scale-105' 
-                                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                                        }`}
-                                    >
-                                        <span>{b.name}</span>
-                                        <span className={`text-[10px] mt-1 ${!b.active ? 'text-slate-400' : selectedBarberForView === b.id ? 'text-slate-800' : 'text-green-600'}`}>
-                                            {b.active ? 'En línea' : 'No disponible'}
-                                        </span>
-                                    </button>
-                                ))}
+                        {!isPlanSolo && (
+                            <div className="flex-1">
+                                <label className="block text-sm font-medium text-slate-700 mb-2">Seleccionar Barbero</label>
+                                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                                    {barbers.map(b => (
+                                        <button 
+                                            key={b.id}
+                                            disabled={!b.active}
+                                            onClick={() => setSelectedBarberForView(b.id)}
+                                            className={`px-4 py-3 rounded-lg border text-sm font-medium whitespace-nowrap transition-all flex flex-col items-center min-w-[100px] ${
+                                                !b.active 
+                                                ? 'bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed opacity-70' 
+                                                : selectedBarberForView === b.id 
+                                                    ? 'bg-[#ffd427] text-slate-900 border-[#ffd427] shadow-md transform scale-105' 
+                                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <span>{b.name}</span>
+                                            <span className={`text-[10px] mt-1 ${!b.active ? 'text-slate-400' : selectedBarberForView === b.id ? 'text-slate-800' : 'text-green-600'}`}>
+                                                {b.active ? 'En línea' : 'No disponible'}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        )}
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-2">Seleccionar Fecha</label>
                             <input 
@@ -724,17 +731,19 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                     </div>
                                 )}
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Barbero</label>
-                                <select className="w-full border border-slate-300 rounded-lg p-2" value={newApt.barberoId || ''} onChange={e => setNewApt({...newApt, barberoId: Number(e.target.value)})}>
-                                    <option value="">Seleccionar Barbero</option>
-                                    {barbers.map(b => (
-                                        <option key={b.id} value={b.id} disabled={!b.active}>
-                                            {b.name} {!b.active && '(No disponible)'}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                            {!isPlanSolo && (
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Barbero</label>
+                                    <select className="w-full border border-slate-300 rounded-lg p-2" value={newApt.barberoId || ''} onChange={e => setNewApt({...newApt, barberoId: Number(e.target.value)})}>
+                                        <option value="">Seleccionar Barbero</option>
+                                        {barbers.map(b => (
+                                            <option key={b.id} value={b.id} disabled={!b.active}>
+                                                {b.name} {!b.active && '(No disponible)'}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-2">Servicios</label>
                                 <div className="space-y-2 border border-slate-200 p-2 rounded-lg max-h-40 overflow-y-auto">

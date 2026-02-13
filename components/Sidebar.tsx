@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ViewState, UserRole } from '../types';
+import { ViewState, UserRole, AccountTier } from '../types';
 import { LayoutDashboard, Users, Calendar, Package, DollarSign, FileText, LogOut, Scissors, Settings, ShoppingBag, MapPin, X, ChevronDown, ChevronRight, Briefcase, BarChart2, MessageCircle, Shield, Globe } from 'lucide-react';
 
 interface SidebarProps {
@@ -11,11 +11,16 @@ interface SidebarProps {
     onClose: () => void;
     /** Solo para rol cliente: true cuando ya eligió una barbería (Visitar Perfil). Si false, no se muestra Operaciones. */
     clientHasSelectedBarberia?: boolean;
+    /** Plan de negocio: en 'solo' se ocultan Calendario, WhatsApp, Inventario, Finanzas, Admin Usuarios. */
+    accountTier?: AccountTier;
 }
 
 type NavGroup = 'principal' | 'operaciones' | 'administracion';
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, userRole, isOpen, onClose, clientHasSelectedBarberia = true }) => {
+/** Ítems que se ocultan en plan Solo (menú simplificado) */
+const HIDDEN_IN_TIER_SOLO: ViewState[] = ['calendar', 'whatsapp_console', 'inventory', 'finance', 'user_admin'];
+
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, userRole, isOpen, onClose, clientHasSelectedBarberia = true, accountTier = 'barberia' }) => {
     
     // State for collapsible groups
     const [expandedGroups, setExpandedGroups] = useState<Record<NavGroup, boolean>>({
@@ -112,7 +117,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                         const effectiveRole = userRole === 'empleado' ? 'barbero' : userRole;
                         if (group.id === 'operaciones' && effectiveRole === 'cliente' && !clientHasSelectedBarberia) return null;
                         // Filter items for this group based on permissions
-                        const filteredItems = group.items.filter(item => item.roles.includes(effectiveRole as UserRole));
+                        let filteredItems = group.items.filter(item => item.roles.includes(effectiveRole as UserRole));
+                        // En plan Solo ocultar: Calendario, WhatsApp, Inventario, Finanzas, Admin Usuarios
+                        if (accountTier === 'solo') {
+                            filteredItems = filteredItems.filter(item => !HIDDEN_IN_TIER_SOLO.includes(item.id as ViewState));
+                        }
                         if (filteredItems.length === 0) return null;
 
                         return (

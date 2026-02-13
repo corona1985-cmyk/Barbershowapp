@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
-import { PointOfSale, SystemUser } from '../types';
+import { PointOfSale, SystemUser, AccountTier } from '../types';
 import { MapPin, Plus, Edit2, Trash2, X, Save, User } from 'lucide-react';
 
 const AdminPOS: React.FC = () => {
@@ -44,7 +44,7 @@ const AdminPOS: React.FC = () => {
         if (pos) {
             setCurrentPos(pos);
         } else {
-            setCurrentPos({ name: '', address: '', ownerId: '', isActive: true });
+            setCurrentPos({ name: '', address: '', ownerId: '', isActive: true, tier: 'barberia' });
         }
         setShowModal(true);
     };
@@ -155,6 +155,19 @@ const AdminPOS: React.FC = () => {
                                     ))}
                                 </select>
                                 <p className="text-xs text-slate-500 mt-1">Solo aparecen usuarios con rol 'Dueño' o 'Admin'.</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de negocio</label>
+                                <select
+                                    className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#ffd427]"
+                                    value={currentPos.tier ?? 'barberia'}
+                                    onChange={e => setCurrentPos({ ...currentPos, tier: e.target.value as AccountTier })}
+                                >
+                                    <option value="solo">Solo – Un barbero, una sede</option>
+                                    <option value="barberia">Barbería – Varios barberos, una sede</option>
+                                    <option value="multisede">Multi-Sede – Varias ubicaciones</option>
+                                </select>
+                                <p className="text-xs text-slate-500 mt-1">Define el menú y las opciones disponibles para esta sede.</p>
                             </div>
                             <div className="flex items-center space-x-2 pt-2">
                                 <input 

@@ -14,9 +14,12 @@ import UserAdmin from './pages/UserAdmin';
 import ClientDiscovery from './pages/ClientDiscovery';
 import MasterDashboard from './pages/MasterDashboard';
 import { Clients, Inventory, Finance } from './pages/InventoryClientsFinance';
-import { ViewState, UserRole, PointOfSale, SystemUser, AppointmentForSale } from './types';
+import { ViewState, UserRole, PointOfSale, SystemUser, AppointmentForSale, AccountTier } from './types';
 import { Scissors, Cookie, MapPin, Globe, LogOut, Menu, UserPlus, CheckCircle, ArrowLeft, Shield } from 'lucide-react';
 import BarberNotificationBell from './components/BarberNotificationBell';
+import OnboardingTier from './components/OnboardingTier';
+import WelcomePlanSelector from './components/WelcomePlanSelector';
+import GuestBookingView from './components/GuestBookingView';
 import { DataService } from './services/data';
 import { authenticateMasterWithPassword } from './services/firebase';
 
@@ -51,10 +54,22 @@ const App: React.FC = () => {
     const [regSuccess, setRegSuccess] = useState(false);
     const [connectionError, setConnectionError] = useState<string | null>(null);
     const [isLoadingSession, setIsLoadingSession] = useState(true);
+    /** Si false, se muestra primero la bienvenida (tipo de barbería + contacto). Si true, el formulario de login. */
+    const [showLoginScreen, setShowLoginScreen] = useState(false);
+    /** Cliente sin cuenta que quiere ver barberías: muestra lista para elegir una y registrarse ahí. */
+    const [showBarberiasGuest, setShowBarberiasGuest] = useState(false);
+    /** Invitado que está agendando cita en una barbería (sin cuenta). */
+    const [guestBookingPos, setGuestBookingPos] = useState<{ id: number; name: string } | null>(null);
     /** Cita completada que se envía a facturación (Punto de Venta) */
     const [salesFromAppointment, setSalesFromAppointment] = useState<AppointmentForSale | null>(null);
     /** Plan de la sede activa: solo 'pro' muestra campana de notificaciones para el barbero */
     const [isPlanPro, setIsPlanPro] = useState(false);
+    /** Tier de negocio de la sede activa: solo / barberia / multisede (menú y límites) */
+    const [accountTier, setAccountTier] = useState<AccountTier>('barberia');
+    /** Mostrar onboarding "¿Cómo trabajas?" cuando la sede activa aún no tiene tier definido */
+    const [showOnboardingTier, setShowOnboardingTier] = useState(false);
+    /** En plan Multi-Sede: sedes del mismo owner para mostrar selector (solo si hay más de una) */
+    const [posListForOwner, setPosListForOwner] = useState<PointOfSale[]>([]);
 
     const handleSwitchPos = async (posId: number) => {
         DataService.setActivePosId(posId);
@@ -64,10 +79,39 @@ const App: React.FC = () => {
             const pos = posList.find(p => p.id === posId);
             setCurrentPosName(pos ? pos.name : 'Desconocido');
             setIsPlanPro(pos?.plan === 'pro');
+            setAccountTier(pos?.tier ?? 'barberia');
+            setShowOnboardingTier(!!(pos && (pos.tier === undefined || pos.tier === null)));
+            if (pos?.tier === 'multisede' && pos.ownerId) {
+                const sameOwner = posList.filter(p => p.ownerId === pos.ownerId);
+                setPosListForOwner(sameOwner);
+            } else {
+                setPosListForOwner([]);
+            }
         } catch {
             setCurrentPosName('Desconocido');
             setIsPlanPro(false);
+            setAccountTier('barberia');
+            setShowOnboardingTier(false);
+            setPosListForOwner([]);
         }
+    };
+
+    const handleOnboardingTierSelect = async (tier: AccountTier) => {
+        if (currentPosId == null) {
+            setShowOnboardingTier(false);
+            return;
+        }
+        try {
+            const posList = await DataService.getPointsOfSale();
+            const pos = posList.find(p => p.id === currentPosId);
+            if (pos) {
+                await DataService.updatePointOfSale({ ...pos, tier });
+                setAccountTier(tier);
+            }
+        } catch (err) {
+            console.error('Error al guardar tipo de negocio:', err);
+        }
+        setShowOnboardingTier(false);
     };
 
     useEffect(() => {
@@ -87,6 +131,7 @@ const App: React.FC = () => {
                         if (found) {
                             setReferralPos(found);
                             setIsRegistering(true);
+                            setShowLoginScreen(true); // QR/referido → ir directo a login/registro
                         }
                     }
                     return;
@@ -110,10 +155,12 @@ const App: React.FC = () => {
                         DataService.setActivePosId(null);
                         setCurrentPosId(null);
                         setCurrentPosName('');
+                        setAccountTier('barberia');
                         setCurrentView('client_discovery');
                     } else {
                         const assignedPosId = userData.posId;
                         if (assignedPosId) await handleSwitchPos(assignedPosId);
+                        else setAccountTier('barberia');
                         setCurrentView('dashboard');
                     }
                 }
@@ -263,19 +310,20 @@ const App: React.FC = () => {
 
     const renderView = () => {
         // Force re-render when POS changes using key
-        const viewProps = { key: currentPosId }; 
+        const viewProps = { key: currentPosId };
+        const planProps = { ...viewProps, accountTier };
         
         switch (currentView) {
             case 'admin_pos': return <AdminPOS {...viewProps} />;
             case 'dashboard': return <Dashboard onChangeView={setCurrentView} {...viewProps} />;
-            case 'sales': return <Sales salesFromAppointment={salesFromAppointment} onClearSalesFromAppointment={() => setSalesFromAppointment(null)} {...viewProps} />;
+            case 'sales': return <Sales salesFromAppointment={salesFromAppointment} onClearSalesFromAppointment={() => setSalesFromAppointment(null)} {...planProps} />;
             case 'shop': return <Shop {...viewProps} />;
-            case 'appointments': return <Appointments onChangeView={setCurrentView} onCompleteForBilling={(data) => { setSalesFromAppointment(data); setCurrentView('sales'); }} {...viewProps} />;
+            case 'appointments': return <Appointments onChangeView={setCurrentView} onCompleteForBilling={(data) => { setSalesFromAppointment(data); setCurrentView('sales'); }} {...planProps} />;
             case 'clients': return <Clients {...viewProps} />;
             case 'inventory': return <Inventory {...viewProps} />;
             case 'finance': return <Finance {...viewProps} />;
-            case 'reports': return <Reports {...viewProps} />;
-            case 'settings': return <Settings {...viewProps} />;
+            case 'reports': return <Reports {...viewProps} accountTier={accountTier} posListForOwner={accountTier === 'multisede' ? posListForOwner : []} />;
+            case 'settings': return <Settings {...planProps} />;
             case 'calendar': return <CalendarView {...viewProps} />;
             case 'whatsapp_console': return <WhatsAppConsole {...viewProps} />;
             case 'user_admin': return <UserAdmin {...viewProps} />;
@@ -303,11 +351,77 @@ const App: React.FC = () => {
         );
     }
 
-    // 3. LOGIN SCREEN
+    // 3. INVITADO: Agendar cita sin cuenta (formulario de reserva)
+    if (!isAuthenticated && showBarberiasGuest && guestBookingPos) {
+        return (
+            <div className="min-h-screen bg-slate-100 p-4 md:p-8">
+                <GuestBookingView
+                    posId={guestBookingPos.id}
+                    posName={guestBookingPos.name}
+                    onBack={() => setGuestBookingPos(null)}
+                    onSuccess={() => setGuestBookingPos(null)}
+                />
+            </div>
+        );
+    }
+
+    // 4. INVITADO: Ver barberías (cliente buscando barbería)
+    if (!isAuthenticated && showBarberiasGuest) {
+        return (
+            <div className="min-h-screen bg-slate-100">
+                <header className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between shadow-lg">
+                    <button type="button" onClick={() => setShowBarberiasGuest(false)} className="flex items-center gap-1 text-slate-300 hover:text-white text-sm">
+                        <ArrowLeft size={18} /> Volver
+                    </button>
+                    <span className="font-bold text-[#ffd427]">BarberShow</span>
+                    <button type="button" onClick={() => { setShowBarberiasGuest(false); setShowLoginScreen(true); }} className="text-sm text-[#ffd427] hover:text-amber-300 font-medium">
+                        Iniciar sesión
+                    </button>
+                </header>
+                <main className="p-4 md:p-8 max-w-6xl mx-auto">
+                    <p className="text-slate-600 text-center mb-2">Elige una barbería para agendar tu cita (sin cuenta) o registrarte.</p>
+                    <p className="text-slate-400 text-center text-sm mb-6">Próximamente: ver barberías más cercanas a tu ubicación.</p>
+                    <ClientDiscovery
+                        guestMode
+                        onSwitchPos={(id) => {
+                            DataService.getPointsOfSale().then((list) => {
+                                const pos = list.find(p => p.id === id);
+                                if (pos) {
+                                    setReferralPos(pos);
+                                    setShowLoginScreen(true);
+                                    setShowBarberiasGuest(false);
+                                    setIsRegistering(true);
+                                    window.history.replaceState({}, '', `${window.location.pathname}?ref_pos=${id}`);
+                                }
+                            });
+                        }}
+                        onBookAppointment={(id, name) => setGuestBookingPos({ id, name })}
+                    />
+                </main>
+            </div>
+        );
+    }
+
+    // 5. BIENVENIDA (tipo de barbería + contacto) o LOGIN
     if (!isAuthenticated) {
+        if (!showLoginScreen) {
+            return (
+                <WelcomePlanSelector
+                    onGoToLogin={() => setShowLoginScreen(true)}
+                    onGoToBarberias={() => setShowBarberiasGuest(true)}
+                />
+            );
+        }
         return (
             <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative overflow-hidden border-t-8 border-[#ffd427]">
+                    <button
+                        type="button"
+                        onClick={() => setShowLoginScreen(false)}
+                        className="absolute top-4 left-4 flex items-center gap-1 text-slate-500 hover:text-slate-700 text-sm"
+                    >
+                        <ArrowLeft size={16} /> Volver
+                    </button>
                     {connectionError && (
                         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
                             {connectionError}
@@ -445,6 +559,12 @@ const App: React.FC = () => {
     // 4. MAIN APP RENDER (General Users)
     return (
         <div className="flex min-h-screen bg-slate-100 font-sans">
+            {showOnboardingTier && userRole !== 'cliente' && (
+                <OnboardingTier
+                    businessName={currentPosName || undefined}
+                    onSelect={handleOnboardingTierSelect}
+                />
+            )}
             <Sidebar 
                 currentView={currentView} 
                 onChangeView={handleChangeView} 
@@ -453,6 +573,7 @@ const App: React.FC = () => {
                 isOpen={isSidebarOpen}
                 onClose={() => setIsSidebarOpen(false)}
                 clientHasSelectedBarberia={userRole === 'cliente' ? currentPosId != null : true}
+                accountTier={accountTier}
             />
             {/* Adjusted margin to be responsive: ml-0 on mobile, ml-64 on desktop */}
             <main className="flex-1 md:ml-64 p-4 md:p-8 overflow-y-auto h-screen transition-all duration-300">
@@ -490,12 +611,30 @@ const App: React.FC = () => {
                                 </select>
                             </div>
                         )}
+                        {/* Multi-Sede: selector de sede cuando el usuario tiene varias sedes (mismo owner) */}
+                        {accountTier === 'multisede' && posListForOwner.length > 1 && userRole !== 'superadmin' && (
+                            <div className="hidden md:flex items-center bg-slate-800 text-white px-3 py-1.5 rounded-lg shadow-md ml-4 border border-slate-700">
+                                <MapPin size={16} className="text-[#ffd427] mr-2" />
+                                <span className="text-xs text-slate-400 mr-2 uppercase tracking-wider font-bold">Sede:</span>
+                                <select 
+                                    value={currentPosId || ''} 
+                                    onChange={(e) => handleSwitchPos(Number(e.target.value))}
+                                    className="bg-slate-900 border-none text-white text-sm font-bold focus:ring-0 cursor-pointer rounded"
+                                >
+                                    {posListForOwner.map(pos => (
+                                        <option key={pos.id} value={pos.id}>{pos.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                         
-                        {/* Tenant Label */}
+                        {/* Tenant Label: en plan Solo "Mi negocio", en Barbería/Multi-Sede nombre de la sede */}
                         {userRole !== 'superadmin' && userRole !== 'platform_owner' && (
                             <div className="hidden md:flex items-center bg-white px-3 py-1.5 rounded-full shadow-sm border border-slate-200">
                                 <MapPin size={14} className="text-[#ffd427] mr-2" />
-                                <span className="text-sm font-bold text-slate-700">{currentPosName}</span>
+                                <span className="text-sm font-bold text-slate-700">
+                                    {accountTier === 'solo' ? 'Mi negocio' : currentPosName}
+                                </span>
                             </div>
                         )}
                     </div>
@@ -526,7 +665,7 @@ const App: React.FC = () => {
                     </div>
                 </header>
                 
-                {/* Mobile Tenant Selector (Superadmin only) */}
+                {/* Mobile Tenant Selector (Superadmin o Multi-Sede con varias sedes) */}
                 {userRole === 'superadmin' && (
                     <div className="md:hidden mb-4">
                          <div className="flex items-center bg-slate-800 text-white px-3 py-2 rounded-lg shadow-md border border-slate-700 w-full">
@@ -537,6 +676,22 @@ const App: React.FC = () => {
                                 className="bg-slate-900 border-none text-white text-sm font-bold focus:ring-0 cursor-pointer rounded w-full"
                             >
                                 {pointsOfSale.map(pos => (
+                                    <option key={pos.id} value={pos.id}>{pos.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                )}
+                {accountTier === 'multisede' && posListForOwner.length > 1 && userRole !== 'superadmin' && (
+                    <div className="md:hidden mb-4">
+                        <div className="flex items-center bg-slate-800 text-white px-3 py-2 rounded-lg shadow-md border border-slate-700 w-full">
+                            <MapPin size={16} className="text-[#ffd427] mr-2" />
+                            <select 
+                                value={currentPosId || ''} 
+                                onChange={(e) => handleSwitchPos(Number(e.target.value))}
+                                className="bg-slate-900 border-none text-white text-sm font-bold focus:ring-0 cursor-pointer rounded w-full"
+                            >
+                                {posListForOwner.map(pos => (
                                     <option key={pos.id} value={pos.id}>{pos.name}</option>
                                 ))}
                             </select>

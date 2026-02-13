@@ -1,16 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { DataService } from '../services/data';
-import { Sale, Appointment, Product, Client } from '../types';
+import { Sale, Appointment, Product, Client, Barber, AccountTier, PointOfSale } from '../types';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, Users, Calendar, ShoppingBag, Printer } from 'lucide-react';
+import { TrendingUp, Users, Calendar, ShoppingBag, Printer, Scissors, MapPin } from 'lucide-react';
 
 const COLORS = ['#ffd427', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
-const Reports: React.FC = () => {
+interface ReportsProps {
+    accountTier?: AccountTier;
+    posListForOwner?: PointOfSale[];
+}
+
+const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner = [] }) => {
     const [sales, setSales] = useState<Sale[]>([]);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
+    const [barbers, setBarbers] = useState<Barber[]>([]);
+    const [salesByPos, setSalesByPos] = useState<{ posId: number; posName: string; total: number; count: number }[]>([]);
+
+    const isSolo = accountTier === 'solo';
+    const showPorBarbero = accountTier === 'barberia' || accountTier === 'multisede';
+    const showPorSede = accountTier === 'multisede' && posListForOwner.length > 1;
 
     useEffect(() => {
         Promise.all([
@@ -25,6 +36,29 @@ const Reports: React.FC = () => {
             setClients(c);
         });
     }, []);
+
+    useEffect(() => {
+        if (showPorBarbero) {
+            DataService.getBarbers().then(setBarbers);
+        }
+    }, [showPorBarbero]);
+
+    useEffect(() => {
+        if (!showPorSede || posListForOwner.length === 0) return;
+        (async () => {
+            const rows = await Promise.all(
+                posListForOwner.map(async (pos) => {
+                    const [s, a] = await Promise.all([
+                        DataService.getSalesForPos(pos.id),
+                        DataService.getAppointmentsForPos(pos.id),
+                    ]);
+                    const total = s.reduce((sum, sale) => sum + sale.total, 0);
+                    return { posId: pos.id, posName: pos.name, total, count: s.length };
+                })
+            );
+            setSalesByPos(rows);
+        })();
+    }, [showPorSede, posListForOwner.length]);
 
     // 1. Sales over time
     const salesData = sales.reduce((acc: any, sale) => {
@@ -62,6 +96,14 @@ const Reports: React.FC = () => {
         }))
         .sort((a, b) => b.sales - a.sales)
         .slice(0, 5);
+
+    const barberStats = showPorBarbero && barbers.length > 0
+        ? barbers.map(b => ({
+            name: b.name,
+            total: sales.filter(s => (s.barberoId ?? null) === b.id).reduce((sum, s) => sum + s.total, 0),
+            citas: appointments.filter(a => a.barberoId === b.id).length,
+        })).filter(x => x.total > 0 || x.citas > 0)
+        : [];
 
     return (
         <div className="space-y-6 print-container">
@@ -174,6 +216,64 @@ const Reports: React.FC = () => {
                     </ResponsiveContainer>
                 </div>
             </div>
+
+            {/* Por barbero (plan Barbería / Multi-Sede) */}
+            {showPorBarbero && barberStats.length > 0 && (
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm page-break-inside-avoid">
+                    <h3 className="font-bold text-slate-800 mb-4 flex items-center">
+                        <Scissors size={20} className="mr-2 text-[#ffd427]" /> Ventas y Citas por Barbero
+                    </h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="text-slate-500 text-sm border-b border-slate-200">
+                                    <th className="py-2">Barbero</th>
+                                    <th className="py-2 text-right">Ventas ($)</th>
+                                    <th className="py-2 text-right">Citas</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {barberStats.map((row, i) => (
+                                    <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
+                                        <td className="py-3 font-medium text-slate-800">{row.name}</td>
+                                        <td className="py-3 text-right text-slate-700">${row.total.toFixed(2)}</td>
+                                        <td className="py-3 text-right text-slate-700">{row.citas}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* Por sede (plan Multi-Sede) */}
+            {showPorSede && salesByPos.length > 0 && (
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm page-break-inside-avoid">
+                    <h3 className="font-bold text-slate-800 mb-4 flex items-center">
+                        <MapPin size={20} className="mr-2 text-[#ffd427]" /> Ventas por Sede
+                    </h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="text-slate-500 text-sm border-b border-slate-200">
+                                    <th className="py-2">Sede</th>
+                                    <th className="py-2 text-right">Total Ventas ($)</th>
+                                    <th className="py-2 text-right">Nº Ventas</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {salesByPos.map((row) => (
+                                    <tr key={row.posId} className="border-b border-slate-50 hover:bg-slate-50">
+                                        <td className="py-3 font-medium text-slate-800">{row.posName}</td>
+                                        <td className="py-3 text-right text-slate-700">${row.total.toFixed(2)}</td>
+                                        <td className="py-3 text-right text-slate-700">{row.count}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
