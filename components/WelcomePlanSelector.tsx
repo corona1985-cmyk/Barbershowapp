@@ -337,7 +337,8 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             <ArrowLeft size={14} /> Volver
                         </button>
                         <p className="text-white text-center text-base font-semibold mb-1">¿Qué tipo de barbería tienes?</p>
-                        <p className="text-slate-400 text-center text-sm mb-4">Elige el plan que mejor describe tu negocio.</p>
+                        <p className="text-slate-400 text-center text-sm mb-1">Elige el plan que mejor describe tu negocio.</p>
+                        <p className="text-slate-500 text-center text-xs mb-4">Haz clic sobre un plan para elegirlo.</p>
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
                             {TIER_OPTIONS.map((opt) => (
                                 <button
