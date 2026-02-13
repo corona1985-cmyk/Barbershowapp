@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ViewState, UserRole, AccountTier } from '../types';
-import { LayoutDashboard, Users, Calendar, Package, DollarSign, FileText, LogOut, Scissors, Settings, ShoppingBag, MapPin, X, ChevronDown, ChevronRight, Briefcase, BarChart2, MessageCircle, Shield, Globe } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, Package, DollarSign, FileText, LogOut, Scissors, Settings, ShoppingBag, MapPin, X, ChevronDown, ChevronRight, Briefcase, BarChart2, MessageCircle, Shield, Globe, ListChecks } from 'lucide-react';
 
 interface SidebarProps {
     currentView: ViewState;
@@ -64,8 +64,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
             icon: <BarChart2 size={18} />,
             items: [
                 { id: 'inventory', label: 'Inventario', icon: <Package size={18} />, roles: ['superadmin', 'admin'] },
-                { id: 'finance', label: 'Finanzas', icon: <DollarSign size={18} />, roles: ['superadmin', 'admin'] },
+                { id: 'finance', label: 'Finanzas', icon: <DollarSign size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
                 { id: 'reports', label: 'Reportes', icon: <FileText size={18} />, roles: ['superadmin', 'admin'] },
+                { id: 'sales_records', label: 'Registros de cortes', icon: <ListChecks size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
                 { id: 'user_admin', label: 'Admin Usuarios', icon: <Shield size={18} />, roles: ['superadmin'] },
                 { id: 'settings', label: 'Configuración', icon: <Settings size={18} />, roles: ['superadmin', 'admin'] },
             ]
@@ -121,6 +122,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                         // En plan Solo ocultar: Calendario, WhatsApp, Inventario, Finanzas, Admin Usuarios
                         if (accountTier === 'solo') {
                             filteredItems = filteredItems.filter(item => !HIDDEN_IN_TIER_SOLO.includes(item.id as ViewState));
+                        }
+                        // Consola WhatsApp solo en plan Multi-Sede
+                        if (accountTier !== 'multisede') {
+                            filteredItems = filteredItems.filter(item => item.id !== 'whatsapp_console');
                         }
                         if (filteredItems.length === 0) return null;
 

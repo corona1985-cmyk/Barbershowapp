@@ -200,4 +200,4 @@ export interface NotificationLog {
     message: string;
 }
 
-export type ViewState = 'dashboard' | 'clients' | 'appointments' | 'inventory' | 'sales' | 'shop' | 'finance' | 'reports' | 'settings' | 'admin_pos' | 'calendar' | 'whatsapp_console' | 'user_admin' | 'client_discovery' | 'master_dashboard';
+export type ViewState = 'dashboard' | 'clients' | 'appointments' | 'inventory' | 'sales' | 'shop' | 'finance' | 'reports' | 'sales_records' | 'settings' | 'admin_pos' | 'calendar' | 'whatsapp_console' | 'user_admin' | 'client_discovery' | 'master_dashboard';

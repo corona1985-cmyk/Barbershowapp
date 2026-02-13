@@ -1,14 +1,1 @@
-{
-  "rules": {
-    "barbershow": {
-      ".read": "true",
-      ".write": "true",
-      "clients": { ".indexOn": ["posId"] },
-      "products": { ".indexOn": ["posId"] },
-      "services": { ".indexOn": ["posId"] },
-      "barbers": { ".indexOn": ["posId"] },
-      "appointments": { ".indexOn": ["posId"] },
-      "sales": { ".indexOn": ["posId"] }
-    }
-  }
-}
+{"rules":{"barbershow":{".read":"true",".write":"true","clients":{".indexOn":["posId"]},"products":{".indexOn":["posId"]},"services":{".indexOn":["posId"]},"barbers":{".indexOn":["posId"]},"appointments":{".indexOn":["posId"]},"sales":{".indexOn":["posId"]},"finances":{".indexOn":["posId"]}}}}}

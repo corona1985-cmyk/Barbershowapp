@@ -62,29 +62,23 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
         }
 
         const existingItem = cart.find(i => i.id === item.id && i.type === type);
-        
-        if (existingItem) {
-            if (type === 'producto') {
-                const product = products.find(p => p.id === item.id);
-                if (product && existingItem.quantity >= product.stock) {
-                    alert('Stock insuficiente');
-                    return;
-                }
-            }
-            setCart(cart.map(i => 
-                (i.id === item.id && i.type === type) 
-                ? { ...i, quantity: i.quantity + 1 } 
-                : i
-            ));
-        } else {
-            setCart([...cart, {
-                id: item.id,
-                name: type === 'producto' ? (item as Product).producto : (item as Service).name,
-                price: type === 'producto' ? (item as Product).precioVenta : (item as Service).price,
-                quantity: 1,
-                type
-            }]);
+
+        if (existingItem && type === 'servicio') {
+            alert('Este servicio ya está en la factura. No se permiten servicios repetidos.');
+            return;
         }
+        if (existingItem && type === 'producto') {
+            alert('Este producto ya está en la factura. Use los controles del carrito para cambiar la cantidad.');
+            return;
+        }
+
+        setCart([...cart, {
+            id: item.id,
+            name: type === 'producto' ? (item as Product).producto : (item as Service).name,
+            price: type === 'producto' ? (item as Product).precioVenta : (item as Service).price,
+            quantity: 1,
+            type
+        }]);
     };
 
     const updateQuantity = (id: number, type: 'producto' | 'servicio', delta: number) => {
@@ -123,11 +117,12 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
             const sales = await DataService.getSales();
             const newId = sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1;
             const saleNumber = `V${String(newId).padStart(4, '0')}`;
+            const clienteId = salesFromAppointment ? salesFromAppointment.clienteId : selectedClient;
             const newSale: Sale = {
                 id: newId,
                 posId: activePosId,
                 numeroVenta: saleNumber,
-                clienteId: selectedClient,
+                clienteId,
                 barberoId: salesFromAppointment?.barberoId ?? DataService.getCurrentBarberId() ?? undefined,
                 items: [...cart],
                 metodoPago: paymentMethod,
@@ -146,8 +141,8 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
                     if (prodIndex >= 0) updatedProducts[prodIndex].stock -= item.quantity;
                 }
             });
-            if (selectedClient) {
-                const client = clients.find(c => c.id === selectedClient);
+            if (clienteId) {
+                const client = clients.find(c => c.id === clienteId);
                 if (client) {
                     let pointsEarned = 0;
                     cart.forEach(item => {
@@ -267,19 +262,47 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
                 </div>
             </div>
 
-            {/* Right Column: Cart */}
-            <div className="w-full lg:w-96 flex-shrink-0 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col min-h-[320px] lg:min-h-0 lg:h-full">
+            {/* Right Column: Cart - en escritorio más ancho para que Factura de cita y servicios se vean bien */}
+            <div className="w-full lg:w-[420px] flex-shrink-0 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col min-h-[320px] lg:min-h-0 lg:h-full">
                 <div className="p-4 border-b border-slate-200">
                     {salesFromAppointment && (
-                        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div className="mb-4 p-3 lg:p-4 bg-amber-50 border border-amber-200 rounded-lg">
                             <h3 className="text-sm font-bold text-amber-900 flex items-center gap-1 mb-2">
                                 <FileText size={16} /> Factura de cita
                             </h3>
                             <dl className="text-sm space-y-1 text-amber-800">
                                 <div><span className="font-medium">Cliente:</span> {salesFromAppointment.clienteNombre}</div>
-                                <div><span className="font-medium">Fecha:</span> {salesFromAppointment.fecha}</div>
-                                <div><span className="font-medium">Hora del corte:</span> {salesFromAppointment.hora}</div>
-                                <div className="pt-1 border-t border-amber-200 mt-1"><span className="font-medium">Total:</span> ${(cart.length > 0 ? total : salesFromAppointment.total).toFixed(2)}</div>
+                                <div><span className="font-medium">Fecha:</span> {salesFromAppointment.fecha} <span className="font-medium">Hora:</span> {salesFromAppointment.hora}</div>
+                                <div className="pt-1.5 mt-1 border-t border-amber-200">
+                                    <span className="font-medium block mb-1.5">Servicios:</span>
+                                    <div className="mt-1 lg:mt-2 min-h-[80px] lg:min-h-[140px]">
+                                        {/* En computadora: tabla con buen espacio; en cel: lista compacta */}
+                                        <div className="hidden lg:block rounded-md border border-amber-200/60 bg-white/60 overflow-visible">
+                                            <table className="w-full text-sm lg:text-base">
+                                                <thead>
+                                                    <tr className="text-left text-amber-900 border-b-2 border-amber-200/80 bg-amber-100/50">
+                                                        <th className="py-2.5 px-3 font-semibold">Servicio</th>
+                                                        <th className="py-2.5 px-3 font-semibold text-right w-24">Precio</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="text-amber-900">
+                                                    {(cart.length > 0 ? cart : salesFromAppointment.items).map((item, i) => (
+                                                        <tr key={`${item.id}-${item.type}-${i}`} className="border-b border-amber-100 last:border-0 hover:bg-amber-50/50">
+                                                            <td className="py-2.5 px-3 font-medium">{item.name}</td>
+                                                            <td className="py-2.5 px-3 text-right font-semibold">${(item.price * item.quantity).toFixed(2)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <ul className="lg:hidden space-y-0.5 text-amber-900">
+                                            {(cart.length > 0 ? cart : salesFromAppointment.items).map((item, i) => (
+                                                <li key={`${item.id}-${item.type}-${i}`} className="break-words">{item.name} — ${(item.price * item.quantity).toFixed(2)}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div className="pt-1.5 border-t border-amber-200"><span className="font-medium">Total:</span> ${(cart.length > 0 ? total : salesFromAppointment.total).toFixed(2)}</div>
                             </dl>
                         </div>
                     )}
@@ -288,24 +311,39 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
                         Venta Actual
                     </h2>
                     
-                    <div className="relative">
-                        <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-                        <select 
-                            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ffd427] appearance-none"
-                            value={selectedClient || ''}
-                            onChange={(e) => setSelectedClient(e.target.value ? Number(e.target.value) : null)}
-                        >
-                            <option value="">Cliente Ocasional</option>
-                            {clients.map(c => (
-                                <option key={c.id} value={c.id}>{c.nombre}</option>
-                            ))}
-                        </select>
-                    </div>
+                    {salesFromAppointment ? (
+                        <div className="flex items-center gap-2 py-2 px-3 bg-amber-50 border border-amber-200 rounded-lg">
+                            <User className="text-amber-700 flex-shrink-0" size={18} />
+                            <div className="min-w-0">
+                                <p className="text-xs font-medium text-amber-800">Cliente (no se puede cambiar en factura de cita)</p>
+                                <p className="font-semibold text-slate-800 truncate">{salesFromAppointment.clienteNombre}</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="relative">
+                            <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+                            <select 
+                                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ffd427] appearance-none"
+                                value={selectedClient || ''}
+                                onChange={(e) => setSelectedClient(e.target.value ? Number(e.target.value) : null)}
+                            >
+                                <option value="">Cliente Ocasional</option>
+                                {clients.map(c => (
+                                    <option key={c.id} value={c.id}>{c.nombre}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 min-w-0 min-h-[200px]">
+                    {salesFromAppointment && cart.length > 0 && (
+                        <p className="text-xs text-slate-500 bg-slate-100 px-3 py-2 rounded-lg">
+                            Para quitar un servicio, haz clic en el icono <Trash2 size={14} className="inline text-red-500 align-middle mx-0.5" /> al lado de cada ítem.
+                        </p>
+                    )}
                     {cart.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                        <div className="h-full flex flex-col items-center justify-center text-slate-400 min-h-[120px]">
                             <ShoppingCart size={48} className="mb-2 opacity-50" />
                             <p>El carrito está vacío</p>
                         </div>
@@ -320,24 +358,27 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
                                     <div className="flex items-center bg-white border border-slate-200 rounded-lg">
                                         <button 
                                             onClick={() => updateQuantity(item.id, item.type, -1)}
-                                            className="p-1 hover:bg-slate-100 text-slate-600 rounded-l-lg"
+                                            className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-l-lg"
+                                            title="Menos"
                                         >
                                             <Minus size={14} />
                                         </button>
                                         <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
                                         <button 
                                             onClick={() => updateQuantity(item.id, item.type, 1)}
-                                            className="p-1 hover:bg-slate-100 text-slate-600 rounded-r-lg"
+                                            className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-r-lg"
+                                            title="Más"
                                         >
                                             <Plus size={14} />
                                         </button>
                                     </div>
-                                    <button 
-                                        onClick={() => removeFromCart(item.id, item.type)}
-                                        className="text-red-400 hover:text-red-600"
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
+<button 
+                                            onClick={() => removeFromCart(item.id, item.type)}
+                                            className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-200"
+                                            title="Quitar este servicio/producto"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
                                 </div>
                             </div>
                         ))
