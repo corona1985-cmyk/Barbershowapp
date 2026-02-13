@@ -18,12 +18,15 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
     const [clients, setClients] = useState<Client[]>([]);
     const [barbers, setBarbers] = useState<Barber[]>([]);
     const [salesByPos, setSalesByPos] = useState<{ posId: number; posName: string; total: number; count: number }[]>([]);
+    const [activePosId, setActivePosId] = useState<number | null>(null);
 
     const isSolo = accountTier === 'solo';
     const showPorBarbero = accountTier === 'barberia' || accountTier === 'multisede';
     const showPorSede = accountTier === 'multisede' && posListForOwner.length > 1;
+    const noSedeActiva = activePosId === null;
 
     useEffect(() => {
+        setActivePosId(DataService.getActivePosId());
         Promise.all([
             DataService.getSales(),
             DataService.getAppointments(),
@@ -34,6 +37,7 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
             setAppointments(a);
             setProducts(p);
             setClients(c);
+            setActivePosId(DataService.getActivePosId());
         });
     }, []);
 
@@ -60,17 +64,20 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
         })();
     }, [showPorSede, posListForOwner.length]);
 
-    // 1. Sales over time
-    const salesData = sales.reduce((acc: any, sale) => {
-        const date = sale.fecha.substring(5); // MM-DD
-        const existing = acc.find((d: any) => d.name === date);
-        if (existing) {
-            existing.total += sale.total;
-        } else {
-            acc.push({ name: date, total: sale.total });
-        }
-        return acc;
-    }, []);
+    // 1. Sales over time (solo ventas con fecha válida para evitar errores)
+    const salesData = sales
+        .filter((sale) => sale.fecha && typeof sale.fecha === 'string' && sale.fecha.length >= 10)
+        .reduce((acc: any, sale) => {
+            const date = sale.fecha.substring(5, 10); // MM-DD
+            const existing = acc.find((d: any) => d.name === date);
+            if (existing) {
+                existing.total += sale.total;
+            } else {
+                acc.push({ name: date, total: sale.total });
+            }
+            return acc;
+        }, [])
+        .sort((a, b) => a.name.localeCompare(b.name));
 
     // 2. Appointments Status
     const appointmentStats = [
@@ -78,6 +85,7 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
         { name: 'Canceladas', value: appointments.filter(a => a.estado === 'cancelada').length },
         { name: 'Pendientes', value: appointments.filter(a => a.estado === 'confirmada' || a.estado === 'pendiente').length },
     ];
+    const hasAppointmentData = appointmentStats.some((s) => s.value > 0);
 
     // 3. Top Products (ventas reales: unidades vendidas por producto)
     const productUnitsSold: Record<number, number> = {};
@@ -123,6 +131,13 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
                 <p className="text-slate-500 mb-6">Generado el: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</p>
             </div>
 
+            {noSedeActiva && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl mb-4 no-print">
+                    <p className="font-medium">No hay sede seleccionada</p>
+                    <p className="text-sm mt-1">Selecciona una sede en el menú superior para ver ventas, citas y reportes de esa ubicación.</p>
+                </div>
+            )}
+
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 print:grid-cols-2">
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
@@ -159,61 +174,88 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 print:grid-cols-1">
                 {/* Sales Chart */}
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-80 page-break-inside-avoid">
-                    <h3 className="font-bold text-slate-800 mb-4">Tendencia de Ventas</h3>
-                    {salesData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={salesData}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" />
-                                <YAxis />
-                                <Tooltip />
-                                <Legend />
-                                <Line type="monotone" dataKey="total" stroke="#ffd427" strokeWidth={2} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    ) : (
-                        <div className="h-full flex items-center justify-center text-slate-400">Sin datos suficientes</div>
-                    )}
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col min-h-[320px] page-break-inside-avoid">
+                    <h3 className="font-bold text-slate-800 mb-4 flex-shrink-0">Tendencia de Ventas</h3>
+                    <div className="flex-1 min-h-[220px] w-full">
+                        {salesData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={salesData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                                    <YAxis tick={{ fontSize: 12 }} />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Line type="monotone" dataKey="total" stroke="#ffd427" strokeWidth={2} name="Total" />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="h-full min-h-[220px] flex items-center justify-center text-slate-400 text-center px-4">
+                                {noSedeActiva ? 'Selecciona una sede para ver la tendencia de ventas.' : 'No hay ventas en el periodo para mostrar.'}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Appointment Status */}
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-80 page-break-inside-avoid">
-                    <h3 className="font-bold text-slate-800 mb-4">Estado de Citas</h3>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie
-                                data={appointmentStats}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={80}
-                                fill="#8884d8"
-                                paddingAngle={5}
-                                dataKey="value"
-                            >
-                                {appointmentStats.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                            </Pie>
-                            <Tooltip />
-                            <Legend />
-                        </PieChart>
-                    </ResponsiveContainer>
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col min-h-[320px] page-break-inside-avoid">
+                    <h3 className="font-bold text-slate-800 mb-4 flex-shrink-0">Estado de Citas</h3>
+                    <div className="flex-1 min-h-[220px] w-full">
+                        {hasAppointmentData ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={appointmentStats}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        fill="#8884d8"
+                                        paddingAngle={2}
+                                        dataKey="value"
+                                    >
+                                        {appointmentStats.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip />
+                                    <Legend />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="h-full min-h-[220px] flex items-center justify-center text-slate-400 text-center px-4">
+                                Sin citas registradas para mostrar.
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Top Products */}
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-80 page-break-inside-avoid">
-                    <h3 className="font-bold text-slate-800 mb-4">Productos Populares</h3>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={productSales} layout="vertical">
-                            <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                            <XAxis type="number" />
-                            <YAxis dataKey="name" type="category" width={100} />
-                            <Tooltip />
-                            <Bar dataKey="sales" fill="#ffd427" radius={[0, 4, 4, 0]} name="Unidades vendidas" />
-                        </BarChart>
-                    </ResponsiveContainer>
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col min-h-[320px] page-break-inside-avoid lg:col-span-2">
+                    <h3 className="font-bold text-slate-800 mb-4 flex-shrink-0">Productos Populares</h3>
+                    <div className="flex-1 min-h-[220px] w-full">
+                        {productSales.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={productSales} margin={{ top: 8, right: 16, left: 8, bottom: 48 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                    <XAxis
+                                        dataKey="name"
+                                        tick={{ fontSize: 14, fill: '#334155', fontWeight: 500 }}
+                                        angle={-35}
+                                        textAnchor="end"
+                                        height={72}
+                                        interval={0}
+                                    />
+                                    <YAxis type="number" tick={{ fontSize: 12 }} />
+                                    <Tooltip />
+                                    <Bar dataKey="sales" fill="#ffd427" radius={[4, 4, 0, 0]} name="Unidades vendidas" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="h-full min-h-[220px] flex items-center justify-center text-slate-400 text-center px-4">
+                                No hay ventas de productos en el periodo.
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
