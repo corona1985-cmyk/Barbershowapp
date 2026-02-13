@@ -1,4 +1,4 @@
-import { ref, get, set, update, remove } from 'firebase/database';
+import { ref, get, set, update, remove, query, orderByChild, equalTo } from 'firebase/database';
 import { db } from './firebase';
 import {
   Client,
@@ -111,6 +111,22 @@ function snapshotToUsers(val: unknown): SystemUser[] {
 
 let ACTIVE_POS_ID: number | null = null;
 
+const CACHE_TTL_MS = 50 * 1000;
+const dataCache: Record<string, { data: unknown; ts: number }> = {};
+function cacheGet<T>(key: string): T | null {
+  const entry = dataCache[key];
+  if (!entry || Date.now() - entry.ts > CACHE_TTL_MS) return null;
+  return entry.data as T;
+}
+function cacheSet(key: string, data: unknown) {
+  dataCache[key] = { data, ts: Date.now() };
+}
+function cacheInvalidate(prefix: string) {
+  Object.keys(dataCache).forEach((k) => {
+    if (k.startsWith(prefix)) delete dataCache[k];
+  });
+}
+
 export const DataService = {
   initialize: async (): Promise<void> => {
     const snap = await get(ref(db, ROOT + '/pointsOfSale'));
@@ -149,9 +165,14 @@ export const DataService = {
   getActivePosId: () => ACTIVE_POS_ID,
 
   getPointsOfSale: async (): Promise<PointOfSale[]> => {
+    const key = 'pointsOfSale';
+    const cached = cacheGet<PointOfSale[]>(key);
+    if (cached) return cached;
     const snap = await get(ref(db, ROOT + '/pointsOfSale'));
     const arr = snapshotToArray<PointOfSale>(snap.val());
-    return arr.map((p) => ({ ...p, id: Number(p.id), plan: p.plan || 'basic' }));
+    const out = arr.map((p) => ({ ...p, id: Number(p.id), plan: p.plan || 'basic' }));
+    cacheSet(key, out);
+    return out;
   },
 
   /** Plan de la sede activa; usado para habilitar funciones Pro (ej. notificaciones barbero). */
@@ -342,9 +363,15 @@ export const DataService = {
 
   getClients: async (): Promise<Client[]> => {
     if (ACTIVE_POS_ID == null) return [];
-    const snap = await get(ref(db, ROOT + '/clients'));
+    const key = `clients_${ACTIVE_POS_ID}`;
+    const cached = cacheGet<Client[]>(key);
+    if (cached) return cached;
+    const q = query(ref(db, ROOT + '/clients'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
+    const snap = await get(q);
     const arr = snapshotToArray<Client>(snap.val());
-    return arr.filter((c) => c.posId === ACTIVE_POS_ID).map((c) => ({ ...c, id: Number(c.id) }));
+    const out = arr.map((c) => ({ ...c, id: Number(c.id) }));
+    cacheSet(key, out);
+    return out;
   },
 
   /** Busca un cliente por teléfono en toda la base de datos (cualquier barbería). Normaliza solo dígitos. */
@@ -360,15 +387,18 @@ export const DataService = {
   /** Solo clientes que tienen al menos una cita o una venta en esta sede (para barberos: solo de este barbero). */
   getClientsWithActivity: async (): Promise<Client[]> => {
     if (ACTIVE_POS_ID == null) return [];
-    const [clientsSnap, apptsSnap, salesSnap] = await Promise.all([
-      get(ref(db, ROOT + '/clients')),
-      get(ref(db, ROOT + '/appointments')),
-      get(ref(db, ROOT + '/sales')),
-    ]);
-    const allClients = snapshotToArray<Client>(clientsSnap.val()).filter((c) => c.posId === ACTIVE_POS_ID);
-    let appts = snapshotToArray<Appointment>(apptsSnap.val()).filter((a) => a.posId === ACTIVE_POS_ID);
-    let sales = snapshotToArray<Sale>(salesSnap.val()).filter((s) => s.posId === ACTIVE_POS_ID);
     const barberId = DataService.getCurrentBarberId();
+    const key = `clientsActivity_${ACTIVE_POS_ID}_${barberId ?? 'all'}`;
+    const cached = cacheGet<Client[]>(key);
+    if (cached) return cached;
+    const [clientsSnap, apptsSnap, salesSnap] = await Promise.all([
+      get(query(ref(db, ROOT + '/clients'), orderByChild('posId'), equalTo(ACTIVE_POS_ID))),
+      get(query(ref(db, ROOT + '/appointments'), orderByChild('posId'), equalTo(ACTIVE_POS_ID))),
+      get(query(ref(db, ROOT + '/sales'), orderByChild('posId'), equalTo(ACTIVE_POS_ID))),
+    ]);
+    const allClients = snapshotToArray<Client>(clientsSnap.val()).map((c) => ({ ...c, id: Number(c.id) }));
+    let appts = snapshotToArray<Appointment>(apptsSnap.val());
+    let sales = snapshotToArray<Sale>(salesSnap.val());
     if (barberId != null) {
       appts = appts.filter((a) => a.barberoId === barberId);
       sales = sales.filter((s) => (s.barberoId ?? null) === barberId);
@@ -376,19 +406,23 @@ export const DataService = {
     const clientIdsWithAppt = new Set(appts.map((a) => a.clienteId));
     const clientIdsWithSale = new Set(sales.map((s) => s.clienteId).filter(Boolean));
     const activeIds = new Set([...clientIdsWithAppt, ...clientIdsWithSale]);
-    return allClients.filter((c) => activeIds.has(c.id)).map((c) => ({ ...c, id: Number(c.id) }));
+    const out = allClients.filter((c) => activeIds.has(c.id));
+    cacheSet(key, out);
+    return out;
   },
 
   addClient: async (client: Omit<Client, 'id' | 'posId'>): Promise<Client> => {
     const effectivePosId = ACTIVE_POS_ID ?? 1;
     const newClient = { ...client, id: Date.now(), posId: effectivePosId } as Client;
     await set(ref(db, ROOT + '/clients/' + newClient.id), newClient);
+    cacheInvalidate('clients');
     await DataService.logAuditAction('create_client', 'system', `Registered client: ${client.nombre}`, effectivePosId);
     return newClient;
   },
 
   updateClient: async (client: Client): Promise<void> => {
     await set(ref(db, ROOT + '/clients/' + client.id), client);
+    cacheInvalidate('clients');
   },
 
   toggleClientStatus: async (id: number): Promise<void> => {
@@ -404,9 +438,9 @@ export const DataService = {
 
   getProducts: async (): Promise<Product[]> => {
     if (ACTIVE_POS_ID == null) return [];
-    const snap = await get(ref(db, ROOT + '/products'));
-    const arr = snapshotToArray<Product>(snap.val());
-    return arr.filter((p) => p.posId === ACTIVE_POS_ID).map((p) => ({ ...p, id: Number(p.id) }));
+    const q = query(ref(db, ROOT + '/products'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
+    const snap = await get(q);
+    return snapshotToArray<Product>(snap.val()).map((p) => ({ ...p, id: Number(p.id) }));
   },
 
   setProducts: async (data: Product[]): Promise<void> => {
@@ -460,9 +494,9 @@ export const DataService = {
 
   getServices: async (): Promise<Service[]> => {
     if (ACTIVE_POS_ID == null) return [];
-    const snap = await get(ref(db, ROOT + '/services'));
-    const arr = snapshotToArray<Service>(snap.val());
-    return arr.filter((s) => s.posId === ACTIVE_POS_ID).map((s) => ({ ...s, id: Number(s.id) }));
+    const q = query(ref(db, ROOT + '/services'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
+    const snap = await get(q);
+    return snapshotToArray<Service>(snap.val()).map((s) => ({ ...s, id: Number(s.id) }));
   },
 
   saveService: async (service: Service): Promise<void> => {
@@ -484,32 +518,40 @@ export const DataService = {
 
   getBarbers: async (): Promise<Barber[]> => {
     if (ACTIVE_POS_ID == null) return [];
-    const snap = await get(ref(db, ROOT + '/barbers'));
-    const arr = snapshotToArray<Barber>(snap.val());
-    return arr.filter((b) => b.posId === ACTIVE_POS_ID).map((b) => ({ ...b, id: Number(b.id) }));
+    const key = `barbers_${ACTIVE_POS_ID}`;
+    const cached = cacheGet<Barber[]>(key);
+    if (cached) return cached;
+    const q = query(ref(db, ROOT + '/barbers'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
+    const snap = await get(q);
+    const out = snapshotToArray<Barber>(snap.val()).map((b) => ({ ...b, id: Number(b.id) }));
+    cacheSet(key, out);
+    return out;
   },
 
   /** Barbers de una sede (para Admin al asignar usuario barbero). No depende de ACTIVE_POS_ID. */
   getBarbersForPos: async (posId: number): Promise<Barber[]> => {
-    const snap = await get(ref(db, ROOT + '/barbers'));
-    const arr = snapshotToArray<Barber>(snap.val());
-    return arr.filter((b) => b.posId === posId).map((b) => ({ ...b, id: Number(b.id) }));
+    const q = query(ref(db, ROOT + '/barbers'), orderByChild('posId'), equalTo(posId));
+    const snap = await get(q);
+    return snapshotToArray<Barber>(snap.val()).map((b) => ({ ...b, id: Number(b.id) }));
   },
 
   addBarber: async (barber: Omit<Barber, 'id' | 'posId'>): Promise<Barber> => {
     if (ACTIVE_POS_ID == null) throw new Error('No Active POS');
     const newBarber = { ...barber, id: Date.now(), posId: ACTIVE_POS_ID } as Barber;
     await set(ref(db, ROOT + '/barbers/' + newBarber.id), newBarber);
+    cacheInvalidate('barbers');
     await DataService.logAuditAction('create_barber', 'admin', `Created barber: ${barber.name}`, ACTIVE_POS_ID);
     return newBarber;
   },
 
   updateBarber: async (barber: Barber): Promise<void> => {
     await set(ref(db, ROOT + '/barbers/' + barber.id), barber);
+    cacheInvalidate('barbers');
   },
 
   deleteBarber: async (id: number): Promise<void> => {
     await remove(ref(db, ROOT + '/barbers/' + id));
+    cacheInvalidate('barbers');
     await DataService.logAuditAction('delete_barber', 'admin', `Deleted barber ID: ${id}`, ACTIVE_POS_ID ?? undefined);
   },
 
@@ -519,6 +561,7 @@ export const DataService = {
     const barber = snap.val() as Barber;
     barber.active = !barber.active;
     await set(ref(db, ROOT + '/barbers/' + id), barber);
+    cacheInvalidate('barbers');
     await DataService.logAuditAction('toggle_barber', 'admin', `Toggled barber ${id} status`, ACTIVE_POS_ID ?? undefined);
   },
 
@@ -527,11 +570,15 @@ export const DataService = {
     const role = DataService.getCurrentUserRole();
     const barberId = DataService.getCurrentBarberId();
     if ((role === 'barbero' || role === 'empleado') && barberId == null) return [];
-    const snap = await get(ref(db, ROOT + '/appointments'));
-    const arr = snapshotToArray<Appointment>(snap.val());
-    let filtered = arr.filter((a) => a.posId === ACTIVE_POS_ID);
-    if (barberId != null) filtered = filtered.filter((a) => a.barberoId === barberId);
-    return filtered.map((a) => ({ ...a, id: Number(a.id) }));
+    const key = `appointments_${ACTIVE_POS_ID}_${barberId ?? 'all'}`;
+    const cached = cacheGet<Appointment[]>(key);
+    if (cached) return cached;
+    const q = query(ref(db, ROOT + '/appointments'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
+    const snap = await get(q);
+    let arr = snapshotToArray<Appointment>(snap.val()).map((a) => ({ ...a, id: Number(a.id) }));
+    if (barberId != null) arr = arr.filter((a) => a.barberoId === barberId);
+    cacheSet(key, arr);
+    return arr;
   },
 
   checkAppointmentConflict: async (posId: number, barberId: number, date: string, time: string): Promise<boolean> => {
@@ -545,6 +592,8 @@ export const DataService = {
     const id = Date.now();
     const apt: Appointment = { ...appointment, id };
     await update(ref(db, ROOT + '/appointments/' + id), apt);
+    cacheInvalidate('appointments');
+    cacheInvalidate('clientsActivity');
     return apt;
   },
 
@@ -560,6 +609,8 @@ export const DataService = {
     const other = Object.fromEntries(Object.entries(all).filter(([, a]) => a.posId !== ACTIVE_POS_ID));
     const merged = { ...other, ...toObjectById(toMerge) };
     await set(ref(db, ROOT + '/appointments'), merged);
+    cacheInvalidate('appointments');
+    cacheInvalidate('clientsActivity');
   },
 
   getSales: async (): Promise<Sale[]> => {
@@ -567,25 +618,29 @@ export const DataService = {
     const role = DataService.getCurrentUserRole();
     const barberId = DataService.getCurrentBarberId();
     if ((role === 'barbero' || role === 'empleado') && barberId == null) return [];
-    const snap = await get(ref(db, ROOT + '/sales'));
-    const arr = snapshotToArray<Sale>(snap.val());
-    let filtered = arr.filter((s) => s.posId === ACTIVE_POS_ID);
-    if (barberId != null) filtered = filtered.filter((s) => (s.barberoId ?? null) === barberId);
-    return filtered.map((s) => ({ ...s, id: Number(s.id) }));
+    const key = `sales_${ACTIVE_POS_ID}_${barberId ?? 'all'}`;
+    const cached = cacheGet<Sale[]>(key);
+    if (cached) return cached;
+    const q = query(ref(db, ROOT + '/sales'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
+    const snap = await get(q);
+    let arr = snapshotToArray<Sale>(snap.val()).map((s) => ({ ...s, id: Number(s.id) }));
+    if (barberId != null) arr = arr.filter((s) => (s.barberoId ?? null) === barberId);
+    cacheSet(key, arr);
+    return arr;
   },
 
   /** Ventas de una sede concreta (para reportes por sede en Multi-Sede). No depende de ACTIVE_POS_ID. */
   getSalesForPos: async (posId: number): Promise<Sale[]> => {
-    const snap = await get(ref(db, ROOT + '/sales'));
-    const arr = snapshotToArray<Sale>(snap.val());
-    return arr.filter((s) => s.posId === posId).map((s) => ({ ...s, id: Number(s.id) }));
+    const q = query(ref(db, ROOT + '/sales'), orderByChild('posId'), equalTo(posId));
+    const snap = await get(q);
+    return snapshotToArray<Sale>(snap.val()).map((s) => ({ ...s, id: Number(s.id) }));
   },
 
   /** Citas de una sede concreta (para reportes por sede en Multi-Sede). No depende de ACTIVE_POS_ID. */
   getAppointmentsForPos: async (posId: number): Promise<Appointment[]> => {
-    const snap = await get(ref(db, ROOT + '/appointments'));
-    const arr = snapshotToArray<Appointment>(snap.val());
-    return arr.filter((a) => a.posId === posId).map((a) => ({ ...a, id: Number(a.id) }));
+    const q = query(ref(db, ROOT + '/appointments'), orderByChild('posId'), equalTo(posId));
+    const snap = await get(q);
+    return snapshotToArray<Appointment>(snap.val()).map((a) => ({ ...a, id: Number(a.id) }));
   },
 
   setSales: async (data: Sale[]): Promise<void> => {
@@ -602,6 +657,8 @@ export const DataService = {
     const other = Object.fromEntries(Object.entries(all).filter(([, s]) => s.posId !== currentPosId));
     const merged = { ...other, ...toObjectById(toMerge) };
     await set(ref(db, ROOT + '/sales'), merged);
+    cacheInvalidate('sales');
+    cacheInvalidate('clientsActivity');
   },
 
   getFinances: async (): Promise<FinanceRecord[]> => {

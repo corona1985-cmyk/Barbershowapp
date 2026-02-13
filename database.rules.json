@@ -2,7 +2,13 @@
   "rules": {
     "barbershow": {
       ".read": "true",
-      ".write": "true"
+      ".write": "true",
+      "clients": { ".indexOn": ["posId"] },
+      "products": { ".indexOn": ["posId"] },
+      "services": { ".indexOn": ["posId"] },
+      "barbers": { ".indexOn": ["posId"] },
+      "appointments": { ".indexOn": ["posId"] },
+      "sales": { ".indexOn": ["posId"] }
     }
   }
 }

@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { DataService } from '../services/data';
 import { ViewState } from '../types';
-import { Users, Calendar, ShoppingBag, AlertTriangle, TrendingUp, Clock } from 'lucide-react';
+import { Users, Calendar, ShoppingBag, AlertTriangle, TrendingUp, Clock, Loader2 } from 'lucide-react';
 
 interface DashboardProps {
     onChangeView: (view: ViewState) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
+    const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         clients: 0,
         appointmentsToday: 0,
@@ -18,7 +19,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
 
     useEffect(() => {
         (async () => {
-            const [clients, appointments, sales, products] = await Promise.all([
+            setLoading(true);
+            try {
+                const [clients, appointments, sales, products] = await Promise.all([
                 DataService.getClients(),
                 DataService.getAppointments(),
                 DataService.getSales(),
@@ -41,8 +44,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
                 amount: s.total
             }));
             setActivities(recentSales.reverse());
+            } finally {
+                setLoading(false);
+            }
         })();
     }, []);
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center py-24 text-slate-500">
+                <Loader2 className="animate-spin mb-4" size={48} />
+                <p className="font-medium">Cargando panel...</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
