@@ -271,8 +271,20 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
     }
 
     return (
-        <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom">
-            <div className="w-full max-w-2xl lg:max-w-6xl min-w-0">
+        <div className="min-h-screen min-h-[100dvh] relative flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom overflow-hidden">
+            {/* Imagen de fondo de barbería difuminada */}
+            <div
+                className="absolute inset-0 bg-cover bg-center scale-110"
+                style={{
+                    backgroundImage: `url('/barbershop-bg.png')`,
+                    filter: 'blur(14px)',
+                }}
+                aria-hidden
+            />
+            {/* Overlay oscuro para legibilidad */}
+            <div className="absolute inset-0 bg-slate-900/75" aria-hidden />
+            {/* Contenido */}
+            <div className="relative z-10 w-full max-w-2xl lg:max-w-6xl min-w-0">
                 {/* Logo — tamaño medio, equilibrado */}
                 <div className="text-center mb-8">
                     <div className="w-14 h-14 bg-[#ffd427] rounded-xl flex items-center justify-center mx-auto mb-3">
