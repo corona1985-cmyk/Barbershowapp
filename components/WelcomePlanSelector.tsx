@@ -3,9 +3,9 @@ import { AccountTier } from '../types';
 import { Scissors, User, Users, MapPin, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send } from 'lucide-react';
 import { DataService } from '../services/data';
 
-/** Configuración de contacto: pon aquí tu número WhatsApp (código país + número sin +) para mostrar el botón. Ej: '5215512345678' */
+/** Configuración de contacto: pon aquí tu número WhatsApp (código país + número sin +) para mostrar el botón. Ej: '18295992941' para RD */
 const CONTACT = {
-    whatsapp: '',
+    whatsapp: '18295992941', // 829 599 2941 (República Dominicana)
     email: 'contacto@barbershow.com',
 };
 
@@ -168,10 +168,15 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             </ul>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 text-slate-500 text-sm mt-6">
+                    <a
+                        href={waLink || `mailto:${supportEmail}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-slate-500 hover:text-[#ffd427] text-sm mt-6 transition-colors cursor-pointer"
+                    >
                         <CheckCircle size={18} className="text-green-500 flex-shrink-0" />
-                        <span>Soporte por correo y WhatsApp</span>
-                    </div>
+                        <span>Soporte por correo y WhatsApp (829 599 2941)</span>
+                    </a>
                 </div>
 
                 {/* Panel derecho claro — formulario */}
