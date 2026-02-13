@@ -18,7 +18,6 @@ import { Clients, Inventory, Finance } from './pages/InventoryClientsFinance';
 import { ViewState, UserRole, PointOfSale, SystemUser, AppointmentForSale, AccountTier } from './types';
 import { Scissors, Cookie, MapPin, Globe, LogOut, Menu, UserPlus, CheckCircle, ArrowLeft, Shield } from 'lucide-react';
 import BarberNotificationBell from './components/BarberNotificationBell';
-import OnboardingTier from './components/OnboardingTier';
 import WelcomePlanSelector from './components/WelcomePlanSelector';
 import GuestBookingView from './components/GuestBookingView';
 import { DataService } from './services/data';
@@ -67,8 +66,6 @@ const App: React.FC = () => {
     const [isPlanPro, setIsPlanPro] = useState(false);
     /** Tier de negocio de la sede activa: solo / barberia / multisede (menú y límites) */
     const [accountTier, setAccountTier] = useState<AccountTier>('barberia');
-    /** Mostrar onboarding "¿Cómo trabajas?" cuando la sede activa aún no tiene tier definido */
-    const [showOnboardingTier, setShowOnboardingTier] = useState(false);
     /** En plan Multi-Sede: sedes del mismo owner para mostrar selector (solo si hay más de una) */
     const [posListForOwner, setPosListForOwner] = useState<PointOfSale[]>([]);
 
@@ -81,7 +78,6 @@ const App: React.FC = () => {
             setCurrentPosName(pos ? pos.name : 'Desconocido');
             setIsPlanPro(pos?.plan === 'pro');
             setAccountTier(pos?.tier ?? 'barberia');
-            setShowOnboardingTier(!!(pos && (pos.tier === undefined || pos.tier === null)));
             if (pos?.tier === 'multisede' && pos.ownerId) {
                 const sameOwner = posList.filter(p => p.ownerId === pos.ownerId);
                 setPosListForOwner(sameOwner);
@@ -92,27 +88,8 @@ const App: React.FC = () => {
             setCurrentPosName('Desconocido');
             setIsPlanPro(false);
             setAccountTier('barberia');
-            setShowOnboardingTier(false);
             setPosListForOwner([]);
         }
-    };
-
-    const handleOnboardingTierSelect = async (tier: AccountTier) => {
-        if (currentPosId == null) {
-            setShowOnboardingTier(false);
-            return;
-        }
-        try {
-            const posList = await DataService.getPointsOfSale();
-            const pos = posList.find(p => p.id === currentPosId);
-            if (pos) {
-                await DataService.updatePointOfSale({ ...pos, tier });
-                setAccountTier(tier);
-            }
-        } catch (err) {
-            console.error('Error al guardar tipo de negocio:', err);
-        }
-        setShowOnboardingTier(false);
     };
 
     useEffect(() => {
@@ -560,12 +537,6 @@ const App: React.FC = () => {
     // 4. MAIN APP RENDER (General Users)
     return (
         <div className="flex h-screen min-h-0 bg-slate-100 font-sans overflow-hidden">
-            {showOnboardingTier && userRole !== 'cliente' && (
-                <OnboardingTier
-                    businessName={currentPosName || undefined}
-                    onSelect={handleOnboardingTierSelect}
-                />
-            )}
             <Sidebar 
                 currentView={currentView} 
                 onChangeView={handleChangeView} 
