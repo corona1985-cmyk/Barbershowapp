@@ -406,7 +406,7 @@ const App: React.FC = () => {
         if (!showLoginScreen) {
             return (
                 <WelcomePlanSelector
-                    onGoToLogin={() => setShowLoginScreen(true)}
+                    onGoToLogin={() => { setShowLoginScreen(true); setIsRegistering(false); }}
                     onGoToBarberias={() => setShowBarberiasGuest(true)}
                 />
             );
