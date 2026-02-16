@@ -68,7 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                 { id: 'reports', label: 'Reportes', icon: <FileText size={18} />, roles: ['superadmin', 'admin'] },
                 { id: 'sales_records', label: 'Registros de cortes', icon: <ListChecks size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
                 { id: 'user_admin', label: 'Admin Usuarios', icon: <Shield size={18} />, roles: ['superadmin'] },
-                { id: 'settings', label: 'Configuración', icon: <Settings size={18} />, roles: ['superadmin', 'admin'] },
+                { id: 'settings', label: 'Configuración', icon: <Settings size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
             ]
         }
     ];

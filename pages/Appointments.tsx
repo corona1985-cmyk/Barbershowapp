@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { DataService } from '../services/data';
 import { Appointment, Barber, Client, Service, AppointmentForSale, SaleItem, AccountTier } from '../types';
 import { ViewState } from '../types';
@@ -109,6 +109,12 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
 
     const isPlanSolo = accountTier === 'solo';
     const defaultBarberId = barbers.filter(b => b.active).length > 0 ? barbers.filter(b => b.active)[0].id : barbers[0]?.id;
+    /** Servicios disponibles para el barbero seleccionado: de la sede (barberId null) + del barbero */
+    const servicesForBarber = useMemo(() => {
+        const bid = newApt.barberoId ?? (isPlanSolo ? defaultBarberId : undefined);
+        if (bid == null) return services.filter((s) => s.barberId == null);
+        return services.filter((s) => s.barberId == null || s.barberId === bid);
+    }, [services, newApt.barberoId, isPlanSolo, defaultBarberId]);
 
     const handleSave = async () => {
         const barberoId = isPlanSolo ? (newApt.barberoId ?? defaultBarberId) : newApt.barberoId;
@@ -483,7 +489,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-2">Selecciona tus Servicios</label>
                                     <div className="space-y-2 border border-slate-200 rounded-lg p-2 max-h-48 overflow-y-auto">
-                                        {services.map(s => (
+                                        {servicesForBarber.map(s => (
                                             <label key={s.id} className="flex items-center space-x-2 p-2 rounded hover:bg-slate-50 cursor-pointer transition-colors">
                                                 <input 
                                                     type="checkbox" 
@@ -809,7 +815,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-2">Servicios</label>
                                 <div className="space-y-2 border border-slate-200 p-2 rounded-lg max-h-40 overflow-y-auto">
-                                    {services.map(s => (
+                                    {servicesForBarber.map(s => (
                                         <label key={s.id} className="flex items-center space-x-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
                                             <input 
                                                 type="checkbox" 

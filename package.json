@@ -9,7 +9,11 @@
     "preview": "vite preview",
     "firebase:login": "firebase login --reauth",
     "firebase:use": "firebase use gen-lang-client-0624135070",
-    "firebase:deploy": "firebase deploy --only functions"
+    "firebase:deploy": "firebase deploy --only functions",
+    "deploy": "npm run build && firebase deploy",
+    "deploy:hosting": "npm run build && firebase deploy --only hosting",
+    "deploy:db": "firebase deploy --only database",
+    "deploy:functions": "firebase deploy --only functions"
   },
   "dependencies": {
     "firebase": "^12.9.0",

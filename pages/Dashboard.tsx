@@ -1,7 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { DataService } from '../services/data';
-import { ViewState } from '../types';
-import { Users, Calendar, ShoppingBag, AlertTriangle, TrendingUp, Clock, Loader2 } from 'lucide-react';
+import { ViewState, Appointment, Client, PointOfSale } from '../types';
+import { Users, Calendar, ShoppingBag, AlertTriangle, TrendingUp, Clock, Loader2, MessageCircle } from 'lucide-react';
+
+/** Teléfono a formato wa.me (solo dígitos; 10 dígitos sin + → prefijo 52) */
+function phoneToWa(phone: string): string {
+    const d = (phone || '').replace(/\D/g, '');
+    if (d.length === 10 && !phone?.startsWith('+')) return '52' + d;
+    return d;
+}
+
+function buildWaLink(phone: string, message: string): string {
+    const num = phoneToWa(phone);
+    if (!num || num.length < 10) return '';
+    return `https://wa.me/${num}?text=${encodeURIComponent(message)}`;
+}
 
 interface DashboardProps {
     onChangeView: (view: ViewState) => void;
@@ -16,34 +29,51 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
         lowStock: 0
     });
     const [activities, setActivities] = useState<any[]>([]);
+    const [nextAppointment, setNextAppointment] = useState<{ apt: Appointment; client: Client } | null>(null);
+    const [pointsOfSale, setPointsOfSale] = useState<PointOfSale[]>([]);
 
     useEffect(() => {
         (async () => {
             setLoading(true);
             try {
-                const [clients, appointments, sales, products] = await Promise.all([
-                DataService.getClients(),
-                DataService.getAppointments(),
-                DataService.getSales(),
-                DataService.getProducts(),
-            ]);
-            const todayStr = new Date().toISOString().split('T')[0];
-            const todayAppointments = appointments.filter(a => a.fecha === todayStr && a.estado !== 'cancelada');
-            const todaySales = sales.filter(s => s.fecha === todayStr).reduce((sum, s) => sum + s.total, 0);
-            const lowStock = products.filter(p => p.stock < 5).length;
-            setStats({
-                clients: clients.length,
-                appointmentsToday: todayAppointments.length,
-                salesToday: todaySales,
-                lowStock
-            });
-            const recentSales = sales.slice(-3).map(s => ({
-                type: 'sale',
-                text: `Venta #${s.numeroVenta}`,
-                time: s.hora,
-                amount: s.total
-            }));
-            setActivities(recentSales.reverse());
+                const [clients, appointments, sales, products, posList] = await Promise.all([
+                    DataService.getClients(),
+                    DataService.getAppointments(),
+                    DataService.getSales(),
+                    DataService.getProducts(),
+                    DataService.getPointsOfSale(),
+                ]);
+                setPointsOfSale(posList);
+                const todayStr = new Date().toISOString().split('T')[0];
+                const todayAppointments = appointments
+                    .filter(a => a.fecha === todayStr && a.estado !== 'cancelada' && a.estado !== 'completada')
+                    .sort((a, b) => a.hora.localeCompare(b.hora));
+                const now = new Date();
+                const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                const barberId = DataService.getCurrentBarberId();
+                const listForUser = barberId != null ? todayAppointments.filter(a => a.barberoId === barberId) : todayAppointments;
+                const next = listForUser.find(a => a.hora >= currentTime) || listForUser[0] || null;
+                if (next) {
+                    const client = clients.find(c => c.id === next.clienteId);
+                    if (client) setNextAppointment({ apt: next, client });
+                    else setNextAppointment(null);
+                } else setNextAppointment(null);
+
+                const todaySales = sales.filter(s => s.fecha === todayStr).reduce((sum, s) => sum + s.total, 0);
+                const lowStock = products.filter(p => p.stock < 5).length;
+                setStats({
+                    clients: clients.length,
+                    appointmentsToday: todayAppointments.length,
+                    salesToday: todaySales,
+                    lowStock
+                });
+                const recentSales = sales.slice(-3).map(s => ({
+                    type: 'sale',
+                    text: `Venta #${s.numeroVenta}`,
+                    time: s.hora,
+                    amount: s.total
+                }));
+                setActivities(recentSales.reverse());
             } finally {
                 setLoading(false);
             }
@@ -128,21 +158,66 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4">Acciones Rápidas</h3>
-                    <div className="space-y-3">
-                        <button onClick={() => onChangeView('sales')} className="w-full flex items-center justify-between p-4 bg-yellow-50 hover:bg-yellow-100 text-yellow-800 rounded-lg transition-colors font-medium">
-                            <span>Nueva Venta</span>
-                            <ShoppingBag size={20} />
-                        </button>
-                        <button onClick={() => onChangeView('appointments')} className="w-full flex items-center justify-between p-4 bg-orange-50 hover:bg-orange-100 text-orange-800 rounded-lg transition-colors font-medium">
-                            <span>Agendar Cita</span>
-                            <Calendar size={20} />
-                        </button>
-                        <button onClick={() => onChangeView('clients')} className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors font-medium">
-                            <span>Registrar Cliente</span>
-                            <Users size={20} />
-                        </button>
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
+                    {nextAppointment && (
+                        <div className="pb-4 border-b border-slate-100">
+                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Siguiente cita</h3>
+                            <p className="font-semibold text-slate-800">{nextAppointment.client.nombre}</p>
+                            <p className="text-sm text-slate-600 flex items-center mt-1">
+                                <Clock size={14} className="mr-1.5" /> {nextAppointment.apt.hora}
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const posName = pointsOfSale.find(p => p.id === nextAppointment.apt.posId)?.name || 'BarberShow';
+                                    const fechaStr = new Date(nextAppointment.apt.fecha + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+                                    const msg = `Hola ${nextAppointment.client.nombre}, recordatorio: tienes cita el ${fechaStr} a las ${nextAppointment.apt.hora} en ${posName}. ¡Te esperamos!`;
+                                    const url = buildWaLink(nextAppointment.client.telefono, msg);
+                                    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                                    else alert('Este cliente no tiene un número de WhatsApp válido.');
+                                }}
+                                disabled={!nextAppointment.client.telefono || phoneToWa(nextAppointment.client.telefono).length < 10}
+                                className="mt-3 w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold bg-green-600 text-white hover:bg-green-700 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
+                            >
+                                <MessageCircle size={20} />
+                                Enviar recordatorio al próximo cliente
+                            </button>
+                            <p className="text-xs text-slate-500 mt-2">Se abrirá WhatsApp con el mensaje listo. Envías desde tu número.</p>
+                        </div>
+                    )}
+                    <div>
+                        <h3 className="text-lg font-bold text-slate-800 mb-4">Acciones Rápidas</h3>
+                        <div className="space-y-3">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!nextAppointment) return;
+                                    const posName = pointsOfSale.find(p => p.id === nextAppointment.apt.posId)?.name || 'BarberShow';
+                                    const fechaStr = new Date(nextAppointment.apt.fecha + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+                                    const msg = `Hola ${nextAppointment.client.nombre}, recordatorio: tienes cita el ${fechaStr} a las ${nextAppointment.apt.hora} en ${posName}. ¡Te esperamos!`;
+                                    const url = buildWaLink(nextAppointment.client.telefono, msg);
+                                    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                                    else alert('Este cliente no tiene un número de WhatsApp válido.');
+                                }}
+                                disabled={!nextAppointment || !nextAppointment.client.telefono || phoneToWa(nextAppointment.client.telefono).length < 10}
+                                className="w-full flex items-center justify-between p-4 bg-green-50 hover:bg-green-100 text-green-800 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-50"
+                            >
+                                <span>Enviar recordatorio al próximo cliente</span>
+                                <MessageCircle size={20} />
+                            </button>
+                            <button onClick={() => onChangeView('sales')} className="w-full flex items-center justify-between p-4 bg-yellow-50 hover:bg-yellow-100 text-yellow-800 rounded-lg transition-colors font-medium">
+                                <span>Nueva Venta</span>
+                                <ShoppingBag size={20} />
+                            </button>
+                            <button onClick={() => onChangeView('appointments')} className="w-full flex items-center justify-between p-4 bg-orange-50 hover:bg-orange-100 text-orange-800 rounded-lg transition-colors font-medium">
+                                <span>Agendar Cita</span>
+                                <Calendar size={20} />
+                            </button>
+                            <button onClick={() => onChangeView('clients')} className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors font-medium">
+                                <span>Registrar Cliente</span>
+                                <Users size={20} />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

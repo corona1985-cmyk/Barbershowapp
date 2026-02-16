@@ -492,28 +492,48 @@ export const DataService = {
   },
   clearCart: () => localStorage.setItem('userCart', '[]'),
 
-  getServices: async (): Promise<Service[]> => {
+  /** Si barberId se pasa, devuelve solo servicios de la sede (barberId null) + de ese barbero. Sin argumento: todos los de la sede (admin/config). */
+  getServices: async (barberId?: number): Promise<Service[]> => {
     if (ACTIVE_POS_ID == null) return [];
     const q = query(ref(db, ROOT + '/services'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
     const snap = await get(q);
-    return snapshotToArray<Service>(snap.val()).map((s) => ({ ...s, id: Number(s.id) }));
+    let list = snapshotToArray<Service>(snap.val()).map((s) => ({ ...s, id: Number(s.id), barberId: s.barberId ?? null }));
+    if (barberId !== undefined) {
+      list = list.filter((s) => s.barberId == null || s.barberId === barberId);
+    }
+    return list;
   },
 
   saveService: async (service: Service): Promise<void> => {
+    const barberId = DataService.getCurrentBarberId();
+    const role = DataService.getCurrentUserRole();
+    if (role === 'barbero' && barberId != null && service.barberId !== barberId) {
+      throw new Error('Solo puedes editar tus propios servicios.');
+    }
     await set(ref(db, ROOT + '/services/' + service.id), service);
   },
 
   addService: async (serviceData: Omit<Service, 'id' | 'posId'>): Promise<Service> => {
     if (ACTIVE_POS_ID == null) throw new Error('No Active POS');
-    const newService = { ...serviceData, id: Date.now(), posId: ACTIVE_POS_ID } as Service;
+    const role = DataService.getCurrentUserRole();
+    const barberId = role === 'barbero' ? DataService.getCurrentBarberId() ?? undefined : undefined;
+    const newService = { ...serviceData, id: Date.now(), posId: ACTIVE_POS_ID, barberId: barberId ?? null } as Service;
     await set(ref(db, ROOT + '/services/' + newService.id), newService);
-    await DataService.logAuditAction('create_service', 'admin', `Created service: ${serviceData.name}`, ACTIVE_POS_ID);
+    await DataService.logAuditAction('create_service', role === 'barbero' ? 'barbero' : 'admin', `Created service: ${serviceData.name}`, ACTIVE_POS_ID);
     return newService;
   },
 
   deleteService: async (id: number): Promise<void> => {
+    const barberId = DataService.getCurrentBarberId();
+    const role = DataService.getCurrentUserRole();
+    const snap = await get(ref(db, ROOT + '/services/' + id));
+    if (!snap.exists()) return;
+    const service = snap.val() as Service;
+    if (role === 'barbero' && (service.barberId == null || service.barberId !== barberId)) {
+      throw new Error('Solo puedes eliminar tus propios servicios.');
+    }
     await remove(ref(db, ROOT + '/services/' + id));
-    await DataService.logAuditAction('delete_service', 'admin', `Deleted service ID: ${id}`, ACTIVE_POS_ID ?? undefined);
+    await DataService.logAuditAction('delete_service', role === 'barbero' ? 'barbero' : 'admin', `Deleted service ID: ${id}`, ACTIVE_POS_ID ?? undefined);
   },
 
   getBarbers: async (): Promise<Barber[]> => {

@@ -103,6 +103,8 @@ export interface Service {
     name: string;
     price: number;
     duration: number;
+    /** Si es null/undefined = servicio de la sede (todos). Si es número = servicio propio de ese barbero. */
+    barberId?: number | null;
 }
 
 export interface Barber {

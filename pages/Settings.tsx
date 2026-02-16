@@ -27,17 +27,23 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
     const [currentBarber, setCurrentBarber] = useState<Partial<Barber>>({ name: '', specialty: '', active: true });
 
     const loadData = async () => {
+        const role = DataService.getCurrentUserRole();
         const [settingsData, usersData, servicesData, barbersData] = await Promise.all([
             DataService.getSettings(),
-            DataService.getUsers(),
+            role === 'barbero' ? Promise.resolve([]) : DataService.getUsers(),
             DataService.getServices(),
-            DataService.getBarbers(),
+            role === 'barbero' ? Promise.resolve([]) : DataService.getBarbers(),
         ]);
         setSettings(settingsData);
         setUsers(usersData);
-        setServices(servicesData);
+        let servicesList = servicesData;
+        if (role === 'barbero') {
+            const myBarberId = DataService.getCurrentBarberId();
+            servicesList = servicesData.filter((s) => s.barberId != null && s.barberId === myBarberId);
+        }
+        setServices(servicesList);
         setBarbers(barbersData);
-        setCurrentUserRole(DataService.getCurrentUserRole());
+        setCurrentUserRole(role);
         setActivePosId(DataService.getActivePosId());
     };
 
@@ -75,19 +81,27 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
 
     const handleSaveService = async () => {
         if (!currentService.name || !currentService.price) return;
-        if (currentService.id) {
-            await DataService.saveService(currentService as Service);
-        } else {
-            await DataService.addService(currentService as Service);
+        try {
+            if (currentService.id) {
+                await DataService.saveService(currentService as Service);
+            } else {
+                await DataService.addService(currentService as Omit<Service, 'id' | 'posId'>);
+            }
+            await loadData();
+            setShowServiceModal(false);
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'No se pudo guardar.');
         }
-        await loadData();
-        setShowServiceModal(false);
     };
 
     const handleDeleteService = async (id: number) => {
         if (confirm('¿Eliminar servicio?')) {
-            await DataService.deleteService(id);
-            await loadData();
+            try {
+                await DataService.deleteService(id);
+                await loadData();
+            } catch (err) {
+                alert(err instanceof Error ? err.message : 'No se pudo eliminar.');
+            }
         }
     };
 
@@ -147,56 +161,67 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
         return `${baseUrl}?ref_pos=${activePosId}`;
     };
 
-    // Solo admin, dueño y superadmin pueden acceder a Configuración
-    const canAccessSettings = ['admin', 'superadmin'].includes(currentUserRole);
+    const isBarber = currentUserRole === 'barbero';
+    const canAccessSettings = ['admin', 'superadmin', 'barbero'].includes(currentUserRole);
     if (!canAccessSettings) {
         return (
             <div className="p-8 text-center text-slate-500">
-                No tienes permisos para acceder a esta sección. Solo administradores y superadmin pueden ver Configuración y gestionar servicios.
+                No tienes permisos para acceder a esta sección. Solo administradores, superadmin y barberos pueden acceder a Configuración.
             </div>
         );
     }
 
+    // Barbero entra directo a pestaña Servicios (Mis servicios)
+    useEffect(() => {
+        if (isBarber && activeTab !== 'services') setActiveTab('services');
+    }, [isBarber]);
+
     return (
         <div className="space-y-6">
             <h2 className="text-2xl font-bold text-slate-800 flex items-center">
-                <SettingsIcon className="mr-2" /> Administración de Sede
+                <SettingsIcon className="mr-2" /> {isBarber ? 'Mis Servicios' : 'Administración de Sede'}
             </h2>
 
-            {/* Tabs */}
+            {/* Tabs: barbero solo ve Servicios */}
             <div className="flex space-x-1 bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit overflow-x-auto">
-                <button 
-                    onClick={() => setActiveTab('general')}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'general' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                    <SettingsIcon size={16} className="mr-2" /> General
-                </button>
-                <button 
-                    onClick={() => setActiveTab('users')}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'users' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                    <UserCog size={16} className="mr-2" /> Usuarios
-                </button>
-                {accountTier !== 'solo' && (
-                    <button 
-                        onClick={() => setActiveTab('barbers')}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'barbers' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
-                    >
-                        <UserCheck size={16} className="mr-2" /> Barberos
-                    </button>
+                {!isBarber && (
+                    <>
+                        <button 
+                            onClick={() => setActiveTab('general')}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'general' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                        >
+                            <SettingsIcon size={16} className="mr-2" /> General
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('users')}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'users' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                        >
+                            <UserCog size={16} className="mr-2" /> Usuarios
+                        </button>
+                        {accountTier !== 'solo' && (
+                            <button 
+                                onClick={() => setActiveTab('barbers')}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'barbers' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                            >
+                                <UserCheck size={16} className="mr-2" /> Barberos
+                            </button>
+                        )}
+                    </>
                 )}
                 <button 
                     onClick={() => setActiveTab('services')}
                     className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'services' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
-                    <Scissors size={16} className="mr-2" /> Servicios
+                    <Scissors size={16} className="mr-2" /> {isBarber ? 'Mis Servicios' : 'Servicios'}
                 </button>
-                <button 
-                    onClick={() => setActiveTab('privacy')}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'privacy' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                    <Shield size={16} className="mr-2" /> Privacidad
-                </button>
+                {!isBarber && (
+                    <button 
+                        onClick={() => setActiveTab('privacy')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'privacy' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                    >
+                        <Shield size={16} className="mr-2" /> Privacidad
+                    </button>
+                )}
             </div>
 
             {/* Content */}
@@ -363,9 +388,9 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                 {activeTab === 'services' && (
                     <div className="space-y-4">
                         <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                            <h3 className="text-lg font-bold text-slate-800">Catálogo de Servicios (Sede Actual)</h3>
+                            <h3 className="text-lg font-bold text-slate-800">{isBarber ? 'Tus servicios (solo tú los ofreces)' : 'Catálogo de Servicios (Sede Actual)'}</h3>
                             <button onClick={() => openServiceModal()} className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center hover:bg-green-700">
-                                <Plus size={16} className="mr-1" /> Nuevo Servicio
+                                <Plus size={16} className="mr-1" /> {isBarber ? 'Agregar mi servicio' : 'Nuevo Servicio'}
                             </button>
                         </div>
                         <div className="overflow-x-auto">
@@ -375,6 +400,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                         <th className="py-2">Servicio</th>
                                         <th className="py-2">Duración (min)</th>
                                         <th className="py-2">Precio</th>
+                                        {!isBarber && <th className="py-2">Tipo</th>}
                                         <th className="py-2 text-right">Acciones</th>
                                     </tr>
                                 </thead>
@@ -384,6 +410,11 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                             <td className="py-3 font-medium text-slate-700">{s.name}</td>
                                             <td className="py-3 text-slate-600">{s.duration}</td>
                                             <td className="py-3 font-bold text-slate-800">${s.price.toFixed(2)}</td>
+                                            {!isBarber && (
+                                                <td className="py-3 text-slate-600">
+                                                    {s.barberId == null ? 'Sede (todos)' : (barbers.find(b => b.id === s.barberId)?.name ?? `Barbero #${s.barberId}`)}
+                                                </td>
+                                            )}
                                             <td className="py-3 text-right space-x-2">
                                                 <button onClick={() => openServiceModal(s)} className="text-blue-500 hover:text-blue-700"><Edit2 size={18}/></button>
                                                 <button onClick={() => handleDeleteService(s.id)} className="text-red-400 hover:text-red-600"><Trash2 size={18}/></button>

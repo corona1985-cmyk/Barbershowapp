@@ -209,7 +209,7 @@ const WhatsAppConsole: React.FC = () => {
                         <h3 className="text-lg font-bold text-slate-800 flex items-center">
                             <Send size={20} className="mr-2 text-green-600" /> Enviar recordatorios a todos
                         </h3>
-                        <span className="text-xs font-bold uppercase tracking-wider text-green-600 bg-green-50 px-2 py-1 rounded">Recomendado</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-green-600 bg-green-50 px-2 py-1 rounded">Desde tu número</span>
                     </div>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -243,7 +243,7 @@ const WhatsAppConsole: React.FC = () => {
                         <p className="text-green-800 font-medium">
                             Citas del día: <span className="text-2xl font-bold block mt-1">{appointments.length}</span>
                         </p>
-                        <p className="text-xs text-green-700 mt-1">Se abrirá WhatsApp por cada cliente (mensaje listo) y se guardará en el historial.</p>
+                        <p className="text-xs text-green-700 mt-1">Se abre WhatsApp con el mensaje listo. Tú envías desde <strong>tu número</strong> (el cliente recibe el mensaje de tu WhatsApp).</p>
                     </div>
 
                     <button 
@@ -256,19 +256,19 @@ const WhatsAppConsole: React.FC = () => {
                         }`}
                     >
                         <MessageCircle size={22} />
-                        {sending ? 'Abriendo WhatsApp...' : 'Abrir WhatsApp y enviar a todos (con registro)'}
+                        {sending ? 'Abriendo WhatsApp...' : 'Abrir mi WhatsApp y enviar a todos'}
                     </button>
                     <p className="text-xs text-slate-500 mt-2 text-center">
-                        Se incluyen todos los clientes con teléfono registrado. Envía el mensaje en cada ventana que se abra.
+                        Se abrirá una ventana por cada cliente. Solo tienes que pulsar Enviar en tu WhatsApp.
                     </p>
 
-                    {/* Envío directo desde la app (API) */}
+                    {/* Opcional: envío desde número de negocio (Twilio) */}
                     <div className="mt-6 pt-6 border-t border-slate-200">
                         <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
-                            <Smartphone size={18} className="text-slate-500" /> Enviar desde la app (sin abrir WhatsApp)
+                            <Smartphone size={18} className="text-slate-500" /> Opcional: desde número de negocio (Twilio)
                         </h4>
                         <p className="text-xs text-slate-500 mb-3">
-                            Los mensajes se envían automáticamente. Necesitas tener configurado Twilio y la Cloud Function (ver README).
+                            Los mensajes se envían solos desde un número de negocio. Requiere configurar Twilio y la Cloud Function.
                         </p>
                         {apiError && (
                             <p className="text-xs text-red-600 mb-2 bg-red-50 p-2 rounded">{apiError}</p>
@@ -284,7 +284,7 @@ const WhatsAppConsole: React.FC = () => {
                             }`}
                         >
                             <Send size={18} />
-                            {sendingViaApi ? 'Enviando...' : 'Enviar desde la app (API)'}
+                            {sendingViaApi ? 'Enviando...' : 'Enviar desde número de negocio'}
                         </button>
                     </div>
                 </div>
@@ -321,7 +321,7 @@ const WhatsAppConsole: React.FC = () => {
             {/* Lista de citas del día: abrir WhatsApp por cliente */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
-                    <MessageCircle size={20} className="mr-2 text-green-600" /> Citas del día – Enviar por WhatsApp
+                    <MessageCircle size={20} className="mr-2 text-green-600" /> Citas del día – Enviar desde tu WhatsApp
                 </h3>
                 {appointmentsWithClient.length === 0 ? (
                     <p className="text-slate-500 text-center py-6">No hay citas agendadas para el día seleccionado (pendientes o confirmadas).</p>
@@ -335,7 +335,7 @@ const WhatsAppConsole: React.FC = () => {
                                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
                             >
                                 <ExternalLink size={18} />
-                                Abrir WhatsApp para todos (uno por uno)
+                                Abrir mi WhatsApp para todos (uno por uno)
                             </button>
                         </div>
                         <div className="overflow-x-auto">
@@ -368,7 +368,7 @@ const WhatsAppConsole: React.FC = () => {
                                                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors text-xs"
                                                         >
                                                             <ExternalLink size={14} />
-                                                            Abrir WhatsApp
+                                                            Abrir mi WhatsApp
                                                         </button>
                                                     </td>
                                                 </tr>
