@@ -167,16 +167,19 @@ const App: React.FC = () => {
                 user = result.user as SystemUser;
                 await DataService.logAuditAction('master_login', 'master', 'Platform Owner Access');
             } else {
-                user = await DataService.authenticate(trimmedUsername);
-                if (user) {
-                    if (user.password === undefined || user.password === null || user.password === '') {
+                try {
+                    user = await DataService.authenticate(trimmedUsername, password);
+                } catch (e) {
+                    if (e instanceof Error && e.message === 'NO_PASSWORD_SET') {
                         setLoginError('Este usuario no tiene contraseña. El administrador debe asignarla en Admin Usuarios.');
-                        return;
+                    } else {
+                        setLoginError(e instanceof Error ? e.message : 'Error de conexión. Revisa tu internet e intenta de nuevo.');
                     }
-                    if (user.password !== password) {
-                        setLoginError('Contraseña incorrecta.');
-                        return;
-                    }
+                    return;
+                }
+                if (!user) {
+                    setLoginError('Contraseña incorrecta.');
+                    return;
                 }
             }
 

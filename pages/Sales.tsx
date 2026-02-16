@@ -113,9 +113,20 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
             return;
         }
         try {
+            const updatedProducts = [...products];
+            for (const item of cart) {
+                if (item.type === 'producto') {
+                    const prod = updatedProducts.find(p => p.id === item.id);
+                    if (prod && prod.stock < item.quantity) {
+                        alert(`No hay stock suficiente de "${item.name}". Disponible: ${prod.stock}. Quita cantidad del carrito o actualiza el inventario.`);
+                        return;
+                    }
+                }
+            }
             const { subtotal, tax, total } = calculateTotal();
             const sales = await DataService.getSales();
-            const newId = sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1;
+            const maxId = sales.length > 0 ? Math.max(0, ...sales.map(s => Number(s.id))) : 0;
+            const newId = typeof maxId === 'number' && !Number.isNaN(maxId) ? maxId + 1 : 1;
             const saleNumber = `V${String(newId).padStart(4, '0')}`;
             const clienteId = salesFromAppointment ? salesFromAppointment.clienteId : selectedClient;
             const newSale: Sale = {
@@ -134,7 +145,6 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
                 notas: '',
                 estado: 'completada'
             };
-            const updatedProducts = [...products];
             cart.forEach(item => {
                 if (item.type === 'producto') {
                     const prodIndex = updatedProducts.findIndex(p => p.id === item.id);

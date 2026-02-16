@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DataService } from '../services/data';
+import { DataService, generateUniqueId } from '../services/data';
 import { Client, Product, PointOfSale, FinanceRecord, Sale } from '../types';
 import { Search, Plus, X, Edit2, User, Star, Upload, Image as ImageIcon, Ban, CheckCircle, Trophy, Crown, MapPin, Loader2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -385,17 +385,21 @@ export const Inventory: React.FC = () => {
     const handleSaveProduct = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!currentProduct.producto || !currentProduct.precioVenta) return;
-        if (isEditing && currentProduct.id) {
-            await DataService.updateProduct(currentProduct as Product);
-            const list = await DataService.getProducts();
-            setProducts(list);
-        } else {
-            const product = await DataService.addProduct({
-                ...currentProduct as any
-            });
-            setProducts([...products, product]);
+        try {
+            if (isEditing && currentProduct.id) {
+                await DataService.updateProduct(currentProduct as Product);
+                const list = await DataService.getProducts();
+                setProducts(list);
+            } else {
+                const product = await DataService.addProduct({
+                    ...currentProduct as any
+                });
+                setProducts([...products, product]);
+            }
+            setShowModal(false);
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'No se pudo guardar el producto. Revisa tu conexión.');
         }
-        setShowModal(false);
     };
 
     return (
@@ -624,7 +628,7 @@ export const Finance: React.FC = () => {
             );
         } else {
             const newRecord: FinanceRecord = {
-                id: Date.now(),
+                id: generateUniqueId(),
                 posId,
                 fecha: gastoFecha,
                 ingresos: 0,

@@ -434,6 +434,11 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                 {/* SERVICES SETTINGS */}
                 {activeTab === 'services' && (
                     <div className="space-y-4">
+                        {isBarber && DataService.getCurrentBarberId() == null && (
+                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+                                <strong>Perfil incompleto.</strong> Tu usuario no tiene un barbero asignado. Pide al administrador que te asigne en <strong>Admin Usuarios</strong> (o en Barberos + usuario con rol barbero). Hasta entonces no podrás agregar tus propios servicios ni ver tus citas correctamente.
+                            </div>
+                        )}
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 border-b border-slate-100 pb-2">
                             <div>
                                 <h3 className="text-lg font-bold text-slate-800">{isBarber ? 'Tus servicios y precios de tus cortes' : 'Catálogo de Servicios (Sede Actual)'}</h3>
@@ -553,11 +558,11 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                 <input type="text" className="w-full border rounded-lg p-2" value={currentService.name} onChange={e => setCurrentService({...currentService, name: e.target.value})} placeholder={isBarber ? 'Ej: Corte clásico, Fade, Barba' : undefined} />
                             </div>
                             <div>
-<<<<<<< Updated upstream
-                                <label className="block text-sm font-medium mb-1">Precio ($)</label>
+                                <label className="block text-sm font-medium mb-1">{isBarber ? 'Precio que cobras ($)' : 'Precio ($)'}</label>
                                 <input
                                     type="number"
                                     min={0}
+                                    step={0.01}
                                     className="w-full border rounded-lg p-2 placeholder:text-gray-400"
                                     value={currentService.price === 0 ? '' : currentService.price}
                                     placeholder="0"
@@ -566,29 +571,18 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                         setCurrentService({ ...currentService, price: v === '' ? 0 : Number(v) });
                                     }}
                                 />
+                                {isBarber && <p className="text-xs text-slate-500 mt-1">Puedes cambiar el precio en cualquier momento.</p>}
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-1">Duración (minutos)</label>
                                 <input
                                     type="number"
-                                    min={0}
+                                    min={1}
                                     className="w-full border rounded-lg p-2 placeholder:text-gray-400"
-                                    value={currentService.duration === 0 ? '' : currentService.duration}
-                                    placeholder="0"
-                                    onChange={e => {
-                                        const v = e.target.value;
-                                        setCurrentService({ ...currentService, duration: v === '' ? 0 : Number(v) });
-                                    }}
+                                    value={currentService.duration ?? ''}
+                                    placeholder="30"
+                                    onChange={e => setCurrentService({ ...currentService, duration: Number(e.target.value) || 0 })}
                                 />
-=======
-                                <label className="block text-sm font-medium mb-1">{isBarber ? 'Precio que cobras ($)' : 'Precio ($)'}</label>
-                                <input type="number" min={0} step={0.01} className="w-full border rounded-lg p-2" value={currentService.price} onChange={e => setCurrentService({...currentService, price: Number(e.target.value)})} />
-                                {isBarber && <p className="text-xs text-slate-500 mt-1">Puedes cambiar el precio en cualquier momento.</p>}
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Duración (minutos)</label>
-                                <input type="number" min={1} className="w-full border rounded-lg p-2" value={currentService.duration} onChange={e => setCurrentService({...currentService, duration: Number(e.target.value)})} />
->>>>>>> Stashed changes
                             </div>
                             <div className="flex justify-end space-x-2 mt-4">
                                 <button onClick={() => setShowServiceModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
