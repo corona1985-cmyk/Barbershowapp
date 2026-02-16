@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
-import { AppSettings, SystemUser, Service, UserRole, Barber, AccountTier } from '../types';
+import { AppSettings, SystemUser, Service, UserRole, Barber, AccountTier, PointOfSale } from '../types';
 import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as SettingsIcon, UserCheck, Power, QrCode, Download, Printer, Percent } from 'lucide-react';
 
 type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'barbers' | 'taxes';
@@ -15,6 +15,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
     const [users, setUsers] = useState<SystemUser[]>([]);
     const [services, setServices] = useState<Service[]>([]);
     const [barbers, setBarbers] = useState<Barber[]>([]);
+    const [pointsOfSale, setPointsOfSale] = useState<PointOfSale[]>([]);
     const [currentUserRole, setCurrentUserRole] = useState<string>(() => DataService.getCurrentUserRole());
     const [activePosId, setActivePosId] = useState<number | null>(null);
 
@@ -28,14 +29,16 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
 
     const loadData = async () => {
         const role = DataService.getCurrentUserRole();
-        const [settingsData, usersData, servicesData, barbersData] = await Promise.all([
+        const [settingsData, usersData, servicesData, barbersData, posList] = await Promise.all([
             DataService.getSettings(),
             role === 'barbero' ? Promise.resolve([]) : DataService.getUsers(),
             DataService.getServices(),
             role === 'barbero' ? Promise.resolve([]) : DataService.getBarbers(),
+            role === 'barbero' ? Promise.resolve([]) : DataService.getPointsOfSale(),
         ]);
         setSettings(settingsData);
         setUsers(usersData);
+        setPointsOfSale(posList);
         let servicesList = servicesData;
         if (role === 'barbero') {
             const myBarberId = DataService.getCurrentBarberId();
@@ -155,11 +158,9 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
         setShowBarberModal(true);
     };
 
-    // Generate QR URL
-    const getRegistrationUrl = () => {
-        const baseUrl = window.location.origin + window.location.pathname;
-        return `${baseUrl}?ref_pos=${activePosId}`;
-    };
+    const baseUrl = window.location.origin + window.location.pathname;
+    const getRegistrationUrl = () => `${baseUrl}?ref_pos=${activePosId}`;
+    const getRegistrationUrlForPos = (posId: number) => `${baseUrl}?ref_pos=${posId}`;
 
     const isBarber = currentUserRole === 'barbero';
     const canAccessSettings = ['admin', 'superadmin', 'barbero'].includes(currentUserRole);
@@ -300,6 +301,43 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                 </button>
                             </div>
                         </div>
+
+                        {/* QR por barbería (admin/superadmin): un QR por cada sede */}
+                        {!isBarber && pointsOfSale.length > 0 && (
+                            <div className="mt-8 pt-8 border-t border-slate-200">
+                                <h3 className="text-lg font-bold text-slate-800 mb-2 flex items-center">
+                                    <QrCode size={20} className="mr-2" /> Códigos QR por barbería
+                                </h3>
+                                <p className="text-sm text-slate-500 mb-4">Cada código lleva al registro o login con esa sede preseleccionada. Descarga o imprime el que corresponda a cada local.</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {pointsOfSale.filter((pos) => pos.isActive !== false).map((pos) => {
+                                        const qrUrl = getRegistrationUrlForPos(pos.id);
+                                        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`;
+                                        const downloadFilename = `BarberShow_QR_${(pos.name || `sede-${pos.id}`).replace(/\s+/g, '_')}.png`;
+                                        return (
+                                            <div key={pos.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col items-center text-center">
+                                                <p className="font-bold text-slate-800 mb-1">{pos.name}</p>
+                                                {pos.address && <p className="text-xs text-slate-500 mb-3">{pos.address}</p>}
+                                                <div className="bg-white p-2 rounded-lg shadow-sm mb-3">
+                                                    <img src={qrImageUrl} alt={`QR ${pos.name}`} className="w-36 h-36 object-contain" />
+                                                </div>
+                                                <div className="flex flex-wrap gap-2 justify-center">
+                                                    <a
+                                                        href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(qrUrl)}`}
+                                                        download={downloadFilename}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="flex items-center px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 text-sm font-medium"
+                                                    >
+                                                        <Download size={14} className="mr-1.5" /> Descargar
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
