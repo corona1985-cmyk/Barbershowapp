@@ -45,6 +45,16 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
     const activeBarbers = barbers.filter((b) => b.active);
     const defaultBarberId = activeBarbers.length > 0 ? activeBarbers[0].id : 0;
 
+    const timeToMinutes = (hora: string): number => {
+        const [h, m] = hora.split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+    };
+    const isSlotInsideAppointment = (slotMinutes: number, apt: Appointment): boolean => {
+        const start = timeToMinutes(apt.hora);
+        const duration = apt.duracionTotal ?? 30;
+        return slotMinutes >= start && slotMinutes < start + duration;
+    };
+
     const generateTimeSlots = (date: string, barberId: number) => {
         const slots: { time: string; taken: boolean; past: boolean }[] = [];
         const startHour = 9;
@@ -56,8 +66,8 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
         for (let h = startHour; h < endHour; h++) {
             for (const min of [0, 30]) {
                 const hourStr = h.toString().padStart(2, '0') + ':' + (min === 0 ? '00' : '30');
-                const isTaken = taken.some((a) => a.hora === hourStr);
                 const slotMins = h * 60 + min;
+                const isTaken = taken.some((a) => isSlotInsideAppointment(slotMins, a));
                 const past = date < todayStr || (date === todayStr && slotMins <= nowMinutes);
                 slots.push({ time: hourStr, taken: isTaken, past });
             }
@@ -93,6 +103,22 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
             setError('No hay barberos disponibles en esta barbería.');
             return;
         }
+        const duracionTotal = selectedServices.reduce((acc, s) => acc + s.duration, 0);
+        const newStart = timeToMinutes(selectedTime);
+        const existingSameBarber = appointments.filter(
+            (a) => a.fecha === selectedDate && a.barberoId === barberId && a.estado !== 'cancelada'
+        );
+        const overlaps = existingSameBarber.some((a) => {
+            const otherStart = timeToMinutes(a.hora);
+            const otherDur = a.duracionTotal ?? 30;
+            const end1 = newStart + duracionTotal;
+            const end2 = otherStart + otherDur;
+            return newStart < end2 && otherStart < end1;
+        });
+        if (overlaps) {
+            setError('Esa hora ya no está disponible (se solapa con otra cita). Elige otra.');
+            return;
+        }
         setLoading(true);
         try {
             const client = await DataService.addClient({
@@ -106,7 +132,6 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                 status: 'active',
             });
             const total = selectedServices.reduce((acc, s) => acc + s.price, 0);
-            const duracionTotal = selectedServices.reduce((acc, s) => acc + s.duration, 0);
             await DataService.addAppointment({
                 posId,
                 clienteId: client.id,

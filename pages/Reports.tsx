@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { DataService } from '../services/data';
 import { Sale, Appointment, Product, Client, Barber, AccountTier, PointOfSale } from '../types';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, Users, Calendar, ShoppingBag, Printer, Scissors, MapPin } from 'lucide-react';
+import { TrendingUp, Users, Calendar, ShoppingBag, Printer, Scissors, MapPin, Loader2 } from 'lucide-react';
 
 const COLORS = ['#ffd427', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
@@ -19,48 +19,65 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
     const [barbers, setBarbers] = useState<Barber[]>([]);
     const [salesByPos, setSalesByPos] = useState<{ posId: number; posName: string; total: number; count: number }[]>([]);
     const [activePosId, setActivePosId] = useState<number | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     const isSolo = accountTier === 'solo';
     const showPorBarbero = accountTier === 'barberia' || accountTier === 'multisede';
     const showPorSede = accountTier === 'multisede' && posListForOwner.length > 1;
     const noSedeActiva = activePosId === null;
 
-    useEffect(() => {
+    const loadMainData = React.useCallback(() => {
+        setLoadError(null);
+        setLoading(true);
         setActivePosId(DataService.getActivePosId());
         Promise.all([
             DataService.getSales(),
             DataService.getAppointments(),
             DataService.getProducts(),
             DataService.getClients(),
-        ]).then(([s, a, p, c]) => {
-            setSales(s);
-            setAppointments(a);
-            setProducts(p);
-            setClients(c);
-            setActivePosId(DataService.getActivePosId());
-        });
+        ])
+            .then(([s, a, p, c]) => {
+                setSales(s);
+                setAppointments(a);
+                setProducts(p);
+                setClients(c);
+                setActivePosId(DataService.getActivePosId());
+            })
+            .catch((err) => {
+                setLoadError(err instanceof Error ? err.message : 'No se pudieron cargar los reportes.');
+            })
+            .finally(() => setLoading(false));
     }, []);
 
     useEffect(() => {
+        loadMainData();
+    }, [loadMainData]);
+
+    useEffect(() => {
         if (showPorBarbero) {
-            DataService.getBarbers().then(setBarbers);
+            DataService.getBarbers().then(setBarbers).catch(() => {});
         }
     }, [showPorBarbero]);
 
     useEffect(() => {
         if (!showPorSede || posListForOwner.length === 0) return;
         (async () => {
-            const rows = await Promise.all(
-                posListForOwner.map(async (pos) => {
-                    const [s, a] = await Promise.all([
-                        DataService.getSalesForPos(pos.id),
-                        DataService.getAppointmentsForPos(pos.id),
-                    ]);
-                    const total = s.reduce((sum, sale) => sum + sale.total, 0);
-                    return { posId: pos.id, posName: pos.name, total, count: s.length };
-                })
-            );
-            setSalesByPos(rows);
+            try {
+                const rows = await Promise.all(
+                    posListForOwner.map(async (pos) => {
+                        const [s, a] = await Promise.all([
+                            DataService.getSalesForPos(pos.id),
+                            DataService.getAppointmentsForPos(pos.id),
+                        ]);
+                        const total = s.reduce((sum, sale) => sum + sale.total, 0);
+                        return { posId: pos.id, posName: pos.name, total, count: s.length };
+                    })
+                );
+                setSalesByPos(rows);
+            } catch {
+                // Mantener salesByPos anterior si falla
+            }
         })();
     }, [showPorSede, posListForOwner.length]);
 
@@ -112,6 +129,26 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
             citas: appointments.filter(a => a.barberoId === b.id).length,
         })).filter(x => x.total > 0 || x.citas > 0)
         : [];
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center py-24 text-slate-500">
+                <Loader2 className="animate-spin mb-4" size={48} />
+                <p className="font-medium">Cargando reportes...</p>
+            </div>
+        );
+    }
+    if (loadError) {
+        return (
+            <div className="flex flex-col items-center justify-center py-24 text-slate-600 max-w-md mx-auto text-center px-4">
+                <p className="font-medium mb-2">No se pudieron cargar los reportes.</p>
+                <p className="text-sm text-slate-500 mb-6">{loadError}</p>
+                <button type="button" onClick={loadMainData} className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 font-semibold px-6 py-3 rounded-xl transition-colors">
+                    Reintentar
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 print-container">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { DataService } from '../services/data';
+import { DataService, generateUniqueId } from '../services/data';
 import { Appointment, Barber, Client, Service, AppointmentForSale, SaleItem, AccountTier } from '../types';
 import { ViewState } from '../types';
 import { Calendar, Clock, User, Scissors, Check, X, Trash2, Printer, MessageCircle, MapPin, Loader2 } from 'lucide-react';
@@ -109,6 +109,8 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
 
     const isPlanSolo = accountTier === 'solo';
     const defaultBarberId = barbers.filter(b => b.active).length > 0 ? barbers.filter(b => b.active)[0].id : barbers[0]?.id;
+    /** Solo clientes activos para agendar (no suspendidos). */
+    const activeClients = useMemo(() => clients.filter((c) => c.status === 'active'), [clients]);
     /** Servicios disponibles para el barbero seleccionado: de la sede (barberId null) + del barbero */
     const servicesForBarber = useMemo(() => {
         const bid = newApt.barberoId ?? (isPlanSolo ? defaultBarberId : undefined);
@@ -198,7 +200,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             return;
         }
         const newAppointment: Appointment = {
-            id: Date.now(),
+            id: generateUniqueId(),
             posId: DataService.getActivePosId() || 0,
             clienteId: finalClientId,
             barberoId: barberoId,
@@ -574,7 +576,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                         <label className="block text-sm font-medium text-slate-700 mb-1">Tu Nombre (Confirmación)</label>
                                         <select className="w-full border border-slate-300 rounded-lg p-2" value={newApt.clienteId || ''} onChange={e => setNewApt({...newApt, clienteId: Number(e.target.value)})}>
                                             <option value="">Selecciona tu perfil</option>
-                                            {clients.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                                            {activeClients.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                                         </select>
                                     </div>
                                 )}
@@ -780,7 +782,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                             }}
                                         >
                                             <option value="">Seleccionar Cliente</option>
-                                            {clients.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.telefono || 'Sin teléfono'}</option>)}
+                                            {activeClients.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.telefono || 'Sin teléfono'}</option>)}
                                         </select>
                                         {newApt.clienteId && (() => {
                                             const sel = clients.find(c => c.id === newApt.clienteId);

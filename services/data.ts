@@ -1,5 +1,6 @@
 import { ref, get, set, update, remove, query, orderByChild, equalTo } from 'firebase/database';
 import { db } from './firebase';
+import { hashPassword, verifyPassword, isStoredHash } from './passwordHash';
 import {
   Client,
   Product,
@@ -111,6 +112,11 @@ function snapshotToUsers(val: unknown): SystemUser[] {
 
 let ACTIVE_POS_ID: number | null = null;
 
+/** Genera un ID numérico único para evitar colisiones al crear varios registros en el mismo ms. */
+export function generateUniqueId(): number {
+  return Date.now() * 1000 + Math.floor(Math.random() * 1000);
+}
+
 const CACHE_TTL_MS = 50 * 1000;
 const dataCache: Record<string, { data: unknown; ts: number }> = {};
 function cacheGet<T>(key: string): T | null {
@@ -125,6 +131,15 @@ function cacheInvalidate(prefix: string) {
   Object.keys(dataCache).forEach((k) => {
     if (k.startsWith(prefix)) delete dataCache[k];
   });
+}
+
+/** Lanza si el rol actual no está en la lista permitida. Usar antes de operaciones sensibles. */
+function requireRole(allowedRoles: string[]): void {
+  const role = DataService.getCurrentUserRole();
+  const normalized = role === 'empleado' ? 'barbero' : role;
+  if (!allowedRoles.includes(normalized)) {
+    throw new Error('No tienes permiso para realizar esta acción.');
+  }
 }
 
 export const DataService = {
@@ -184,7 +199,7 @@ export const DataService = {
   },
 
   addPointOfSale: async (pos: Omit<PointOfSale, 'id'>): Promise<PointOfSale> => {
-    const newPos = { ...pos, id: Date.now(), isActive: true };
+    const newPos = { ...pos, id: generateUniqueId(), isActive: true };
     await update(ref(db, ROOT + '/pointsOfSale/' + newPos.id), newPos);
     const allSettingsSnap = await get(ref(db, ROOT + '/settings'));
     const allSettings: Record<string, AppSettings> = allSettingsSnap.val() || {};
@@ -231,13 +246,21 @@ export const DataService = {
     return user;
   },
 
-  authenticate: async (username: string): Promise<SystemUser | null> => {
+  /** Autentica con usuario y contraseña. Verifica hash; no devuelve la contraseña. Lanza Error('NO_PASSWORD_SET') si el usuario no tiene contraseña asignada. */
+  authenticate: async (username: string, password: string): Promise<SystemUser | null> => {
     const user = await DataService.findUserByUsername(username);
     if (!user) return null;
+    const storedPassword = user.password;
+    if (storedPassword === undefined || storedPassword === null || storedPassword === '') {
+      throw new Error('NO_PASSWORD_SET');
+    }
+    const valid = await verifyPassword(password, storedPassword);
+    if (!valid) return null;
     const updated = { ...user, lastLogin: new Date().toISOString(), loginAttempts: 0 };
-    await set(ref(db, ROOT + '/users/' + user.username), updated);
+    delete (updated as Record<string, unknown>).password;
+    await set(ref(db, ROOT + '/users/' + user.username), { ...user, lastLogin: updated.lastLogin, loginAttempts: 0 });
     await DataService.logAuditAction('login', username, 'User Logged In', user.posId ?? undefined);
-    return updated;
+    return updated as SystemUser;
   },
 
   authenticateMaster: async (username: string): Promise<SystemUser | null> => {
@@ -279,6 +302,12 @@ export const DataService = {
   },
 
   saveUser: async (user: SystemUser): Promise<void> => {
+    const currentRole = DataService.getCurrentUserRole();
+    if (currentRole === '') {
+      if (user.role !== 'cliente') throw new Error('No tienes permiso para crear este tipo de usuario.');
+    } else {
+      requireRole(['superadmin', 'admin']);
+    }
     user.username = (user.username || '').trim();
     if (!user.username) return;
     // Solo asignar sede por defecto si no se eligió ninguna (undefined); si es null = explícitamente sin sede
@@ -292,12 +321,15 @@ export const DataService = {
     if (isUpdate && (user.password === undefined || user.password === null || user.password === '')) {
       const existing = snap.val() as SystemUser | null;
       if (existing?.password) toWrite.password = existing.password;
+    } else if (toWrite.password && String(toWrite.password).trim() !== '' && !isStoredHash(String(toWrite.password))) {
+      toWrite.password = await hashPassword(String(toWrite.password));
     }
     await set(ref(db, ROOT + '/users/' + user.username), toWrite);
     await DataService.logAuditAction(isUpdate ? 'update_user' : 'create_user', 'admin', `User: ${user.username}`, user.posId ?? undefined);
   },
 
   deleteUser: async (username: string): Promise<void> => {
+    requireRole(['superadmin']);
     await remove(ref(db, ROOT + '/users/' + username));
     await DataService.logAuditAction('delete_user', 'admin', `Deleted user: ${username}`);
   },
@@ -311,9 +343,16 @@ export const DataService = {
 
   updateSettings: async (settings: AppSettings): Promise<void> => {
     if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa. Selecciona una sede para guardar la configuración.');
+    const role = DataService.getCurrentUserRole();
     const posId = ACTIVE_POS_ID;
+    if (role === 'barbero') {
+      const current = await DataService.getSettings();
+      settings = { ...current, taxRate: settings.taxRate, currencySymbol: settings.currencySymbol };
+    } else {
+      requireRole(['admin', 'superadmin']);
+    }
     await update(ref(db, ROOT + '/settings'), { [String(posId)]: { ...settings, posId } });
-    await DataService.logAuditAction('update_settings', 'admin', 'Updated POS Settings', posId);
+    await DataService.logAuditAction('update_settings', role === 'barbero' ? 'barbero' : 'admin', 'Updated POS Settings', posId);
   },
 
   getGlobalSettings: async (): Promise<GlobalSettings> => {
@@ -322,12 +361,13 @@ export const DataService = {
   },
 
   updateGlobalSettings: async (settings: GlobalSettings): Promise<void> => {
+    requireRole(['platform_owner']);
     await set(ref(db, ROOT + '/globalSettings'), settings);
     await DataService.logAuditAction('update_global_settings', 'master', 'Updated Platform Branding/Settings');
   },
 
   logAuditAction: async (action: string, actor: string, details: string, posId?: number): Promise<void> => {
-    const id = Date.now();
+    const id = generateUniqueId();
     const log: Record<string, unknown> = {
       id,
       action,
@@ -412,8 +452,9 @@ export const DataService = {
   },
 
   addClient: async (client: Omit<Client, 'id' | 'posId'>): Promise<Client> => {
+    if (DataService.getCurrentUserRole() !== '') requireRole(['admin', 'superadmin', 'barbero']);
     const effectivePosId = ACTIVE_POS_ID ?? 1;
-    const newClient = { ...client, id: Date.now(), posId: effectivePosId } as Client;
+    const newClient = { ...client, id: generateUniqueId(), posId: effectivePosId } as Client;
     await set(ref(db, ROOT + '/clients/' + newClient.id), newClient);
     cacheInvalidate('clients');
     await DataService.logAuditAction('create_client', 'system', `Registered client: ${client.nombre}`, effectivePosId);
@@ -421,11 +462,13 @@ export const DataService = {
   },
 
   updateClient: async (client: Client): Promise<void> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
     await set(ref(db, ROOT + '/clients/' + client.id), client);
     cacheInvalidate('clients');
   },
 
   toggleClientStatus: async (id: number): Promise<void> => {
+    requireRole(['admin', 'superadmin']);
     const snap = await get(ref(db, ROOT + '/clients/' + id));
     if (!snap.exists()) return;
     const client = snap.val() as Client;
@@ -444,6 +487,8 @@ export const DataService = {
   },
 
   setProducts: async (data: Product[]): Promise<void> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
+    if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa.');
     const snap = await get(ref(db, ROOT + '/products'));
     const all: Record<string, Product> = snap.val() || {};
     const other = Object.fromEntries(Object.entries(all).filter(([, p]) => p.posId !== ACTIVE_POS_ID));
@@ -452,14 +497,16 @@ export const DataService = {
   },
 
   addProduct: async (product: Omit<Product, 'id' | 'posId'>): Promise<Product> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
     if (ACTIVE_POS_ID == null) throw new Error('No Active POS');
-    const newProduct = { ...product, id: Date.now(), posId: ACTIVE_POS_ID } as Product;
+    const newProduct = { ...product, id: generateUniqueId(), posId: ACTIVE_POS_ID } as Product;
     await set(ref(db, ROOT + '/products/' + newProduct.id), newProduct);
     await DataService.logAuditAction('create_product', 'admin', `Created product: ${product.producto}`, ACTIVE_POS_ID);
     return newProduct;
   },
 
   updateProduct: async (product: Product): Promise<void> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
     await set(ref(db, ROOT + '/products/' + product.id), product);
   },
 
@@ -505,6 +552,7 @@ export const DataService = {
   },
 
   saveService: async (service: Service): Promise<void> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
     const barberId = DataService.getCurrentBarberId();
     const role = DataService.getCurrentUserRole();
     if (role === 'barbero' && barberId != null && service.barberId !== barberId) {
@@ -514,16 +562,18 @@ export const DataService = {
   },
 
   addService: async (serviceData: Omit<Service, 'id' | 'posId'>): Promise<Service> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
     if (ACTIVE_POS_ID == null) throw new Error('No Active POS');
     const role = DataService.getCurrentUserRole();
     const barberId = role === 'barbero' ? DataService.getCurrentBarberId() ?? undefined : undefined;
-    const newService = { ...serviceData, id: Date.now(), posId: ACTIVE_POS_ID, barberId: barberId ?? null } as Service;
+    const newService = { ...serviceData, id: generateUniqueId(), posId: ACTIVE_POS_ID, barberId: barberId ?? null } as Service;
     await set(ref(db, ROOT + '/services/' + newService.id), newService);
     await DataService.logAuditAction('create_service', role === 'barbero' ? 'barbero' : 'admin', `Created service: ${serviceData.name}`, ACTIVE_POS_ID);
     return newService;
   },
 
   deleteService: async (id: number): Promise<void> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
     const barberId = DataService.getCurrentBarberId();
     const role = DataService.getCurrentUserRole();
     const snap = await get(ref(db, ROOT + '/services/' + id));
@@ -556,8 +606,9 @@ export const DataService = {
   },
 
   addBarber: async (barber: Omit<Barber, 'id' | 'posId'>): Promise<Barber> => {
+    requireRole(['admin', 'superadmin']);
     if (ACTIVE_POS_ID == null) throw new Error('No Active POS');
-    const newBarber = { ...barber, id: Date.now(), posId: ACTIVE_POS_ID } as Barber;
+    const newBarber = { ...barber, id: generateUniqueId(), posId: ACTIVE_POS_ID } as Barber;
     await set(ref(db, ROOT + '/barbers/' + newBarber.id), newBarber);
     cacheInvalidate('barbers');
     await DataService.logAuditAction('create_barber', 'admin', `Created barber: ${barber.name}`, ACTIVE_POS_ID);
@@ -565,17 +616,20 @@ export const DataService = {
   },
 
   updateBarber: async (barber: Barber): Promise<void> => {
+    requireRole(['admin', 'superadmin']);
     await set(ref(db, ROOT + '/barbers/' + barber.id), barber);
     cacheInvalidate('barbers');
   },
 
   deleteBarber: async (id: number): Promise<void> => {
+    requireRole(['admin', 'superadmin']);
     await remove(ref(db, ROOT + '/barbers/' + id));
     cacheInvalidate('barbers');
     await DataService.logAuditAction('delete_barber', 'admin', `Deleted barber ID: ${id}`, ACTIVE_POS_ID ?? undefined);
   },
 
   toggleBarberStatus: async (id: number): Promise<void> => {
+    requireRole(['admin', 'superadmin']);
     const snap = await get(ref(db, ROOT + '/barbers/' + id));
     if (!snap.exists()) return;
     const barber = snap.val() as Barber;
@@ -609,7 +663,7 @@ export const DataService = {
 
   /** Añade una cita sin reemplazar las demás (para reservas de invitados sin cuenta). */
   addAppointment: async (appointment: Omit<Appointment, 'id'>): Promise<Appointment> => {
-    const id = Date.now();
+    const id = generateUniqueId();
     const apt: Appointment = { ...appointment, id };
     await update(ref(db, ROOT + '/appointments/' + id), apt);
     cacheInvalidate('appointments');
@@ -618,6 +672,7 @@ export const DataService = {
   },
 
   setAppointments: async (data: Appointment[]): Promise<void> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
     const snap = await get(ref(db, ROOT + '/appointments'));
     const all: Record<string, Appointment> = snap.val() || {};
     const barberId = DataService.getCurrentBarberId();
@@ -664,6 +719,7 @@ export const DataService = {
   },
 
   setSales: async (data: Sale[]): Promise<void> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
     if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa. No se puede registrar la venta.');
     const snap = await get(ref(db, ROOT + '/sales'));
     const all: Record<string, Sale> = snap.val() || {};
@@ -689,6 +745,7 @@ export const DataService = {
   },
 
   setFinances: async (data: FinanceRecord[]): Promise<void> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
     const snap = await get(ref(db, ROOT + '/finances'));
     const all: Record<string, FinanceRecord> = snap.val() || {};
     const other = Object.fromEntries(Object.entries(all).filter(([, f]) => f.posId !== ACTIVE_POS_ID));
@@ -697,7 +754,7 @@ export const DataService = {
   },
 
   logNotification: async (log: Omit<NotificationLog, 'id'>): Promise<void> => {
-    const id = Date.now();
+    const id = generateUniqueId();
     await set(ref(db, ROOT + '/notificationLogs/' + id), { ...log, id });
     await DataService.logAuditAction('send_notification', 'system', `Notification to client ${log.clientId}`, log.posId);
   },

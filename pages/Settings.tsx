@@ -434,6 +434,11 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                 {/* SERVICES SETTINGS */}
                 {activeTab === 'services' && (
                     <div className="space-y-4">
+                        {isBarber && DataService.getCurrentBarberId() == null && (
+                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+                                <strong>Perfil incompleto.</strong> Tu usuario no tiene un barbero asignado. Pide al administrador que te asigne en <strong>Admin Usuarios</strong> (o en Barberos + usuario con rol barbero). Hasta entonces no podrás agregar tus propios servicios ni ver tus citas correctamente.
+                            </div>
+                        )}
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 border-b border-slate-100 pb-2">
                             <div>
                                 <h3 className="text-lg font-bold text-slate-800">{isBarber ? 'Tus servicios y precios de tus cortes' : 'Catálogo de Servicios (Sede Actual)'}</h3>
@@ -574,12 +579,9 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                     type="number"
                                     min={1}
                                     className="w-full border rounded-lg p-2 placeholder:text-gray-400"
-                                    value={currentService.duration === 0 ? '' : currentService.duration}
-                                    placeholder="0"
-                                    onChange={e => {
-                                        const v = e.target.value;
-                                        setCurrentService({ ...currentService, duration: v === '' ? 0 : Number(v) });
-                                    }}
+                                    value={currentService.duration ?? ''}
+                                    placeholder="30"
+                                    onChange={e => setCurrentService({ ...currentService, duration: Number(e.target.value) || 0 })}
                                 />
                             </div>
                             <div className="flex justify-end space-x-2 mt-4">
