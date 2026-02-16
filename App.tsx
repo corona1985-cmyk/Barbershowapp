@@ -224,7 +224,7 @@ const App: React.FC = () => {
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!regUsername || !regPassword || !regName) return;
+        if (!regUsername || !regPassword || !regName || !regPhone) return;
         const existing = await DataService.findUserByUsername(regUsername);
         if (existing) {
             setLoginError('El usuario ya existe');
@@ -233,7 +233,7 @@ const App: React.FC = () => {
         const targetPosId = referralPos ? referralPos.id : 1;
         const prevPosId = DataService.getActivePosId();
         DataService.setActivePosId(targetPosId);
-        const newClient = await DataService.addClient({
+        const client = await DataService.addClientOrGetExisting({
             nombre: regName,
             telefono: regPhone,
             email: `${regUsername}@example.com`,
@@ -244,7 +244,7 @@ const App: React.FC = () => {
             whatsappOptIn: true,
             ultimaVisita: 'N/A'
         });
-        const newUser: SystemUser = { username: regUsername, password: regPassword, name: regName, role: 'cliente', posId: targetPosId, clientId: newClient.id };
+        const newUser: SystemUser = { username: regUsername, password: regPassword, name: regName, role: 'cliente', posId: targetPosId, clientId: client.id };
         await DataService.saveUser(newUser);
         DataService.setActivePosId(prevPosId);
         setRegSuccess(true);

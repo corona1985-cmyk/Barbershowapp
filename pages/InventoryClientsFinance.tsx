@@ -90,12 +90,15 @@ export const Clients: React.FC = () => {
             const list = await DataService.getClients();
             setClients(list);
         } else {
-            const client = await DataService.addClient({
+            const client = await DataService.addClientOrGetExisting({
                 ...currentClient as any,
                 fechaRegistro: new Date().toISOString().split('T')[0],
                 ultimaVisita: 'N/A'
             });
-            setClients([...clients, client]);
+            const merged = { ...client, ...currentClient, id: client.id, posId: client.posId, fechaRegistro: client.fechaRegistro } as Client;
+            await DataService.updateClient(merged);
+            const list = await DataService.getClients();
+            setClients(list);
         }
         setShowModal(false);
     };
@@ -127,10 +130,10 @@ export const Clients: React.FC = () => {
                         Solo se muestran clientes que ya se han agendado o atendido en esta barbería.
                     </div>
                 )}
-                <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-slate-800">Gestión de Clientes</h2>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Gestión de Clientes</h2>
                     {userRole !== 'barbero' && (
-                        <button onClick={handleCreateClick} className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2 rounded-lg font-bold flex items-center space-x-2 transition-colors shadow-sm">
+                        <button onClick={handleCreateClick} className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2.5 rounded-lg font-bold flex items-center justify-center space-x-2 transition-colors shadow-sm w-full sm:w-auto touch-manipulation">
                             <Plus size={18} />
                             <span>Nuevo Cliente</span>
                         </button>
@@ -138,13 +141,69 @@ export const Clients: React.FC = () => {
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="p-4 border-b border-slate-200 flex space-x-4 bg-slate-50/50">
-                        <div className="relative flex-1 max-w-md">
+                    <div className="p-4 border-b border-slate-200 bg-slate-50/50">
+                        <div className="relative w-full max-w-md">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
-                            <input type="text" placeholder="Buscar por nombre o teléfono..." className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ffd427]" value={search} onChange={e => setSearch(e.target.value)} />
+                            <input type="text" placeholder="Buscar por nombre o teléfono..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ffd427]" value={search} onChange={e => setSearch(e.target.value)} />
                         </div>
                     </div>
-                    <div className="overflow-x-auto table-wrapper">
+
+                    {/* Vista móvil: tarjetas */}
+                    <div className="md:hidden divide-y divide-slate-100">
+                        {filtered.map(c => (
+                            <div key={c.id} className={`p-4 active:bg-slate-50 transition-colors ${c.status === 'suspended' ? 'bg-red-50/50' : ''}`}>
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                        {c.photoUrl ? (
+                                            <img src={c.photoUrl} alt={c.nombre} className="w-12 h-12 rounded-full object-cover border-2 border-slate-100 shadow-sm flex-shrink-0" />
+                                        ) : (
+                                            <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700 font-bold text-lg shadow-sm flex-shrink-0">
+                                                {c.nombre.charAt(0)}
+                                            </div>
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                            <div className="font-semibold text-slate-800 truncate">{c.nombre}</div>
+                                            <div className="text-xs text-slate-500 mt-0.5">Reg: {c.fechaRegistro}</div>
+                                            <div className="flex items-center text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded w-fit mt-1.5">
+                                                <MapPin size={12} className="mr-1 flex-shrink-0" />
+                                                <span className="truncate">{getPosName(c.posId)}</span>
+                                            </div>
+                                            <div className="mt-1.5 text-sm text-slate-600">{c.telefono}</div>
+                                            <div className="text-xs text-slate-400">{c.email || 'Sin email'}</div>
+                                            <div className="flex flex-wrap items-center gap-2 mt-2">
+                                                <span className="flex items-center bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full text-xs font-bold border border-amber-100">
+                                                    <Star size={12} className="mr-1 fill-amber-400 text-amber-400" />
+                                                    {c.puntos || 0}
+                                                </span>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                                    c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                                }`}>
+                                                    {c.status === 'active' ? 'Activo' : 'Suspendido'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                        <button onClick={() => handleEditClick(c)} className="text-slate-400 hover:text-blue-600 p-2 hover:bg-blue-50 rounded-lg transition-colors touch-manipulation" title="Editar Cliente">
+                                            <Edit2 size={20} />
+                                        </button>
+                                        {isAdmin && (
+                                            <button 
+                                                onClick={() => handleToggleStatus(c)} 
+                                                className={`p-2 rounded-lg transition-colors touch-manipulation ${c.status === 'active' ? 'text-red-400 hover:text-red-600 hover:bg-red-50' : 'text-green-400 hover:text-green-600 hover:bg-green-50'}`}
+                                                title={c.status === 'active' ? 'Suspender Cuenta' : 'Activar Cuenta'}
+                                            >
+                                                {c.status === 'active' ? <Ban size={20} /> : <CheckCircle size={20} />}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Vista escritorio: tabla */}
+                    <div className="hidden md:block overflow-x-auto table-wrapper">
                         <table className="w-full min-w-[640px]">
                             <thead className="bg-slate-50 text-slate-600 text-sm font-semibold uppercase tracking-wider">
                                 <tr>

@@ -452,13 +452,23 @@ export const DataService = {
   },
 
   addClient: async (client: Omit<Client, 'id' | 'posId'>): Promise<Client> => {
-    if (DataService.getCurrentUserRole() !== '') requireRole(['admin', 'superadmin', 'barbero']);
+    if (DataService.getCurrentUserRole() !== '') requireRole(['admin', 'superadmin', 'barbero', 'cliente']);
     const effectivePosId = ACTIVE_POS_ID ?? 1;
     const newClient = { ...client, id: generateUniqueId(), posId: effectivePosId } as Client;
     await set(ref(db, ROOT + '/clients/' + newClient.id), newClient);
     cacheInvalidate('clients');
     await DataService.logAuditAction('create_client', 'system', `Registered client: ${client.nombre}`, effectivePosId);
     return newClient;
+  },
+
+  /** Busca cliente por teléfono; si existe lo devuelve. Si no, crea uno nuevo. Evita duplicados. */
+  addClientOrGetExisting: async (client: Omit<Client, 'id' | 'posId'>): Promise<Client> => {
+    const phone = (client.telefono || '').trim();
+    if (phone.length >= 6) {
+      const existing = await DataService.findClientByPhone(phone);
+      if (existing) return existing;
+    }
+    return DataService.addClient(client);
   },
 
   updateClient: async (client: Client): Promise<void> => {

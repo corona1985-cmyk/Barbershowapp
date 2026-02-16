@@ -136,7 +136,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             if (clientRecord) {
                 finalClientId = clientRecord.id;
             } else if ((clientPhoneForBooking || '').trim()) {
-                const newClient = await DataService.addClient({
+                const client = await DataService.addClientOrGetExisting({
                     nombre: (currUser?.name || 'Cliente').trim(),
                     telefono: clientPhoneForBooking.trim(),
                     email: '',
@@ -146,8 +146,8 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                     puntos: 0,
                     status: 'active',
                 });
-                finalClientId = newClient.id;
-                setClients(prev => [...prev, newClient]);
+                finalClientId = client.id;
+                if (!clients.some(c => c.id === client.id)) setClients(prev => [...prev, client]);
             }
         } else if (isNewClient) {
             if (!newClientName.trim() || !newClientPhone.trim()) {
@@ -155,7 +155,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                 alert('Ingrese nombre y teléfono del nuevo cliente.');
                 return;
             }
-            const newClient = await DataService.addClient({
+            const client = await DataService.addClientOrGetExisting({
                 nombre: newClientName.trim(),
                 telefono: newClientPhone.trim(),
                 email: '',
@@ -165,8 +165,8 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                 puntos: 0,
                 status: 'active',
             });
-            finalClientId = newClient.id;
-            setClients([...clients, newClient]);
+            finalClientId = client.id;
+            if (!clients.some(c => c.id === client.id)) setClients([...clients, client]);
         }
         if (!finalClientId) {
             setSaving(false);
@@ -199,8 +199,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             alert(`No se puede agendar: la cita duraría ${duration} minutos y se solaparía con otra cita de ese barbero. Elige otra hora o menos servicios.`);
             return;
         }
-        const newAppointment: Appointment = {
-            id: generateUniqueId(),
+        const newAppointmentData: Omit<Appointment, 'id'> = {
             posId: DataService.getActivePosId() || 0,
             clienteId: finalClientId,
             barberoId: barberoId,
@@ -214,9 +213,15 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             fechaCreacion: new Date().toISOString()
         };
         try {
-            const updated = [...appointments, newAppointment];
-            setAppointments(updated);
-            await DataService.setAppointments(updated);
+            if (userRole === 'cliente') {
+                const saved = await DataService.addAppointment(newAppointmentData);
+                setAppointments(prev => [...prev, saved]);
+            } else {
+                const newAppointment: Appointment = { ...newAppointmentData, id: generateUniqueId() };
+                const updated = [...appointments, newAppointment];
+                setAppointments(updated);
+                await DataService.setAppointments(updated);
+            }
             setShowModal(false);
             setNewApt(prev => ({ ...prev, hora: undefined, servicios: [], notas: '', clienteId: undefined }));
             setIsNewClient(false);
@@ -226,7 +231,8 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             alert('Cita agendada con éxito.');
         } catch (err) {
             console.error('Error al agendar cita:', err);
-            alert('No se pudo guardar la cita. Revisa tu conexión e intenta de nuevo.');
+            const msg = err instanceof Error ? err.message : '';
+            alert(msg.includes('permiso') ? 'No tienes permiso para realizar esta acción.' : 'No se pudo guardar la cita. Revisa tu conexión e intenta de nuevo.');
         } finally {
             setSaving(false);
         }

@@ -121,7 +121,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
         }
         setLoading(true);
         try {
-            const client = await DataService.addClient({
+            const client = await DataService.addClientOrGetExisting({
                 nombre: nombre.trim(),
                 telefono: telefono.trim(),
                 email: '',
