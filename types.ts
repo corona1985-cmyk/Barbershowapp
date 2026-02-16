@@ -7,6 +7,9 @@ export type PosPlan = 'basic' | 'pro';
 /** Tipo de negocio / tier de cuenta: determina menú y límites (solo → barbería → multi-sede) */
 export type AccountTier = 'solo' | 'barberia' | 'multisede';
 
+/** Nombre comercial único del plan mostrado al usuario: un solo nombre por cuenta (Normal incluye lo básico; Pro incluye Normal + más; Full incluye todo). */
+export type DisplayPlanName = 'Normal' | 'Pro' | 'Full';
+
 export interface PointOfSale {
     id: number;
     name: string;

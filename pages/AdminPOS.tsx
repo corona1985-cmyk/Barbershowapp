@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
 import { PointOfSale, SystemUser, AccountTier } from '../types';
+import { getDisplayPlanName } from '../utils/planDisplay';
 import { MapPin, Plus, Edit2, Trash2, X, Save, User } from 'lucide-react';
 
 const AdminPOS: React.FC = () => {
@@ -99,7 +100,7 @@ const AdminPOS: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         <span className={`px-2 py-1 rounded text-xs font-medium ${pos.tier === 'multisede' ? 'bg-indigo-100 text-indigo-800' : pos.tier === 'barberia' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
-                                            {pos.tier === 'multisede' ? 'Multi-Sede' : pos.tier === 'barberia' ? 'Barbería' : 'Solo'}
+                                            {getDisplayPlanName(pos.tier)}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-center">
@@ -174,11 +175,11 @@ const AdminPOS: React.FC = () => {
                                     value={currentPos.tier ?? 'solo'}
                                     onChange={e => setCurrentPos({ ...currentPos, tier: e.target.value as AccountTier })}
                                 >
-                                    <option value="solo">Solo – Una persona, un local. Menú simplificado (Dashboard, Citas, Clientes, Ventas, Configuración, Reportes, Registros de cortes).</option>
-                                    <option value="barberia">Barbería – Varios barberos, una sede. Incluye agenda por barbero, reportes por barbero, inventario, finanzas, WhatsApp, admin usuarios.</option>
-                                    <option value="multisede">Multi-Sede – Varias ubicaciones o cadena. Selector de sede, reportes por sede, administración centralizada.</option>
+                                    <option value="solo">Normal – Una persona, un local. Menú simplificado (Dashboard, Citas, Clientes, Ventas, Configuración, Reportes, Registros de cortes).</option>
+                                    <option value="barberia">Pro – Varios barberos, una sede. Incluye agenda por barbero, reportes por barbero, inventario, finanzas, WhatsApp, admin usuarios.</option>
+                                    <option value="multisede">Full – Varias ubicaciones o cadena. Incluye todo (selector de sede, reportes por sede, administración centralizada).</option>
                                 </select>
-                                <p className="text-xs text-slate-500 mt-1">El plan define el menú y las opciones disponibles para esta sede.</p>
+                                <p className="text-xs text-slate-500 mt-1">Un solo nombre de plan: Normal, Pro o Full. El plan define el menú y las opciones disponibles.</p>
                             </div>
                             <div className="flex items-center space-x-2 pt-2">
                                 <input 

@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
-import { PointOfSale, SystemUser, AuditLog, GlobalSettings, Sale, PosPlan } from '../types';
+import { PointOfSale, SystemUser, AuditLog, GlobalSettings, Sale, DisplayPlanName } from '../types';
+import { getDisplayPlanName, displayPlanNameToTierAndPlan } from '../utils/planDisplay';
 import { LayoutDashboard, Trash2, Globe, DollarSign, Users, Building, LogOut, Activity, Shield, Settings, FileText, Search, Plus, Save, Monitor, AlertTriangle, Eye, Lock } from 'lucide-react';
 
 interface MasterDashboardProps {
@@ -53,8 +54,9 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
         }
     };
 
-    const handleUpdateSedePlan = async (sede: PointOfSale, plan: PosPlan) => {
-        await DataService.updatePointOfSale({ ...sede, plan });
+    const handleUpdateSedePlan = async (sede: PointOfSale, displayPlan: DisplayPlanName) => {
+        const { tier, plan } = displayPlanNameToTierAndPlan(displayPlan);
+        await DataService.updatePointOfSale({ ...sede, tier, plan });
         loadData();
     };
 
@@ -471,14 +473,15 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                                             <td className="px-6 py-4 text-[#ffd427]">{sede.ownerId}</td>
                                             <td className="px-6 py-4 text-center">
                                                 <select
-                                                    value={sede.plan || 'basic'}
-                                                    onChange={(e) => handleUpdateSedePlan(sede, e.target.value as PosPlan)}
+                                                    value={getDisplayPlanName(sede.tier)}
+                                                    onChange={(e) => handleUpdateSedePlan(sede, e.target.value as DisplayPlanName)}
                                                     className="bg-slate-900 border border-slate-600 text-white rounded px-2 py-1 text-xs font-bold cursor-pointer"
                                                 >
-                                                    <option value="basic">Basic</option>
-                                                    <option value="pro">Pro</option>
+                                                    <option value="Normal">Normal</option>
+                                                    <option value="Pro">Pro</option>
+                                                    <option value="Full">Full</option>
                                                 </select>
-                                                {sede.plan === 'pro' && (
+                                                {(sede.tier === 'barberia' || sede.tier === 'multisede') && (
                                                     <span className="ml-1 text-[10px] text-amber-400" title="Incluye notificaciones de citas para barbero">🔔</span>
                                                 )}
                                             </td>
