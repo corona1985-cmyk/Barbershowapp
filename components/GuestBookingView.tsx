@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { DataService } from '../services/data';
 import { Appointment, Barber, Service } from '../types';
 import { MapPin, ArrowLeft, CheckCircle } from 'lucide-react';
@@ -78,6 +78,10 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
     const barberId = selectedBarberId || defaultBarberId;
     const slots = barberId ? generateTimeSlots(selectedDate, barberId) : [];
     const noBarbers = activeBarbers.length === 0;
+    const servicesForBarber = useMemo(
+        () => services.filter((s) => s.barberId == null || s.barberId === barberId),
+        [services, barberId]
+    );
 
     const toggleService = (s: Service) => {
         setSelectedServices((prev) =>
@@ -244,7 +248,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-2">Servicios</label>
                         <div className="space-y-2 border border-slate-200 rounded-lg p-3 max-h-40 overflow-y-auto">
-                            {services.map((s) => (
+                            {servicesForBarber.map((s) => (
                                 <label key={s.id} className="flex items-center gap-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
                                     <input
                                         type="checkbox"

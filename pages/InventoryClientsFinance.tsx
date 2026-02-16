@@ -361,7 +361,10 @@ export const Inventory: React.FC = () => {
         estado: 'activo'
     });
     
-    useEffect(() => { DataService.getProducts().then(setProducts); }, []);
+    const barberIdForProducts = DataService.getCurrentUserRole() === 'barbero' ? DataService.getCurrentBarberId() ?? undefined : undefined;
+    useEffect(() => {
+        DataService.getProducts(barberIdForProducts).then(setProducts);
+    }, [barberIdForProducts]);
 
     const handleCreateClick = () => {
         setCurrentProduct({
@@ -388,7 +391,7 @@ export const Inventory: React.FC = () => {
         try {
             if (isEditing && currentProduct.id) {
                 await DataService.updateProduct(currentProduct as Product);
-                const list = await DataService.getProducts();
+                const list = await DataService.getProducts(barberIdForProducts);
                 setProducts(list);
             } else {
                 const product = await DataService.addProduct({

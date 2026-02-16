@@ -31,10 +31,11 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
         setLoadError(null);
         setLoading(true);
         setActivePosId(DataService.getActivePosId());
+        const barberId = DataService.getCurrentUserRole() === 'barbero' ? DataService.getCurrentBarberId() ?? undefined : undefined;
         Promise.all([
             DataService.getSales(),
             DataService.getAppointments(),
-            DataService.getProducts(),
+            DataService.getProducts(barberId),
             DataService.getClients(),
         ])
             .then(([s, a, p, c]) => {

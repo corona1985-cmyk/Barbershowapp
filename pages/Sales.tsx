@@ -48,14 +48,20 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
     const loadData = async () => {
         setLoadingCatalog(true);
         try {
+            const role = DataService.getCurrentUserRole();
+            const barberId = role === 'barbero' ? DataService.getCurrentBarberId() ?? undefined : undefined;
             const [productsData, servicesData, clientsData, settingsData] = await Promise.all([
-                DataService.getProducts(),
+                DataService.getProducts(barberId),
                 DataService.getServices(),
                 DataService.getClients(),
                 DataService.getSettings(),
             ]);
+            let serv = servicesData;
+            if (role === 'barbero' && barberId != null) {
+                serv = servicesData.filter((s) => s.barberId === barberId);
+            }
             setProducts(productsData);
-            setServices(servicesData);
+            setServices(serv);
             setClients(clientsData);
             setTaxRate(settingsData.taxRate);
             setStoreName(settingsData.storeName || 'BarberShow');

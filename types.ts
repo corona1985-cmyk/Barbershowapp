@@ -92,6 +92,8 @@ export interface Client {
 export interface Product {
     id: number;
     posId: number;
+    /** Si es null/undefined = producto de la sede. Si es número = producto propio de ese barbero. */
+    barberId?: number | null;
     producto: string;
     categoria: string;
     stock: number;

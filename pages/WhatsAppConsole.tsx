@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
-import { sendWhatsAppFromApp } from '../services/firebase';
 import { Appointment, Barber, Client, NotificationLog } from '../types';
-import { MessageCircle, Send, CheckCircle, AlertCircle, Clock, Calendar, ExternalLink, Smartphone } from 'lucide-react';
+import { MessageCircle, Send, CheckCircle, AlertCircle, Clock, Calendar, ExternalLink } from 'lucide-react';
 
 /** Normaliza teléfono para enlace wa.me: solo dígitos; si tiene 10 dígitos (México) añade 52 */
 function phoneToWaNumber(phone: string): string {
@@ -28,8 +27,6 @@ const WhatsAppConsole: React.FC = () => {
     const [selectedBarberId, setSelectedBarberId] = useState<number>(0);
     const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
     const [sending, setSending] = useState(false);
-    const [sendingViaApi, setSendingViaApi] = useState(false);
-    const [apiError, setApiError] = useState<string | null>(null);
 
     const refreshLogs = async () => {
         const list = await DataService.getNotificationLogs();
@@ -138,58 +135,6 @@ const WhatsAppConsole: React.FC = () => {
         alert(sentCount ? `Se abrieron ${sentCount} chats de WhatsApp y se registró el envío. Envía el mensaje en cada ventana.` : 'Ningún cliente con cita tiene teléfono registrado.');
     };
 
-    /** Envía los recordatorios directamente desde la app (Cloud Function + Twilio). */
-    const handleSendViaApi = async () => {
-        const withPhone = appointments.filter(apt => {
-            const client = clients.find(c => c.id === apt.clienteId);
-            return client?.telefono && phoneToWaNumber(client.telefono).length >= 10;
-        });
-        if (withPhone.length === 0) {
-            alert('Ningún cliente con cita tiene teléfono válido.');
-            return;
-        }
-        if (!confirm(`¿Enviar ${withPhone.length} recordatorios por WhatsApp desde la app? (Requiere tener Twilio configurado)`)) return;
-        setApiError(null);
-        setSendingViaApi(true);
-        let ok = 0;
-        let fail = 0;
-        for (const apt of withPhone) {
-            const client = clients.find(c => c.id === apt.clienteId)!;
-            const msg = buildMessage(apt, client);
-            try {
-                await sendWhatsAppFromApp(client.telefono!, msg);
-                ok++;
-                await DataService.logNotification({
-                    posId: DataService.getActivePosId() || 0,
-                    barberId: apt.barberoId,
-                    clientId: apt.clienteId,
-                    type: 'whatsapp',
-                    status: 'sent',
-                    timestamp: new Date().toISOString(),
-                    message: msg
-                });
-            } catch (e: unknown) {
-                fail++;
-                const errMsg = e && typeof e === 'object' && 'message' in e ? String((e as { message: string }).message) : String(e);
-                setApiError(errMsg);
-                await DataService.logNotification({
-                    posId: DataService.getActivePosId() || 0,
-                    barberId: apt.barberoId,
-                    clientId: apt.clienteId,
-                    type: 'whatsapp',
-                    status: 'failed',
-                    timestamp: new Date().toISOString(),
-                    message: msg
-                });
-            }
-            await new Promise(r => setTimeout(r, 300));
-        }
-        setSendingViaApi(false);
-        await refreshLogs();
-        if (fail === 0) alert(`Se enviaron ${ok} mensajes por WhatsApp desde la app.`);
-        else alert(`Enviados: ${ok}. Fallos: ${fail}. Revisa la consola o configuración de Twilio.`);
-    };
-
     const appointmentsWithClient = appointments.map(apt => ({
         apt,
         client: clients.find(c => c.id === apt.clienteId),
@@ -261,32 +206,6 @@ const WhatsAppConsole: React.FC = () => {
                     <p className="text-xs text-slate-500 mt-2 text-center">
                         Se abrirá una ventana por cada cliente. Solo tienes que pulsar Enviar en tu WhatsApp.
                     </p>
-
-                    {/* Opcional: envío desde número de negocio (Twilio) */}
-                    <div className="mt-6 pt-6 border-t border-slate-200">
-                        <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
-                            <Smartphone size={18} className="text-slate-500" /> Opcional: desde número de negocio (Twilio)
-                        </h4>
-                        <p className="text-xs text-slate-500 mb-3">
-                            Los mensajes se envían solos desde un número de negocio. Requiere configurar Twilio y la Cloud Function.
-                        </p>
-                        {apiError && (
-                            <p className="text-xs text-red-600 mb-2 bg-red-50 p-2 rounded">{apiError}</p>
-                        )}
-                        <button
-                            type="button"
-                            onClick={handleSendViaApi}
-                            disabled={sendingViaApi || appointments.length === 0}
-                            className={`w-full py-3 rounded-lg font-bold shadow-md transition-all flex justify-center items-center gap-2 ${
-                                sendingViaApi || appointments.length === 0
-                                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                                    : 'bg-slate-700 hover:bg-slate-800 text-white'
-                            }`}
-                        >
-                            <Send size={18} />
-                            {sendingViaApi ? 'Enviando...' : 'Enviar desde número de negocio'}
-                        </button>
-                    </div>
                 </div>
 
                 {/* Log Viewer */}

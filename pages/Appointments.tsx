@@ -111,12 +111,16 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     const defaultBarberId = barbers.filter(b => b.active).length > 0 ? barbers.filter(b => b.active)[0].id : barbers[0]?.id;
     /** Solo clientes activos para agendar (no suspendidos). */
     const activeClients = useMemo(() => clients.filter((c) => c.status === 'active'), [clients]);
-    /** Servicios disponibles para el barbero seleccionado: de la sede (barberId null) + del barbero */
+    /** Servicios disponibles: si el usuario es barbero solo ve los suyos; si es admin ve sede + del barbero seleccionado */
     const servicesForBarber = useMemo(() => {
+        const currentBarberId = DataService.getCurrentBarberId();
+        if (userRole === 'barbero' && currentBarberId != null) {
+            return services.filter((s) => s.barberId === currentBarberId);
+        }
         const bid = newApt.barberoId ?? (isPlanSolo ? defaultBarberId : undefined);
         if (bid == null) return services.filter((s) => s.barberId == null);
         return services.filter((s) => s.barberId == null || s.barberId === bid);
-    }, [services, newApt.barberoId, isPlanSolo, defaultBarberId]);
+    }, [services, newApt.barberoId, isPlanSolo, defaultBarberId, userRole]);
 
     const handleSave = async () => {
         const barberoId = isPlanSolo ? (newApt.barberoId ?? defaultBarberId) : newApt.barberoId;
