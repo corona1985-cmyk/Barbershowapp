@@ -243,12 +243,17 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Tasa de Impuestos (Decimal)</label>
-                                <input 
-                                    type="number" 
+                                <input
+                                    type="number"
                                     step="0.01"
-                                    className="w-full border border-slate-300 rounded-lg p-2.5"
-                                    value={settings.taxRate}
-                                    onChange={e => setSettings({...settings, taxRate: Number(e.target.value)})}
+                                    min={0}
+                                    className="w-full border border-slate-300 rounded-lg p-2.5 placeholder:text-gray-400"
+                                    value={settings.taxRate === 0 ? '' : settings.taxRate}
+                                    placeholder="0"
+                                    onChange={e => {
+                                        const v = e.target.value;
+                                        setSettings({ ...settings, taxRate: v === '' ? 0 : Number(v) });
+                                    }}
                                 />
                                 <p className="text-xs text-slate-500 mt-1">Ejemplo: 0.16 para 16%</p>
                             </div>
@@ -502,11 +507,31 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-1">Precio ($)</label>
-                                <input type="number" className="w-full border rounded-lg p-2" value={currentService.price} onChange={e => setCurrentService({...currentService, price: Number(e.target.value)})} />
+                                <input
+                                    type="number"
+                                    min={0}
+                                    className="w-full border rounded-lg p-2 placeholder:text-gray-400"
+                                    value={currentService.price === 0 ? '' : currentService.price}
+                                    placeholder="0"
+                                    onChange={e => {
+                                        const v = e.target.value;
+                                        setCurrentService({ ...currentService, price: v === '' ? 0 : Number(v) });
+                                    }}
+                                />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-1">Duración (minutos)</label>
-                                <input type="number" className="w-full border rounded-lg p-2" value={currentService.duration} onChange={e => setCurrentService({...currentService, duration: Number(e.target.value)})} />
+                                <input
+                                    type="number"
+                                    min={0}
+                                    className="w-full border rounded-lg p-2 placeholder:text-gray-400"
+                                    value={currentService.duration === 0 ? '' : currentService.duration}
+                                    placeholder="0"
+                                    onChange={e => {
+                                        const v = e.target.value;
+                                        setCurrentService({ ...currentService, duration: v === '' ? 0 : Number(v) });
+                                    }}
+                                />
                             </div>
                             <div className="flex justify-end space-x-2 mt-4">
                                 <button onClick={() => setShowServiceModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>

@@ -307,7 +307,17 @@ export const Clients: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Puntos de Lealtad</label>
-                                    <input type="number" className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427]" value={currentClient.puntos} onChange={e => setCurrentClient({...currentClient, puntos: Number(e.target.value)})} />
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427] placeholder:text-gray-400"
+                                        value={currentClient.puntos === 0 ? '' : currentClient.puntos}
+                                        placeholder="0"
+                                        onChange={e => {
+                                            const v = e.target.value;
+                                            setCurrentClient({ ...currentClient, puntos: v === '' ? 0 : Number(v) });
+                                        }}
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Estado</label>
@@ -457,17 +467,51 @@ export const Inventory: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Stock Actual</label>
-                                    <input type="number" required className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427]" value={currentProduct.stock} onChange={e => setCurrentProduct({...currentProduct, stock: Number(e.target.value)})} />
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        required
+                                        className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427] placeholder:text-gray-400"
+                                        value={currentProduct.stock === 0 ? '' : currentProduct.stock}
+                                        placeholder="0"
+                                        onChange={e => {
+                                            const v = e.target.value;
+                                            setCurrentProduct({ ...currentProduct, stock: v === '' ? 0 : Number(v) });
+                                        }}
+                                    />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Precio Compra ($)</label>
-                                    <input type="number" step="0.01" className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427]" value={currentProduct.precioCompra} onChange={e => setCurrentProduct({...currentProduct, precioCompra: Number(e.target.value)})} />
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min={0}
+                                        className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427] placeholder:text-gray-400"
+                                        value={currentProduct.precioCompra === 0 ? '' : currentProduct.precioCompra}
+                                        placeholder="0"
+                                        onChange={e => {
+                                            const v = e.target.value;
+                                            setCurrentProduct({ ...currentProduct, precioCompra: v === '' ? 0 : Number(v) });
+                                        }}
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Precio Venta ($) *</label>
-                                    <input type="number" required step="0.01" className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427]" value={currentProduct.precioVenta} onChange={e => setCurrentProduct({...currentProduct, precioVenta: Number(e.target.value)})} />
+                                    <input
+                                        type="number"
+                                        required
+                                        step="0.01"
+                                        min={0}
+                                        className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427] placeholder:text-gray-400"
+                                        value={currentProduct.precioVenta === 0 ? '' : currentProduct.precioVenta}
+                                        placeholder="0"
+                                        onChange={e => {
+                                            const v = e.target.value;
+                                            setCurrentProduct({ ...currentProduct, precioVenta: v === '' ? 0 : Number(v) });
+                                        }}
+                                    />
                                 </div>
                             </div>
                             
