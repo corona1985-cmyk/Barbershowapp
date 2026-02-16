@@ -183,6 +183,20 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         }
         const total = newApt.servicios!.reduce((acc, s) => acc + s.price, 0);
         const duration = newApt.servicios!.reduce((acc, s) => acc + s.duration, 0);
+        const existingSameBarberDate = appointments.filter(
+            (a) => a.fecha === newApt.fecha && a.barberoId === barberoId && a.estado !== 'cancelada'
+        );
+        const newStart = timeToMinutes(newApt.hora!);
+        const overlaps = existingSameBarberDate.some((a) => {
+            const otherStart = timeToMinutes(a.hora);
+            const otherDur = a.duracionTotal ?? 30;
+            return timeRangesOverlap(newStart, duration, otherStart, otherDur);
+        });
+        if (overlaps) {
+            setSaving(false);
+            alert(`No se puede agendar: la cita duraría ${duration} minutos y se solaparía con otra cita de ese barbero. Elige otra hora o menos servicios.`);
+            return;
+        }
         const newAppointment: Appointment = {
             id: Date.now(),
             posId: DataService.getActivePosId() || 0,
@@ -301,7 +315,28 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         setSearchPhone('');
     };
 
-    // Client Visual Grid Logic
+    /** Convierte "HH:mm" a minutos desde medianoche */
+    const timeToMinutes = (hora: string): number => {
+        const [h, m] = hora.split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+    };
+
+    /** True si el slot cae dentro del bloque [apt.hora, apt.hora + duracion) de alguna cita */
+    const isSlotInsideAppointment = (slotMinutes: number, apt: Appointment): boolean => {
+        const start = timeToMinutes(apt.hora);
+        const duration = apt.duracionTotal ?? 30;
+        const end = start + duration;
+        return slotMinutes >= start && slotMinutes < end;
+    };
+
+    /** True si [start1, start1+dur1) y [start2, start2+dur2) se solapan */
+    const timeRangesOverlap = (start1: number, dur1: number, start2: number, dur2: number): boolean => {
+        const end1 = start1 + dur1;
+        const end2 = start2 + dur2;
+        return start1 < end2 && start2 < end1;
+    };
+
+    // Client Visual Grid Logic: un slot está ocupado si cae dentro de la duración de alguna cita existente
     const generateTimeSlots = (date: string, barberId: number) => {
         const slots: { time: string; taken: boolean; past: boolean }[] = [];
         const startHour = 9; // 9 AM
@@ -314,14 +349,14 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
 
         for (let h = startHour; h < endHour; h++) {
             const hourStr = h.toString().padStart(2, '0') + ':00';
-            const isTaken = taken.some(a => a.hora === hourStr);
             const slotMins = h * 60;
+            const isTaken = taken.some(a => isSlotInsideAppointment(slotMins, a));
             const past = date < todayStr || (date === todayStr && slotMins <= nowMinutes);
             slots.push({ time: hourStr, taken: isTaken, past });
 
             const halfHourStr = h.toString().padStart(2, '0') + ':30';
-            const isHalfTaken = taken.some(a => a.hora === halfHourStr);
             const halfSlotMins = h * 60 + 30;
+            const isHalfTaken = taken.some(a => isSlotInsideAppointment(halfSlotMins, a));
             const halfPast = date < todayStr || (date === todayStr && halfSlotMins <= nowMinutes);
             slots.push({ time: halfHourStr, taken: isHalfTaken, past: halfPast });
         }
