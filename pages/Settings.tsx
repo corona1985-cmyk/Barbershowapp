@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
 import { AppSettings, SystemUser, Service, UserRole, Barber, AccountTier } from '../types';
-import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as SettingsIcon, UserCheck, Power, QrCode, Download, Printer } from 'lucide-react';
+import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as SettingsIcon, UserCheck, Power, QrCode, Download, Printer, Percent } from 'lucide-react';
 
-type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'barbers';
+type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'barbers' | 'taxes';
 
 interface SettingsProps {
     accountTier?: AccountTier;
@@ -171,9 +171,9 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
         );
     }
 
-    // Barbero entra directo a pestaña Servicios (Mis servicios)
+    // Barbero entra directo a pestaña Servicios (Mis servicios); no sobrescribir si eligió Impuestos
     useEffect(() => {
-        if (isBarber && activeTab !== 'services') setActiveTab('services');
+        if (isBarber && activeTab !== 'services' && activeTab !== 'taxes') setActiveTab('services');
     }, [isBarber]);
 
     return (
@@ -214,6 +214,14 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                 >
                     <Scissors size={16} className="mr-2" /> {isBarber ? 'Mis Servicios' : 'Servicios'}
                 </button>
+                {isBarber && (
+                    <button 
+                        onClick={() => setActiveTab('taxes')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'taxes' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                    >
+                        <Percent size={16} className="mr-2" /> Impuestos
+                    </button>
+                )}
                 {!isBarber && (
                     <button 
                         onClick={() => setActiveTab('privacy')}
@@ -292,6 +300,40 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {/* TAXES (barbero): solo tasa y símbolo de moneda */}
+                {activeTab === 'taxes' && (
+                    <div className="space-y-4 max-w-md">
+                        <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">Impuestos y moneda</h3>
+                        <p className="text-sm text-slate-500">Configura la tasa de impuestos y el símbolo de moneda que se usan en ventas y facturación.</p>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Tasa de impuestos (decimal)</label>
+                            <input 
+                                type="number" 
+                                step="0.01"
+                                min={0}
+                                max={1}
+                                className="w-full border border-slate-300 rounded-lg p-2.5"
+                                value={settings.taxRate}
+                                onChange={e => setSettings({ ...settings, taxRate: Number(e.target.value) })}
+                            />
+                            <p className="text-xs text-slate-500 mt-1">Ejemplo: 0.16 para 16%</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Símbolo de moneda</label>
+                            <input 
+                                type="text" 
+                                className="w-full border border-slate-300 rounded-lg p-2.5"
+                                value={settings.currencySymbol}
+                                onChange={e => setSettings({ ...settings, currencySymbol: e.target.value })}
+                                placeholder="$"
+                            />
+                        </div>
+                        <button onClick={handleSaveSettings} className="bg-[#ffd427] text-slate-900 px-4 py-2 rounded-lg font-bold flex items-center hover:bg-[#e6be23]">
+                            <Save size={18} className="mr-2" /> Guardar
+                        </button>
                     </div>
                 )}
 
@@ -392,9 +434,14 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                 {/* SERVICES SETTINGS */}
                 {activeTab === 'services' && (
                     <div className="space-y-4">
-                        <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                            <h3 className="text-lg font-bold text-slate-800">{isBarber ? 'Tus servicios (solo tú los ofreces)' : 'Catálogo de Servicios (Sede Actual)'}</h3>
-                            <button onClick={() => openServiceModal()} className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center hover:bg-green-700">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 border-b border-slate-100 pb-2">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-800">{isBarber ? 'Tus servicios y precios de tus cortes' : 'Catálogo de Servicios (Sede Actual)'}</h3>
+                                {isBarber && (
+                                    <p className="text-sm text-slate-500 mt-1">Define nombre, <strong>precio</strong> y duración de cada corte o servicio. Puedes editar los precios cuando quieras desde el botón editar.</p>
+                                )}
+                            </div>
+                            <button onClick={() => openServiceModal()} className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center hover:bg-green-700 whitespace-nowrap">
                                 <Plus size={16} className="mr-1" /> {isBarber ? 'Agregar mi servicio' : 'Nuevo Servicio'}
                             </button>
                         </div>
@@ -499,13 +546,14 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
             {showServiceModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                        <h3 className="text-xl font-bold mb-4">{currentService.id ? 'Editar Servicio' : 'Nuevo Servicio'}</h3>
+                        <h3 className="text-xl font-bold mb-4">{currentService.id ? (isBarber ? 'Editar mi servicio y precio' : 'Editar Servicio') : (isBarber ? 'Nuevo servicio (corte)' : 'Nuevo Servicio')}</h3>
                         <div className="space-y-3">
                             <div>
                                 <label className="block text-sm font-medium mb-1">Nombre del Servicio</label>
-                                <input type="text" className="w-full border rounded-lg p-2" value={currentService.name} onChange={e => setCurrentService({...currentService, name: e.target.value})} />
+                                <input type="text" className="w-full border rounded-lg p-2" value={currentService.name} onChange={e => setCurrentService({...currentService, name: e.target.value})} placeholder={isBarber ? 'Ej: Corte clásico, Fade, Barba' : undefined} />
                             </div>
                             <div>
+<<<<<<< Updated upstream
                                 <label className="block text-sm font-medium mb-1">Precio ($)</label>
                                 <input
                                     type="number"
@@ -532,6 +580,15 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                         setCurrentService({ ...currentService, duration: v === '' ? 0 : Number(v) });
                                     }}
                                 />
+=======
+                                <label className="block text-sm font-medium mb-1">{isBarber ? 'Precio que cobras ($)' : 'Precio ($)'}</label>
+                                <input type="number" min={0} step={0.01} className="w-full border rounded-lg p-2" value={currentService.price} onChange={e => setCurrentService({...currentService, price: Number(e.target.value)})} />
+                                {isBarber && <p className="text-xs text-slate-500 mt-1">Puedes cambiar el precio en cualquier momento.</p>}
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Duración (minutos)</label>
+                                <input type="number" min={1} className="w-full border rounded-lg p-2" value={currentService.duration} onChange={e => setCurrentService({...currentService, duration: Number(e.target.value)})} />
+>>>>>>> Stashed changes
                             </div>
                             <div className="flex justify-end space-x-2 mt-4">
                                 <button onClick={() => setShowServiceModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>

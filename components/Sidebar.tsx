@@ -63,7 +63,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
             label: 'Administración',
             icon: <BarChart2 size={18} />,
             items: [
-                { id: 'inventory', label: 'Inventario', icon: <Package size={18} />, roles: ['superadmin', 'admin'] },
+                { id: 'inventory', label: 'Inventario', icon: <Package size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
                 { id: 'finance', label: 'Finanzas', icon: <DollarSign size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
                 { id: 'reports', label: 'Reportes', icon: <FileText size={18} />, roles: ['superadmin', 'admin'] },
                 { id: 'sales_records', label: 'Registros de cortes', icon: <ListChecks size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
