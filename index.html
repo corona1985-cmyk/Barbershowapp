@@ -30,6 +30,10 @@
             main { margin-left: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
             .print-container { padding: 20px !important; }
             .page-break-inside-avoid { page-break-inside: avoid; }
+            /* Solo mostrar la factura al imprimir desde el modal de venta exitosa */
+            body * { visibility: hidden; }
+            #invoice-print-area, #invoice-print-area * { visibility: visible; }
+            #invoice-print-area { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; max-width: none !important; padding: 16px !important; }
         }
     </style>
     <link rel="stylesheet" href="/index.css">

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
 import { Product, Service, Client, SaleItem, Sale, AppointmentForSale } from '../types';
-import { Search, Plus, Minus, Trash2, User, CreditCard, Banknote, Smartphone, CheckCircle, Package, Scissors, ShoppingCart, FileText, Loader2 } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, User, CreditCard, Banknote, Smartphone, CheckCircle, Package, Scissors, ShoppingCart, FileText, Loader2, Printer, MessageCircle } from 'lucide-react';
+import Invoice from '../components/Invoice';
 
 interface SalesProps {
     salesFromAppointment?: AppointmentForSale | null;
@@ -18,7 +19,14 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
     
     // Config
     const [taxRate, setTaxRate] = useState(0.16);
-    
+    const [storeName, setStoreName] = useState('BarberShow');
+    const [currencySymbol, setCurrencySymbol] = useState('$');
+
+    // Última venta completada (para factura / imprimir / WhatsApp)
+    const [lastCompletedSale, setLastCompletedSale] = useState<Sale | null>(null);
+    const [lastSaleClientName, setLastSaleClientName] = useState<string | null>(null);
+    const [lastSaleClientPhone, setLastSaleClientPhone] = useState<string | null>(null);
+
     // Cart State
     const [cart, setCart] = useState<SaleItem[]>([]);
     const [selectedClient, setSelectedClient] = useState<number | null>(null);
@@ -50,6 +58,8 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
             setServices(servicesData);
             setClients(clientsData);
             setTaxRate(settingsData.taxRate);
+            setStoreName(settingsData.storeName || 'BarberShow');
+            setCurrencySymbol(settingsData.currencySymbol || '$');
         } finally {
             setLoadingCatalog(false);
         }
@@ -157,12 +167,15 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
             await DataService.setSales([...sales, newSale]);
             setProducts(updatedProducts);
             setLastSaleId(saleNumber);
+            setLastCompletedSale(newSale);
+            const client = clienteId ? clients.find(c => c.id === clienteId) : null;
+            setLastSaleClientName(client?.nombre ?? null);
+            setLastSaleClientPhone(client?.telefono ?? null);
             setShowSuccess(true);
             setCart([]);
             setSelectedClient(null);
             setPaymentMethod('efectivo');
             onClearSalesFromAppointment?.();
-            setTimeout(() => setShowSuccess(false), 3000);
         } catch (err) {
             alert(err instanceof Error ? err.message : 'No se pudo completar la venta. Intenta de nuevo.');
         }
@@ -436,19 +449,73 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
                 </div>
             </div>
 
-            {/* Success Modal Overlay */}
-            {showSuccess && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-                    <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center animate-in fade-in zoom-in duration-300">
-                        <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
-                            <CheckCircle size={40} />
+            {/* Success Modal: factura, imprimir y WhatsApp */}
+            {showSuccess && lastCompletedSale && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4 no-print">
+                    <div className="bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] w-full max-w-lg">
+                        <div className="p-6 flex flex-col items-center border-b border-slate-100">
+                            <div className="w-14 h-14 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3">
+                                <CheckCircle size={32} />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800">¡Venta exitosa!</h3>
+                            <p className="text-slate-500 text-sm font-mono">Ref: {lastSaleId}</p>
                         </div>
-                        <h3 className="text-2xl font-bold text-slate-800 mb-2">¡Venta Exitosa!</h3>
-                        <p className="text-slate-500 mb-6 text-center">
-                            Transacción completada.
-                            <br/>
-                            <span className="font-mono text-xs">Ref: {lastSaleId}</span>
-                        </p>
+                        <div className="flex-1 overflow-y-auto p-4">
+                            <div id="invoice-print-area">
+                                <Invoice
+                                    sale={lastCompletedSale}
+                                    storeName={storeName}
+                                    currencySymbol={currencySymbol}
+                                    clientName={lastSaleClientName}
+                                    forPrint={false}
+                                />
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-slate-100 space-y-3">
+                            <div className="flex flex-col sm:flex-row gap-3">
+                            <button
+                                type="button"
+                                onClick={() => window.print()}
+                                className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold rounded-xl transition-colors no-print"
+                            >
+                                <Printer size={20} />
+                                Imprimir factura
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const lines = [
+                                        `*${storeName}* – Comprobante de venta`,
+                                        `Ref: ${lastCompletedSale.numeroVenta}`,
+                                        `Fecha: ${lastCompletedSale.fecha} ${lastCompletedSale.hora}`,
+                                        lastSaleClientName ? `Cliente: ${lastSaleClientName}` : null,
+                                        '',
+                                        ...lastCompletedSale.items.map(i => `• ${i.name} x${i.quantity} – ${currencySymbol}${(i.price * i.quantity).toFixed(2)}`),
+                                        '',
+                                        `*Total: ${currencySymbol}${lastCompletedSale.total.toFixed(2)}*`,
+                                        'Gracias por su preferencia.',
+                                    ].filter(Boolean);
+                                    const text = lines.join('\n');
+                                    const phone = lastSaleClientPhone?.replace(/\s+/g, '').replace(/^\+/, '') || '';
+                                    const url = phone
+                                        ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+                                        : `https://wa.me/?text=${encodeURIComponent(text)}`;
+                                    window.open(url, '_blank');
+                                }}
+                                className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-colors no-print"
+                            >
+                                <MessageCircle size={20} />
+                                {lastSaleClientPhone ? 'Enviar por WhatsApp' : 'Abrir WhatsApp'}
+                            </button>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => { setShowSuccess(false); setLastCompletedSale(null); setLastSaleClientName(null); setLastSaleClientPhone(null); }}
+                                className="w-full py-2.5 text-slate-600 hover:text-slate-800 font-medium rounded-lg border border-slate-200 hover:bg-slate-50 no-print"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
