@@ -96,12 +96,12 @@ const CalendarView: React.FC = () => {
                         {d}
                         {isToday && <span className="sr-only"> (hoy)</span>}
                     </span>
-                    {/* Móvil: solo indicador compacto (puntos o número) */}
-                    <div className="mt-1 flex flex-wrap justify-center gap-0.5 max-w-full">
+                    {/* Indicador compacto en todas las pantallas: sin scroll dentro de la celda */}
+                    <div className="mt-1 flex flex-wrap justify-center gap-0.5 max-w-full min-w-0">
                         {hasCitas ? (
                             <>
-                                <span className="hidden sm:inline text-[10px] text-slate-500 font-medium">{dayAppointments.length} {dayAppointments.length === 1 ? 'cita' : 'citas'}</span>
-                                <div className="sm:hidden flex flex-wrap justify-center gap-0.5">
+                                <span className="text-[10px] text-slate-500 font-medium">{dayAppointments.length} {dayAppointments.length === 1 ? 'cita' : 'citas'}</span>
+                                <div className="flex flex-wrap justify-center gap-0.5 md:hidden">
                                     {dayAppointments.slice(0, 5).map(app => (
                                         <span
                                             key={app.id}
@@ -114,21 +114,21 @@ const CalendarView: React.FC = () => {
                                     ))}
                                     {dayAppointments.length > 5 && <span className="text-[9px] text-slate-400">+{dayAppointments.length - 5}</span>}
                                 </div>
+                                {/* PC: solo primeras 2 horas como texto fijo, sin scroll */}
+                                <div className="hidden md:flex flex-wrap justify-center gap-x-1 gap-y-0.5 mt-0.5">
+                                    {dayAppointments.slice(0, 2).map(app => (
+                                        <span
+                                            key={app.id}
+                                            className={`text-[10px] px-1 py-0.5 rounded ${getStatusStyle(app.estado)}`}
+                                            title={`${app.hora} · ${clients.find(c => c.id === app.clienteId)?.nombre ?? 'Cliente'} · ${app.estado}`}
+                                        >
+                                            {app.hora}
+                                        </span>
+                                    ))}
+                                    {dayAppointments.length > 2 && <span className="text-[9px] text-slate-400">+{dayAppointments.length - 2}</span>}
+                                </div>
                             </>
                         ) : null}
-                    </div>
-                    {/* Desktop: una línea por cita (hora + estado) sin truncar texto largo */}
-                    <div className="hidden md:block mt-1 w-full space-y-0.5 overflow-y-auto max-h-14">
-                        {dayAppointments.slice(0, 3).map(app => (
-                            <div
-                                key={app.id}
-                                className={`text-[10px] px-1 py-0.5 rounded ${getStatusStyle(app.estado)} truncate`}
-                                title={`${app.hora} · ${clients.find(c => c.id === app.clienteId)?.nombre ?? 'Cliente'} · ${app.estado}`}
-                            >
-                                {app.hora}
-                            </div>
-                        ))}
-                        {dayAppointments.length > 3 && <span className="text-[9px] text-slate-400">+{dayAppointments.length - 3}</span>}
                     </div>
                 </button>
             );
@@ -250,50 +250,54 @@ const CalendarView: React.FC = () => {
                         onClick={() => setSelectedDay(null)}
                         aria-hidden
                     />
-                    <div
-                        className="fixed left-0 right-0 bottom-0 sm:left-1/2 sm:right-auto sm:bottom-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-md sm:rounded-xl z-50 bg-white shadow-2xl border-t sm:border border-slate-200 rounded-t-2xl sm:rounded-xl max-h-[70vh] sm:max-h-[80vh] flex flex-col animate-in slide-in-from-bottom duration-200"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="day-detail-title"
-                    >
-                        <div className="flex items-center justify-between p-4 border-b border-slate-200 flex-shrink-0">
-                            <h3 id="day-detail-title" className="text-lg font-bold text-slate-800">
-                                Citas del {selectedDay && new Date(selectedDay + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
-                            </h3>
-                            <button
-                                type="button"
-                                onClick={() => setSelectedDay(null)}
-                                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 touch-manipulation"
-                                aria-label="Cerrar"
-                            >
-                                <X size={22} />
-                            </button>
-                        </div>
-                        <div className="overflow-y-auto p-4 space-y-3 flex-1">
-                            {selectedDayAppointments.length === 0 ? (
-                                <p className="text-slate-500 text-center py-6">No hay citas este día.</p>
-                            ) : (
-                                selectedDayAppointments.map(app => {
-                                    const client = clients.find(c => c.id === app.clienteId);
-                                    const barber = barbers.find(b => b.id === app.barberoId);
-                                    return (
-                                        <div
-                                            key={app.id}
-                                            className={`p-3 rounded-xl border ${getStatusStyle(app.estado)}`}
-                                        >
-                                            <div className="flex justify-between items-start gap-2">
-                                                <span className="font-bold text-slate-900">{app.hora}</span>
-                                                <span className="text-xs font-semibold uppercase">{app.estado}</span>
+                    {/* Móvil: panel abajo; PC: panel centrado en pantalla */}
+                    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 pointer-events-none">
+                        <div
+                            className="w-full max-h-[70vh] sm:max-h-[85vh] sm:max-w-md sm:w-full bg-white shadow-2xl border-t sm:border border-slate-200 rounded-t-2xl sm:rounded-xl flex flex-col pointer-events-auto min-w-0 animate-in slide-in-from-bottom sm:zoom-in-95 duration-200"
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="day-detail-title"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex items-center justify-between gap-3 p-4 border-b border-slate-200 flex-shrink-0 min-w-0">
+                                <h3 id="day-detail-title" className="text-lg font-bold text-slate-800 truncate">
+                                    Citas del {selectedDay && new Date(selectedDay + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedDay(null)}
+                                    className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 touch-manipulation flex-shrink-0"
+                                    aria-label="Cerrar"
+                                >
+                                    <X size={22} />
+                                </button>
+                            </div>
+                            <div className="overflow-y-auto overflow-x-hidden p-4 space-y-3 flex-1 min-h-0">
+                                {selectedDayAppointments.length === 0 ? (
+                                    <p className="text-slate-500 text-center py-6">No hay citas este día.</p>
+                                ) : (
+                                    selectedDayAppointments.map(app => {
+                                        const client = clients.find(c => c.id === app.clienteId);
+                                        const barber = barbers.find(b => b.id === app.barberoId);
+                                        return (
+                                            <div
+                                                key={app.id}
+                                                className={`p-3 rounded-xl border min-w-0 break-words ${getStatusStyle(app.estado)}`}
+                                            >
+                                                <div className="flex justify-between items-start gap-2">
+                                                    <span className="font-bold text-slate-900">{app.hora}</span>
+                                                    <span className="text-xs font-semibold uppercase flex-shrink-0">{app.estado}</span>
+                                                </div>
+                                                <p className="text-sm font-medium text-slate-800 mt-1 break-words">{client?.nombre ?? 'Cliente'}</p>
+                                                <p className="text-xs text-slate-600 break-words">{barber?.name ?? 'Barbero'}</p>
+                                                {app.servicios?.length > 0 && (
+                                                    <p className="text-xs text-slate-500 mt-1 break-words">{app.servicios.map(s => s.name).join(', ')}</p>
+                                                )}
                                             </div>
-                                            <p className="text-sm font-medium text-slate-800 mt-1">{client?.nombre ?? 'Cliente'}</p>
-                                            <p className="text-xs text-slate-600">{barber?.name ?? 'Barbero'}</p>
-                                            {app.servicios?.length > 0 && (
-                                                <p className="text-xs text-slate-500 mt-1">{app.servicios.map(s => s.name).join(', ')}</p>
-                                            )}
-                                        </div>
-                                    );
-                                })
-                            )}
+                                        );
+                                    })
+                                )}
+                            </div>
                         </div>
                     </div>
                 </>
