@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DataService, generateUniqueId } from '../services/data';
 import { Client, Product, PointOfSale, FinanceRecord, Sale } from '../types';
-import { Search, Plus, X, Edit2, User, Star, Upload, Image as ImageIcon, Ban, CheckCircle, Trophy, Crown, MapPin, Loader2, Phone, Users } from 'lucide-react';
+import { Search, Plus, X, Edit2, User, Star, Upload, Image as ImageIcon, Ban, CheckCircle, Trophy, Crown, MapPin, Loader2, Phone, Users, Package } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 
@@ -506,12 +506,28 @@ export const Inventory: React.FC = () => {
                 </button>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+                {/* Estado vacío: mismo en móvil y escritorio */}
+                {products.length === 0 ? (
+                    <div className="p-8 md:p-12 text-center">
+                        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                            <Package size={32} className="text-slate-400" />
+                        </div>
+                        <p className="text-slate-600 font-medium">No hay productos en el inventario</p>
+                        <p className="text-slate-500 text-sm mt-1">Pulsa &quot;Nuevo Producto&quot; para agregar el primero.</p>
+                        <button
+                            type="button"
+                            onClick={handleCreateClick}
+                            className="mt-6 inline-flex items-center gap-2 bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-5 py-2.5 rounded-xl font-bold transition-colors"
+                        >
+                            <Plus size={18} /> Nuevo Producto
+                        </button>
+                    </div>
+                ) : (
+                <>
                 {/* Vista tarjetas — solo en móvil */}
                 <div className="md:hidden p-4 space-y-4">
-                    {products.length === 0 ? (
-                        <p className="text-slate-500 text-center py-10 text-sm">No hay productos. Pulsa &quot;Nuevo Producto&quot; para agregar.</p>
-                    ) : (
+                    {
                         products.map(p => (
                             <div
                                 key={p.id}
@@ -557,12 +573,11 @@ export const Inventory: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                        ))
-                    )}
+                        ))}
                 </div>
 
                 {/* Vista tabla — solo en escritorio */}
-                <div className="hidden md:block overflow-x-auto table-wrapper">
+                <div className="hidden md:block overflow-x-auto">
                 <table className="w-full min-w-[640px]">
                     <thead className="bg-slate-50 text-slate-600 text-sm font-semibold uppercase tracking-wider">
                         <tr>
@@ -598,6 +613,8 @@ export const Inventory: React.FC = () => {
                     </tbody>
                 </table>
                 </div>
+                </>
+                )}
             </div>
 
             {/* Product Modal */}

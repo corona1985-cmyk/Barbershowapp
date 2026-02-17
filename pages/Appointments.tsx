@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import { DataService } from '../services/data';
 import { Appointment, Barber, Client, Service, AppointmentForSale, SaleItem, AccountTier } from '../types';
 import { ViewState } from '../types';
@@ -36,7 +36,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     const [searchPhone, setSearchPhone] = useState('');
     const [clientFoundByPhone, setClientFoundByPhone] = useState<Client | null>(null);
     const [searchAttempted, setSearchAttempted] = useState(false);
-    /** Teléfono que el cliente (rol) ingresa en Confirmar Reserva cuando aún no está en la barbería */
+    /** TelÃ©fono que el cliente (rol) ingresa en Confirmar Reserva cuando aÃºn no estÃ¡ en la barberÃ­a */
     const [clientPhoneForBooking, setClientPhoneForBooking] = useState('');
     /** Guardando cita (evita doble clic y muestra feedback) */
     const [saving, setSaving] = useState(false);
@@ -128,7 +128,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         if (!newApt.hora) { alert('Seleccione una hora.'); return; }
         if (!newApt.servicios?.length) { alert('Seleccione al menos un servicio.'); return; }
         if (newApt.fecha && isDateTimeInPast(newApt.fecha, newApt.hora)) {
-            alert('No se puede agendar una cita en una fecha u hora que ya pasó.');
+            alert('No se puede agendar una cita en una fecha u hora que ya pasÃ³.');
             return;
         }
         if (saving) return;
@@ -156,7 +156,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         } else if (isNewClient) {
             if (!newClientName.trim() || !newClientPhone.trim()) {
                 setSaving(false);
-                alert('Ingrese nombre y teléfono del nuevo cliente.');
+                alert('Ingrese nombre y telÃ©fono del nuevo cliente.');
                 return;
             }
             const client = await DataService.addClientOrGetExisting({
@@ -175,16 +175,16 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         if (!finalClientId) {
             setSaving(false);
             if (userRole === 'cliente') {
-                alert('Ingresa tu número de teléfono abajo para confirmar la reserva.');
+                alert('Ingresa tu nÃºmero de telÃ©fono abajo para confirmar la reserva.');
             } else {
-                alert('Seleccione un cliente o agregue uno nuevo (nombre y teléfono).');
+                alert('Seleccione un cliente o agregue uno nuevo (nombre y telÃ©fono).');
             }
             return;
         }
         const clientRecord = clients.find(c => c.id === finalClientId);
         if (clientRecord && !(clientRecord.telefono || '').trim()) {
             setSaving(false);
-            alert('El cliente debe tener un número de teléfono para confirmar la cita. Edite el cliente o use "Buscar por teléfono".');
+            alert('El cliente debe tener un nÃºmero de telÃ©fono para confirmar la cita. Edite el cliente o use "Buscar por telÃ©fono".');
             return;
         }
         const total = newApt.servicios!.reduce((acc, s) => acc + s.price, 0);
@@ -200,13 +200,13 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         });
         if (overlaps) {
             setSaving(false);
-            alert(`No se puede agendar: la cita duraría ${duration} minutos y se solaparía con otra cita de ese barbero. Elige otra hora o menos servicios.`);
+            alert(`No se puede agendar: la cita durarÃ­a ${duration} minutos y se solaparÃ­a con otra cita de ese barbero. Elige otra hora o menos servicios.`);
             return;
         }
         const posId = DataService.getActivePosId();
         if (posId == null) {
             setSaving(false);
-            alert('No hay sede activa. Selecciona una barbería o sede antes de agendar.');
+            alert('No hay sede activa. Selecciona una barberÃ­a o sede antes de agendar.');
             return;
         }
         const aptData: Omit<Appointment, 'id'> = {
@@ -238,11 +238,11 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             setNewClientName('');
             setNewClientPhone('');
             setClientPhoneForBooking('');
-            alert('Cita agendada con éxito.');
+            alert('Cita agendada con Ã©xito.');
         } catch (err) {
             console.error('Error al agendar cita:', err);
             const msg = err instanceof Error ? err.message : String(err);
-            alert(msg.includes('permiso') || msg.includes('conexión') ? msg : `No se pudo guardar la cita. ${msg}`);
+            alert(msg.includes('permiso') || msg.includes('conexiÃ³n') ? msg : `No se pudo guardar la cita. ${msg}`);
         } finally {
             setSaving(false);
         }
@@ -281,7 +281,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     };
 
     const deleteAppointment = async (id: number) => {
-        if (confirm('¿Eliminar cita?')) {
+        if (confirm('Â¿Eliminar cita?')) {
             const updated = appointments.filter(a => a.id !== id);
             setAppointments(updated);
             await DataService.setAppointments(updated);
@@ -301,7 +301,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     const handleSearchByPhone = async () => {
         const trimmed = searchPhone.trim();
         if (trimmed.length < 6) {
-            alert('Ingrese al menos 6 dígitos para buscar.');
+            alert('Ingrese al menos 6 dÃ­gitos para buscar.');
             return;
         }
         setSearchAttempted(true);
@@ -354,7 +354,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         return start1 < end2 && start2 < end1;
     };
 
-    // Client Visual Grid Logic: un slot está ocupado si cae dentro de la duración de alguna cita existente
+    // Client Visual Grid Logic: un slot estÃ¡ ocupado si cae dentro de la duraciÃ³n de alguna cita existente
     const generateTimeSlots = (date: string, barberId: number) => {
         const slots: { time: string; taken: boolean; past: boolean }[] = [];
         const startHour = 9; // 9 AM
@@ -409,7 +409,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         return (
             <div className="flex flex-col items-center justify-center py-24 text-slate-600 max-w-md mx-auto text-center px-4">
                 <p className="font-medium mb-2">No se pudo cargar la agenda.</p>
-                <p className="text-sm text-slate-500 mb-6">Revisa tu conexión a internet e intenta de nuevo.</p>
+                <p className="text-sm text-slate-500 mb-6">Revisa tu conexiÃ³n a internet e intenta de nuevo.</p>
                 <button
                     type="button"
                     onClick={() => loadData()}
@@ -431,7 +431,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                 {currentBarberiaName && (
                     <div className="flex items-center gap-2 bg-[#ffd427]/20 border border-[#ffd427]/50 text-slate-800 px-4 py-3 rounded-xl">
                         <MapPin size={20} className="text-[#ffd427] flex-shrink-0" />
-                        <span className="font-semibold">Barbería:</span>
+                        <span className="font-semibold">BarberÃ­a:</span>
                         <span>{currentBarberiaName}</span>
                     </div>
                 )}
@@ -460,7 +460,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                         >
                                             <span>{b.name}</span>
                                             <span className={`text-[10px] mt-1 ${!b.active ? 'text-slate-400' : selectedBarberForView === b.id ? 'text-slate-800' : 'text-green-600'}`}>
-                                                {b.active ? 'En línea' : 'No disponible'}
+                                                {b.active ? 'En lÃ­nea' : 'No disponible'}
                                             </span>
                                         </button>
                                     ))}
@@ -515,7 +515,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                     ) : (
                         <div className="bg-slate-50 border border-slate-100 rounded-lg p-8 text-center text-slate-500">
                             <User className="mx-auto mb-2 text-slate-300" size={32} />
-                            <p>El barbero seleccionado no está disponible en este momento.</p>
+                            <p>El barbero seleccionado no estÃ¡ disponible en este momento.</p>
                             <p className="text-sm mt-1">Por favor selecciona otro barbero activo.</p>
                         </div>
                     )}
@@ -561,7 +561,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                         <p className="text-xs text-red-500 mt-1">* Selecciona al menos un servicio</p>
                                     )}
                                 </div>
-                                {/* Cliente: mostrar nombre y, si no está en la barbería, pedir teléfono */}
+                                {/* Cliente: mostrar nombre y, si no estÃ¡ en la barberÃ­a, pedir telÃ©fono */}
                                 {userRole === 'cliente' && (
                                     <div className="space-y-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
                                         <p className="text-sm font-medium text-slate-700">Datos para la reserva</p>
@@ -574,7 +574,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                                     <p className="font-medium text-slate-800">{DataService.getCurrentUser()?.name || 'Cliente'}</p>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-slate-700 mb-1">Tu teléfono (requerido para confirmar) <span className="text-red-500">*</span></label>
+                                                    <label className="block text-sm font-medium text-slate-700 mb-1">Tu telÃ©fono (requerido para confirmar) <span className="text-red-500">*</span></label>
                                                     <input
                                                         type="tel"
                                                         className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-[#ffd427]"
@@ -589,7 +589,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                 )}
                                 {userRole !== 'cliente' && (
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Tu Nombre (Confirmación)</label>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Tu Nombre (ConfirmaciÃ³n)</label>
                                         <select className="w-full border border-slate-300 rounded-lg p-2" value={newApt.clienteId || ''} onChange={e => setNewApt({...newApt, clienteId: Number(e.target.value)})}>
                                             <option value="">Selecciona tu perfil</option>
                                             {activeClients.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
@@ -658,7 +658,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                 {sortedAppointments.length === 0 ? (
                     <div className="col-span-full py-12 text-center text-slate-400 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
                         <Calendar size={48} className="mx-auto mb-3 opacity-50" />
-                        <p>No hay citas programadas para este día</p>
+                        <p>No hay citas programadas para este dÃ­a</p>
                     </div>
                 ) : (
                     sortedAppointments.map(apt => {
@@ -719,7 +719,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                     )}
                                     {apt.estado === 'confirmada' && (
                                         <>
-                                            <button onClick={() => handleCompleteAndGoToBilling(apt)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-transparent hover:border-green-100" title="Completar e ir a facturación">
+                                            <button onClick={() => handleCompleteAndGoToBilling(apt)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-transparent hover:border-green-100" title="Completar e ir a facturaciÃ³n">
                                                 <Check size={18} />
                                             </button>
                                             <button onClick={() => updateStatus(apt.id, 'cancelada')} className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-transparent hover:border-amber-100" title="Cancelar">
@@ -757,7 +757,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Buscar cliente por teléfono (ya en la base de datos)</label>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Buscar cliente por telÃ©fono (ya en la base de datos)</label>
                                 <div className="flex gap-2">
                                     <input
                                         type="tel"
@@ -773,7 +773,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                     <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex flex-wrap items-center justify-between gap-2">
                                         <div>
                                             <span className="font-medium text-green-800">Cliente encontrado: {clientFoundByPhone.nombre}</span>
-                                            <span className="text-green-700"> – {clientFoundByPhone.telefono || 'Sin teléfono'}</span>
+                                            <span className="text-green-700"> â€“ {clientFoundByPhone.telefono || 'Sin telÃ©fono'}</span>
                                         </div>
                                         <div className="flex gap-2">
                                             <button type="button" onClick={() => handleUseClientFound(clientFoundByPhone)} className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">Usar este cliente</button>
@@ -782,7 +782,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                     </div>
                                 )}
                                 {searchAttempted && !clientFoundByPhone && searchPhone.trim().length >= 6 && (
-                                    <p className="text-sm text-slate-500">No encontrado con ese teléfono. Puede agregar como nuevo cliente abajo.</p>
+                                    <p className="text-sm text-slate-500">No encontrado con ese telÃ©fono. Puede agregar como nuevo cliente abajo.</p>
                                 )}
                             </div>
                             <div>
@@ -798,12 +798,12 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                             }}
                                         >
                                             <option value="">Seleccionar Cliente</option>
-                                            {activeClients.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.telefono || 'Sin teléfono'}</option>)}
+                                            {activeClients.map(c => <option key={c.id} value={c.id}>{c.nombre} â€“ {c.telefono || 'Sin telÃ©fono'}</option>)}
                                         </select>
                                         {newApt.clienteId && (() => {
                                             const sel = clients.find(c => c.id === newApt.clienteId);
                                             return sel && !(sel.telefono || '').trim() ? (
-                                                <p className="mt-1 text-amber-600 text-sm">Este cliente no tiene teléfono. Agregue uno en Gestión de Clientes o busque por otro.</p>
+                                                <p className="mt-1 text-amber-600 text-sm">Este cliente no tiene telÃ©fono. Agregue uno en GestiÃ³n de Clientes o busque por otro.</p>
                                             ) : null;
                                         })()}
                                         <button
@@ -812,7 +812,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                             className="mt-2 flex items-center gap-1.5 text-sm text-amber-700 hover:text-amber-800 font-medium"
                                         >
                                             <User size={16} />
-                                            ¿No está en la lista? Agregar cliente nuevo (sin registro)
+                                            Â¿No estÃ¡ en la lista? Agregar cliente nuevo (sin registro)
                                         </button>
                                     </>
                                 ) : (
@@ -824,7 +824,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                                 onClick={() => { setIsNewClient(false); setNewClientName(''); setNewClientPhone(''); }}
                                                 className="text-sm text-amber-700 hover:text-amber-900 underline"
                                             >
-                                                ← Elegir de la lista de clientes
+                                                â† Elegir de la lista de clientes
                                             </button>
                                         </div>
                                         <div className="grid grid-cols-2 gap-3">
@@ -839,11 +839,11 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-medium text-amber-800 mb-1">Teléfono</label>
+                                                <label className="block text-xs font-medium text-amber-800 mb-1">TelÃ©fono</label>
                                                 <input
                                                     type="tel"
                                                     className="w-full border border-amber-300 rounded-lg p-2 text-sm"
-                                                    placeholder="Teléfono / WhatsApp"
+                                                    placeholder="TelÃ©fono / WhatsApp"
                                                     value={newClientPhone}
                                                     onChange={e => setNewClientPhone(e.target.value)}
                                                 />
