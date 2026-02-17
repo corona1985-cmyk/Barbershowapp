@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ViewState, UserRole, AccountTier } from '../types';
-import { LayoutDashboard, Users, Calendar, Package, DollarSign, FileText, LogOut, Scissors, Settings, ShoppingBag, MapPin, X, ChevronDown, ChevronRight, Briefcase, BarChart2, MessageCircle, Shield, Globe, ListChecks, QrCode } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, Package, DollarSign, FileText, LogOut, Scissors, Settings, ShoppingBag, MapPin, X, ChevronDown, ChevronRight, Briefcase, BarChart2, MessageCircle, Shield, Globe, ListChecks, QrCode, StarOff } from 'lucide-react';
 
 interface SidebarProps {
     currentView: ViewState;
@@ -13,6 +13,12 @@ interface SidebarProps {
     clientHasSelectedBarberia?: boolean;
     /** Plan de negocio: en 'solo' se ocultan Calendario, WhatsApp, Inventario, Finanzas, Admin Usuarios. */
     accountTier?: AccountTier;
+    /** Solo cliente: id de la barbería favorita. Si coincide con currentPosId se muestra "Quitar de favoritos". */
+    preferredPosId?: number | null;
+    /** Solo cliente: id de la barbería actualmente seleccionada. */
+    currentPosId?: number | null;
+    /** Solo cliente: callback para quitar la barbería de favoritos. */
+    onRemoveFavorite?: () => void | Promise<void>;
 }
 
 type NavGroup = 'principal' | 'operaciones' | 'administracion';
@@ -20,7 +26,7 @@ type NavGroup = 'principal' | 'operaciones' | 'administracion';
 /** Ítems que se ocultan en plan Solo (menú simplificado) */
 const HIDDEN_IN_TIER_SOLO: ViewState[] = ['calendar', 'whatsapp_console', 'inventory', 'finance', 'user_admin'];
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, userRole, isOpen, onClose, clientHasSelectedBarberia = true, accountTier = 'barberia' }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, userRole, isOpen, onClose, clientHasSelectedBarberia = true, accountTier = 'barberia', preferredPosId = null, currentPosId = null, onRemoveFavorite }) => {
     
     // State for collapsible groups
     const [expandedGroups, setExpandedGroups] = useState<Record<NavGroup, boolean>>({
@@ -166,7 +172,17 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                     })}
                 </nav>
 
-                <div className="p-4 border-t border-slate-800 bg-slate-900/50">
+                <div className="p-4 border-t border-slate-800 bg-slate-900/50 space-y-2">
+                    {(userRole === 'cliente' && clientHasSelectedBarberia && currentPosId != null && currentPosId === preferredPosId && onRemoveFavorite) && (
+                        <button
+                            type="button"
+                            onClick={() => { onRemoveFavorite(); onClose(); }}
+                            className="w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-[#ffd427] transition-all duration-200 text-sm"
+                        >
+                            <StarOff size={16} />
+                            <span>Quitar de favoritos</span>
+                        </button>
+                    )}
                     <button 
                         onClick={onLogout}
                         className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 border border-slate-700 rounded-lg text-slate-400 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all duration-200 text-sm font-medium"

@@ -23,6 +23,9 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({ onSwitchPos, guestMod
     }, []);
 
     const filtered = posList.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const sorted = preferredPosId != null && !guestMode
+        ? [...filtered].sort((a, b) => (a.id === preferredPosId ? -1 : b.id === preferredPosId ? 1 : 0))
+        : filtered;
 
     return (
         <div className="space-y-6">
@@ -43,7 +46,7 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({ onSwitchPos, guestMod
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filtered.map(pos => {
+                {sorted.map(pos => {
                     const isFavorite = !guestMode && preferredPosId != null && pos.id === preferredPosId;
                     return (
                         <div key={pos.id} className={`bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-lg transition-all group ${isFavorite ? 'border-[#ffd427] ring-1 ring-[#ffd427]/50' : 'border-slate-200'}`}>

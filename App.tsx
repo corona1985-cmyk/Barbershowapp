@@ -651,6 +651,9 @@ const App: React.FC = () => {
                 onClose={() => setIsSidebarOpen(false)}
                 clientHasSelectedBarberia={userRole === 'cliente' ? currentPosId != null : true}
                 accountTier={accountTier}
+                preferredPosId={userRole === 'cliente' ? preferredPosId : null}
+                currentPosId={userRole === 'cliente' ? currentPosId : null}
+                onRemoveFavorite={userRole === 'cliente' ? async () => { const u = DataService.getCurrentUser(); if (u?.username) { await DataService.setClientPreferredPos(u.username, null); setPreferredPosId(null); } } : undefined}
             />
             {/* Área principal: flex para que el scroll sea solo en el contenido */}
             <main className="flex-1 flex flex-col min-w-0 min-h-0 md:ml-64 overflow-hidden transition-all duration-300">
