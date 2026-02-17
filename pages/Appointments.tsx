@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { DataService, generateUniqueId } from '../services/data';
+import { DataService } from '../services/data';
 import { Appointment, Barber, Client, Service, AppointmentForSale, SaleItem, AccountTier } from '../types';
 import { ViewState } from '../types';
 import { Calendar, Clock, User, Scissors, Check, X, Trash2, Printer, MessageCircle, MapPin, Loader2 } from 'lucide-react';
@@ -203,9 +203,14 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             alert(`No se puede agendar: la cita duraría ${duration} minutos y se solaparía con otra cita de ese barbero. Elige otra hora o menos servicios.`);
             return;
         }
-        const newAppointment: Appointment = {
-            id: generateUniqueId(),
-            posId: DataService.getActivePosId() || 0,
+        const posId = DataService.getActivePosId();
+        if (posId == null) {
+            setSaving(false);
+            alert('No hay sede activa. Selecciona una barbería o sede antes de agendar.');
+            return;
+        }
+        const aptData = {
+            posId,
             clienteId: finalClientId,
             barberoId: barberoId,
             fecha: newApt.fecha!,
@@ -214,13 +219,12 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             notas: newApt.notas || '',
             duracionTotal: duration,
             total: total,
-            estado: 'confirmada',
+            estado: 'confirmada' as const,
             fechaCreacion: new Date().toISOString()
         };
         try {
-            const updated = [...appointments, newAppointment];
-            setAppointments(updated);
-            await DataService.setAppointments(updated);
+            const saved = await DataService.addAppointment(aptData);
+            setAppointments(prev => [...prev, saved]);
             setShowModal(false);
             setNewApt(prev => ({ ...prev, hora: undefined, servicios: [], notas: '', clienteId: undefined }));
             setIsNewClient(false);
@@ -230,7 +234,8 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             alert('Cita agendada con éxito.');
         } catch (err) {
             console.error('Error al agendar cita:', err);
-            alert('No se pudo guardar la cita. Revisa tu conexión e intenta de nuevo.');
+            const msg = err instanceof Error ? err.message : String(err);
+            alert(msg.includes('permiso') || msg.includes('conexión') ? msg : `No se pudo guardar la cita. ${msg}`);
         } finally {
             setSaving(false);
         }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DataService, generateUniqueId } from '../services/data';
 import { Client, Product, PointOfSale, FinanceRecord, Sale } from '../types';
-import { Search, Plus, X, Edit2, User, Star, Upload, Image as ImageIcon, Ban, CheckCircle, Trophy, Crown, MapPin, Loader2 } from 'lucide-react';
+import { Search, Plus, X, Edit2, User, Star, Upload, Image as ImageIcon, Ban, CheckCircle, Trophy, Crown, MapPin, Loader2, Phone, Users } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 
@@ -105,117 +105,206 @@ export const Clients: React.FC = () => {
         return pos ? pos.name : `Sede #${posId}`;
     };
 
+    const formatRegDate = (iso: string) => {
+        const d = new Date(iso + 'T12:00:00');
+        return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
     const filtered = clients.filter(c => c.nombre.toLowerCase().includes(search.toLowerCase()) || c.telefono.includes(search));
-    
-    // Sort for leaderboard
+
     const topClients = [...clients].sort((a, b) => b.puntos - a.puntos).slice(0, 5);
 
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center py-24 text-slate-500">
-                <Loader2 className="animate-spin mb-4" size={48} />
+                <Loader2 className="animate-spin mb-4 text-[#ffd427]" size={48} />
                 <p className="font-medium">Cargando clientes...</p>
             </div>
         );
     }
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
             <div className="lg:col-span-3 space-y-6">
                 {userRole === 'barbero' && (
-                    <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded-lg text-sm">
+                    <div className="bg-amber-50/80 border border-amber-200/80 text-amber-800 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+                        <Users size={18} className="shrink-0" />
                         Solo se muestran clientes que ya se han agendado o atendido en esta barbería.
                     </div>
                 )}
-                <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-slate-800">Gestión de Clientes</h2>
+
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-[#ffd427]/15 text-[#c9a000]">
+                            <User size={26} strokeWidth={2} />
+                        </div>
+                        <div>
+                            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight">Gestión de Clientes</h1>
+                            <p className="text-sm text-slate-500 mt-0.5">Busca y administra tu cartera de clientes</p>
+                        </div>
+                    </div>
                     {userRole !== 'barbero' && (
-                        <button onClick={handleCreateClick} className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2 rounded-lg font-bold flex items-center space-x-2 transition-colors shadow-sm">
+                        <button onClick={handleCreateClick} className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors shadow-sm shrink-0">
                             <Plus size={18} />
                             <span>Nuevo Cliente</span>
                         </button>
                     )}
                 </div>
 
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="p-4 border-b border-slate-200 flex space-x-4 bg-slate-50/50">
-                        <div className="relative flex-1 max-w-md">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
-                            <input type="text" placeholder="Buscar por nombre o teléfono..." className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ffd427]" value={search} onChange={e => setSearch(e.target.value)} />
+                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                    <div className="p-4 sm:p-5 border-b border-slate-100">
+                        <div className="relative max-w-md">
+                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                            <input
+                                type="text"
+                                placeholder="Buscar por nombre o teléfono..."
+                                className="w-full pl-10 pr-4 py-2.5 bg-slate-50/80 border border-slate-200 rounded-xl text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ffd427]/40 focus:border-[#ffd427]/50 focus:bg-white transition-all"
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                            />
                         </div>
+                        {filtered.length > 0 && (
+                            <p className="mt-3 text-sm text-slate-500">
+                                <strong className="text-slate-700">{filtered.length}</strong> cliente{filtered.length !== 1 ? 's' : ''}
+                                {search && filtered.length !== clients.length && ` de ${clients.length}`}
+                            </p>
+                        )}
                     </div>
-                    <div className="overflow-x-auto table-wrapper">
-                        <table className="w-full min-w-[640px]">
-                            <thead className="bg-slate-50 text-slate-600 text-sm font-semibold uppercase tracking-wider">
-                                <tr>
-                                    <th className="px-6 py-4 text-left">Cliente</th>
-                                    <th className="px-6 py-4 text-left">Sede Origen</th>
-                                    <th className="px-6 py-4 text-left">Contacto</th>
-                                    <th className="px-6 py-4 text-left">Puntos</th>
-                                    <th className="px-6 py-4 text-left">Estado</th>
-                                    <th className="px-6 py-4 text-right">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {filtered.map(c => (
-                                    <tr key={c.id} className={`hover:bg-slate-50 transition-colors group ${c.status === 'suspended' ? 'bg-red-50' : ''}`}>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center space-x-3">
-                                                {c.photoUrl ? (
-                                                    <img src={c.photoUrl} alt={c.nombre} className="w-12 h-12 rounded-full object-cover border-2 border-slate-100 shadow-sm" />
-                                                ) : (
-                                                    <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700 font-bold text-lg shadow-sm">
-                                                        {c.nombre.charAt(0)}
+
+                    {filtered.length === 0 ? (
+                        <div className="py-16 px-6 text-center">
+                            <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                                <User size={28} className="text-slate-400" />
+                            </div>
+                            <p className="text-slate-600 font-medium">{search ? 'Ningún cliente coincide con la búsqueda' : 'No hay clientes'}</p>
+                            <p className="text-slate-500 text-sm mt-1">{search ? 'Prueba otro nombre o teléfono' : 'Añade el primero desde Nuevo Cliente'}</p>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="hidden md:block overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="bg-slate-50/90 text-slate-500 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
+                                            <th className="py-4 px-5">Cliente</th>
+                                            <th className="py-4 px-5">Sede origen</th>
+                                            <th className="py-4 px-5">Contacto</th>
+                                            <th className="py-4 px-5">Puntos</th>
+                                            <th className="py-4 px-5">Estado</th>
+                                            <th className="py-4 px-5 text-right w-24">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {filtered.map(c => (
+                                            <tr key={c.id} className={`hover:bg-amber-50/30 transition-colors ${c.status === 'suspended' ? 'bg-red-50/50' : ''}`}>
+                                                <td className="py-4 px-5">
+                                                    <div className="flex items-center gap-3">
+                                                        {c.photoUrl ? (
+                                                            <img src={c.photoUrl} alt={c.nombre} className="w-11 h-11 rounded-full object-cover border-2 border-slate-100 shadow-sm" />
+                                                        ) : (
+                                                            <div className="w-11 h-11 rounded-full bg-[#ffd427]/20 flex items-center justify-center text-[#c9a000] font-bold text-lg shrink-0">
+                                                                {c.nombre.charAt(0).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                        <div>
+                                                            <div className="font-semibold text-slate-800">{c.nombre}</div>
+                                                            <div className="text-xs text-slate-500 mt-0.5">Reg: {formatRegDate(c.fechaRegistro)}</div>
+                                                        </div>
                                                     </div>
-                                                )}
-                                                <div>
-                                                    <div className="font-semibold text-slate-800">{c.nombre}</div>
-                                                    <div className="text-xs text-slate-500 mt-0.5">Reg: {c.fechaRegistro}</div>
+                                                </td>
+                                                <td className="py-4 px-5">
+                                                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg w-fit">
+                                                        <MapPin size={12} className="text-slate-400 shrink-0" />
+                                                        {getPosName(c.posId)}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-5">
+                                                    <div className="flex items-center gap-1.5 text-slate-700 text-sm font-medium">
+                                                        <Phone size={14} className="text-slate-400 shrink-0" />
+                                                        {c.telefono}
+                                                    </div>
+                                                    <div className="text-xs text-slate-400 mt-0.5">{c.email || 'Sin email'}</div>
+                                                </td>
+                                                <td className="py-4 px-5">
+                                                    <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 px-2.5 py-1 rounded-lg w-fit border border-amber-100">
+                                                        <Star size={14} className="fill-amber-400 text-amber-400 shrink-0" />
+                                                        <span className="font-bold text-sm">{c.puntos || 0}</span>
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-5">
+                                                    <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                                                        c.status === 'active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'
+                                                    }`}>
+                                                        {c.status === 'active' ? 'Activo' : 'Suspendido'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-5 text-right">
+                                                    <div className="flex justify-end gap-1">
+                                                        <button onClick={() => handleEditClick(c)} className="p-2 rounded-lg text-slate-400 hover:text-[#c9a000] hover:bg-[#ffd427]/15 transition-colors" title="Editar">
+                                                            <Edit2 size={18} />
+                                                        </button>
+                                                        {isAdmin && (
+                                                            <button
+                                                                onClick={() => handleToggleStatus(c)}
+                                                                className={`p-2 rounded-lg transition-colors ${c.status === 'active' ? 'text-red-400 hover:text-red-600 hover:bg-red-50' : 'text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                                                                title={c.status === 'active' ? 'Suspender' : 'Reactivar'}
+                                                            >
+                                                                {c.status === 'active' ? <Ban size={18} /> : <CheckCircle size={18} />}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="md:hidden divide-y divide-slate-100">
+                                {filtered.map(c => (
+                                    <div key={c.id} className={`p-4 ${c.status === 'suspended' ? 'bg-red-50/50' : ''}`}>
+                                        <div className="flex items-start gap-3">
+                                            {c.photoUrl ? (
+                                                <img src={c.photoUrl} alt={c.nombre} className="w-12 h-12 rounded-full object-cover border-2 border-slate-100 shrink-0" />
+                                            ) : (
+                                                <div className="w-12 h-12 rounded-full bg-[#ffd427]/20 flex items-center justify-center text-[#c9a000] font-bold text-lg shrink-0">
+                                                    {c.nombre.charAt(0).toUpperCase()}
+                                                </div>
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-semibold text-slate-800 truncate">{c.nombre}</p>
+                                                <p className="text-xs text-slate-500 mt-0.5">Reg: {formatRegDate(c.fechaRegistro)}</p>
+                                                <span className="inline-flex items-center gap-1 mt-2 text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded-lg w-fit">
+                                                    <MapPin size={10} /> {getPosName(c.posId)}
+                                                </span>
+                                                <div className="flex items-center gap-1.5 mt-2 text-sm text-slate-700">
+                                                    <Phone size={14} className="text-slate-400" />
+                                                    {c.telefono}
+                                                </div>
+                                                <div className="flex flex-wrap items-center gap-2 mt-2">
+                                                    <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 px-2 py-0.5 rounded text-xs font-bold">
+                                                        <Star size={12} className="fill-amber-400" /> {c.puntos || 0}
+                                                    </span>
+                                                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${c.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                                                        {c.status === 'active' ? 'Activo' : 'Suspendido'}
+                                                    </span>
                                                 </div>
                                             </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded w-fit">
-                                                <MapPin size={12} className="mr-1" />
-                                                {getPosName(c.posId)}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-600">
-                                            <div className="text-sm font-medium">{c.telefono}</div>
-                                            <div className="text-xs text-slate-400">{c.email || 'Sin email'}</div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center bg-amber-50 text-amber-700 px-3 py-1 rounded-full w-fit border border-amber-100">
-                                                <Star size={14} className="mr-1.5 fill-amber-400 text-amber-400" />
-                                                <span className="font-bold text-sm">{c.puntos || 0}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                                                c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                            }`}>
-                                                {c.status === 'active' ? 'Activo' : 'Suspendido'}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right flex justify-end space-x-2">
-                                            <button onClick={() => handleEditClick(c)} className="text-slate-400 hover:text-blue-600 p-2 hover:bg-blue-50 rounded-lg transition-colors" title="Editar Cliente">
-                                                <Edit2 size={18} />
-                                            </button>
-                                            {isAdmin && (
-                                                <button 
-                                                    onClick={() => handleToggleStatus(c)} 
-                                                    className={`p-2 rounded-lg transition-colors ${c.status === 'active' ? 'text-red-400 hover:text-red-600 hover:bg-red-50' : 'text-green-400 hover:text-green-600 hover:bg-green-50'}`}
-                                                    title={c.status === 'active' ? 'Suspender Cuenta' : 'Activar Cuenta'}
-                                                >
-                                                    {c.status === 'active' ? <Ban size={18} /> : <CheckCircle size={18} />}
+                                            <div className="flex flex-col gap-1 shrink-0">
+                                                <button onClick={() => handleEditClick(c)} className="p-2 rounded-lg text-slate-400 hover:bg-[#ffd427]/15 hover:text-[#c9a000]" title="Editar">
+                                                    <Edit2 size={18} />
                                                 </button>
-                                            )}
-                                        </td>
-                                    </tr>
+                                                {isAdmin && (
+                                                    <button onClick={() => handleToggleStatus(c)} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100" title={c.status === 'active' ? 'Suspender' : 'Reactivar'}>
+                                                        {c.status === 'active' ? <Ban size={18} /> : <CheckCircle size={18} />}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
                                 ))}
-                            </tbody>
-                        </table>
-                    </div>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
 

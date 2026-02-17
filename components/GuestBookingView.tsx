@@ -151,7 +151,8 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
             });
             setDone(true);
         } catch (e) {
-            setError('No se pudo agendar. Intenta de nuevo.');
+            const msg = e instanceof Error ? e.message : String(e);
+            setError(msg.includes('permiso') || msg.includes('conexión') ? msg : `No se pudo agendar. ${msg}`);
         } finally {
             setLoading(false);
         }

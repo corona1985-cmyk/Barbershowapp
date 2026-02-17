@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ViewState, UserRole, AccountTier } from '../types';
-import { LayoutDashboard, Users, Calendar, Package, DollarSign, FileText, LogOut, Scissors, Settings, ShoppingBag, MapPin, X, ChevronDown, ChevronRight, Briefcase, BarChart2, MessageCircle, Shield, Globe, ListChecks } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, Package, DollarSign, FileText, LogOut, Scissors, Settings, ShoppingBag, MapPin, X, ChevronDown, ChevronRight, Briefcase, BarChart2, MessageCircle, Shield, Globe, ListChecks, QrCode } from 'lucide-react';
 
 interface SidebarProps {
     currentView: ViewState;
@@ -43,6 +43,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                 { id: 'admin_pos', label: 'Sedes Globales', icon: <MapPin size={18} />, roles: ['superadmin'] },
                 { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
                 { id: 'client_discovery', label: 'Descubrir Barberías', icon: <Globe size={18} />, roles: ['cliente'] },
+                { id: 'qr_scanner', label: 'Escanear QR', icon: <QrCode size={18} />, roles: ['cliente'] },
             ]
         },
         {
