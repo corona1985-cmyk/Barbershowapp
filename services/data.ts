@@ -159,7 +159,8 @@ export const DataService = {
       await set(ref(db, ROOT + '/auditLogs'), {});
       await set(ref(db, ROOT + '/financialTransactions'), {});
       await set(ref(db, ROOT + '/globalSettings'), DEFAULT_GLOBAL_SETTINGS);
-      await set(ref(db, ROOT + '/settings'), { '1': { ...DEFAULT_SETTINGS, posId: 1 }, '2': { ...DEFAULT_SETTINGS, storeName: 'BarberShow Norte', posId: 2 } });
+      await set(ref(db, ROOT + '/settings/1'), { ...DEFAULT_SETTINGS, posId: 1 });
+      await set(ref(db, ROOT + '/settings/2'), { ...DEFAULT_SETTINGS, storeName: 'BarberShow Norte', posId: 2 });
       await set(ref(db, ROOT + '/userCart'), []);
     }
     // Asegurar que los usuarios por defecto existan siempre (por si la BD ya tenía datos sin users)
@@ -201,10 +202,7 @@ export const DataService = {
   addPointOfSale: async (pos: Omit<PointOfSale, 'id'>): Promise<PointOfSale> => {
     const newPos = { ...pos, id: generateUniqueId(), isActive: true };
     await update(ref(db, ROOT + '/pointsOfSale/' + newPos.id), newPos);
-    const allSettingsSnap = await get(ref(db, ROOT + '/settings'));
-    const allSettings: Record<string, AppSettings> = allSettingsSnap.val() || {};
-    allSettings[String(newPos.id)] = { ...DEFAULT_SETTINGS, posId: newPos.id, storeName: newPos.name };
-    await set(ref(db, ROOT + '/settings'), allSettings);
+    await set(ref(db, ROOT + '/settings/' + newPos.id), { ...DEFAULT_SETTINGS, posId: newPos.id, storeName: newPos.name });
     await DataService.logAuditAction('create_pos', 'master', `Created POS: ${newPos.name}`, newPos.id);
     return newPos;
   },
@@ -216,10 +214,7 @@ export const DataService = {
 
   deletePointOfSale: async (id: number): Promise<void> => {
     await remove(ref(db, ROOT + '/pointsOfSale/' + id));
-    const allSnap = await get(ref(db, ROOT + '/settings'));
-    const all: Record<string, AppSettings> = allSnap.val() || {};
-    delete all[String(id)];
-    await set(ref(db, ROOT + '/settings'), all);
+    await remove(ref(db, ROOT + '/settings/' + id));
     await DataService.logAuditAction('delete_pos', 'master', `Deleted POS ID: ${id}`);
   },
 
@@ -347,9 +342,14 @@ export const DataService = {
   },
 
   getSettings: async (): Promise<AppSettings> => {
-    const snap = await get(ref(db, ROOT + '/settings'));
-    const obj = snap.val() || {};
-    const posSettings = ACTIVE_POS_ID != null ? obj[String(ACTIVE_POS_ID)] : null;
+    if (ACTIVE_POS_ID == null) return DEFAULT_SETTINGS;
+    const snap = await get(ref(db, ROOT + '/settings/' + ACTIVE_POS_ID));
+    let posSettings = snap.val();
+    if (posSettings == null) {
+      const legacySnap = await get(ref(db, ROOT + '/settings'));
+      const obj = legacySnap.val() || {};
+      posSettings = obj[String(ACTIVE_POS_ID)];
+    }
     return posSettings || DEFAULT_SETTINGS;
   },
 
@@ -363,7 +363,7 @@ export const DataService = {
     } else {
       requireRole(['admin', 'superadmin']);
     }
-    await update(ref(db, ROOT + '/settings'), { [String(posId)]: { ...settings, posId } });
+    await set(ref(db, ROOT + '/settings/' + posId), { ...settings, posId });
     await DataService.logAuditAction('update_settings', role === 'barbero' ? 'barbero' : 'admin', 'Updated POS Settings', posId);
   },
 
@@ -689,9 +689,10 @@ export const DataService = {
   },
 
   checkAppointmentConflict: async (posId: number, barberId: number, date: string, time: string): Promise<boolean> => {
-    const snap = await get(ref(db, ROOT + '/appointments'));
+    const q = query(ref(db, ROOT + '/appointments'), orderByChild('posId'), equalTo(posId));
+    const snap = await get(q);
     const arr = snapshotToArray<Appointment>(snap.val());
-    return arr.some((a) => a.posId === posId && a.barberoId === barberId && a.fecha === date && a.hora === time && a.estado !== 'cancelada');
+    return arr.some((a) => a.barberoId === barberId && a.fecha === date && a.hora === time && a.estado !== 'cancelada');
   },
 
   /** Añade una cita sin reemplazar las demás (para reservas de invitados sin cuenta). */
@@ -704,6 +705,23 @@ export const DataService = {
     return apt;
   },
 
+  /** Actualiza una cita (escritura por ítem; evita leer/escribir todo el nodo). */
+  updateAppointment: async (apt: Appointment): Promise<void> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
+    await set(ref(db, ROOT + '/appointments/' + apt.id), apt);
+    cacheInvalidate('appointments');
+    cacheInvalidate('clientsActivity');
+  },
+
+  /** Elimina una cita (escritura por ítem). */
+  deleteAppointment: async (id: number): Promise<void> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
+    await remove(ref(db, ROOT + '/appointments/' + id));
+    cacheInvalidate('appointments');
+    cacheInvalidate('clientsActivity');
+  },
+
+  /** @deprecated Usar addAppointment / updateAppointment / deleteAppointment para no sobrecargar con muchas sedes. */
   setAppointments: async (data: Appointment[]): Promise<void> => {
     requireRole(['admin', 'superadmin', 'barbero']);
     const snap = await get(ref(db, ROOT + '/appointments'));
@@ -751,6 +769,17 @@ export const DataService = {
     return snapshotToArray<Appointment>(snap.val()).map((a) => ({ ...a, id: Number(a.id) }));
   },
 
+  /** Añade una venta (escritura por ítem; evita leer/escribir todo el nodo). */
+  addSale: async (sale: Sale): Promise<void> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
+    if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa. No se puede registrar la venta.');
+    const s = { ...sale, posId: sale.posId || ACTIVE_POS_ID, barberoId: sale.barberoId ?? DataService.getCurrentBarberId() ?? undefined };
+    await set(ref(db, ROOT + '/sales/' + s.id), s);
+    cacheInvalidate('sales');
+    cacheInvalidate('clientsActivity');
+  },
+
+  /** @deprecated Usar addSale para nuevas ventas; evita contención con muchas sedes. */
   setSales: async (data: Sale[]): Promise<void> => {
     requireRole(['admin', 'superadmin', 'barbero']);
     if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa. No se puede registrar la venta.');
@@ -772,9 +801,25 @@ export const DataService = {
 
   getFinances: async (): Promise<FinanceRecord[]> => {
     if (ACTIVE_POS_ID == null) return [];
-    const snap = await get(ref(db, ROOT + '/finances'));
-    const arr = snapshotToArray<FinanceRecord>(snap.val());
-    return arr.filter((f) => f.posId === ACTIVE_POS_ID);
+    const q = query(ref(db, ROOT + '/finances'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
+    const snap = await get(q);
+    return snapshotToArray<FinanceRecord>(snap.val()).map((f) => ({ ...f, id: Number(f.id) }));
+  },
+
+  /** Añade un registro de finanzas (escritura por ítem). */
+  addFinanceRecord: async (record: Omit<FinanceRecord, 'id'>): Promise<FinanceRecord> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
+    if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa.');
+    const id = generateUniqueId();
+    const full: FinanceRecord = { ...record, id, posId: record.posId ?? ACTIVE_POS_ID };
+    await set(ref(db, ROOT + '/finances/' + id), full);
+    return full;
+  },
+
+  /** Actualiza un registro de finanzas (escritura por ítem). */
+  updateFinanceRecord: async (record: FinanceRecord): Promise<void> => {
+    requireRole(['admin', 'superadmin', 'barbero']);
+    await set(ref(db, ROOT + '/finances/' + record.id), record);
   },
 
   setFinances: async (data: FinanceRecord[]): Promise<void> => {
@@ -794,10 +839,10 @@ export const DataService = {
 
   getNotificationLogs: async (): Promise<NotificationLog[]> => {
     if (ACTIVE_POS_ID == null) return [];
-    const snap = await get(ref(db, ROOT + '/notificationLogs'));
-    const obj = snap.val() || {};
-    const arr = Object.values(obj) as NotificationLog[];
-    return arr.filter((l) => l.posId === ACTIVE_POS_ID);
+    const q = query(ref(db, ROOT + '/notificationLogs'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
+    const snap = await get(q);
+    const arr = snapshotToArray<NotificationLog>(snap.val());
+    return arr.map((l) => ({ ...l, id: Number(l.id) }));
   },
 
   logSecurityEvent: (event: string, details: unknown) => {

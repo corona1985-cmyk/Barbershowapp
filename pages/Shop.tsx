@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DataService } from '../services/data';
+import { DataService, generateUniqueId } from '../services/data';
 import { Product, CartItem, Sale } from '../types';
 import { Search, ShoppingBag, Plus, Minus, Trash2, CheckCircle, Package } from 'lucide-react';
 
@@ -38,10 +38,9 @@ const Shop: React.FC = () => {
             return;
         }
         try {
-            const [settings, clients, sales] = await Promise.all([
+            const [settings, clients] = await Promise.all([
                 DataService.getSettings(),
                 DataService.getClients(),
-                DataService.getSales(),
             ]);
             const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
             const taxRate = settings.taxRate;
@@ -51,8 +50,8 @@ const Shop: React.FC = () => {
             const client = currentUser
                 ? (currentUser.clientId != null ? clients.find(c => c.id === currentUser.clientId) : clients.find(c => c.nombre === currentUser.name))
                 : null;
-            const newId = sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1;
-            const saleNumber = `ORD${String(newId).padStart(4, '0')}`;
+            const newId = generateUniqueId();
+            const saleNumber = `ORD${String(newId).padStart(6, '0')}`;
             const newSale: Sale = {
                 id: newId,
                 posId: activePosId,
@@ -69,17 +68,19 @@ const Shop: React.FC = () => {
                 estado: 'completada'
             };
             const updatedProducts = [...products];
-            cart.forEach(item => {
-                const prodIndex = updatedProducts.findIndex(p => p.id === item.id);
-                if (prodIndex >= 0) updatedProducts[prodIndex].stock -= item.quantity;
-            });
+            for (const item of cart) {
+                const prod = updatedProducts.find(p => p.id === item.id);
+                if (prod) {
+                    prod.stock -= item.quantity;
+                    await DataService.updateProduct(prod);
+                }
+            }
             if (client) {
                 const pointsEarned = DataService.calculatePoints(total, 'product');
                 client.puntos = (client.puntos || 0) + pointsEarned;
                 await DataService.updateClient(client);
             }
-            await DataService.setProducts(updatedProducts);
-            await DataService.setSales([...sales, newSale]);
+            await DataService.addSale(newSale);
             DataService.clearCart();
             setProducts(updatedProducts);
             setCart([]);

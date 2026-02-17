@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DataService } from '../services/data';
+import { DataService, generateUniqueId } from '../services/data';
 import { Product, Service, Client, SaleItem, Sale, AppointmentForSale } from '../types';
 import { Search, Plus, Minus, Trash2, User, CreditCard, Banknote, Smartphone, CheckCircle, Package, Scissors, ShoppingCart, FileText, Loader2, Printer, MessageCircle } from 'lucide-react';
 import Invoice from '../components/Invoice';
@@ -140,10 +140,8 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
                 }
             }
             const { subtotal, tax, total } = calculateTotal();
-            const sales = await DataService.getSales();
-            const maxId = sales.length > 0 ? Math.max(0, ...sales.map(s => Number(s.id))) : 0;
-            const newId = typeof maxId === 'number' && !Number.isNaN(maxId) ? maxId + 1 : 1;
-            const saleNumber = `V${String(newId).padStart(4, '0')}`;
+            const newId = generateUniqueId();
+            const saleNumber = `V${String(newId).padStart(6, '0')}`;
             const clienteId = salesFromAppointment ? salesFromAppointment.clienteId : selectedClient;
             const newSale: Sale = {
                 id: newId,
@@ -161,12 +159,15 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
                 notas: '',
                 estado: 'completada'
             };
-            cart.forEach(item => {
+            for (const item of cart) {
                 if (item.type === 'producto') {
-                    const prodIndex = updatedProducts.findIndex(p => p.id === item.id);
-                    if (prodIndex >= 0) updatedProducts[prodIndex].stock -= item.quantity;
+                    const prod = updatedProducts.find(p => p.id === item.id);
+                    if (prod) {
+                        prod.stock -= item.quantity;
+                        await DataService.updateProduct(prod);
+                    }
                 }
-            });
+            }
             if (clienteId) {
                 const client = clients.find(c => c.id === clienteId);
                 if (client) {
@@ -179,8 +180,7 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
                     await DataService.updateClient(client);
                 }
             }
-            await DataService.setProducts(updatedProducts);
-            await DataService.setSales([...sales, newSale]);
+            await DataService.addSale(newSale);
             setProducts(updatedProducts);
             setLastSaleId(saleNumber);
             setLastCompletedSale(newSale);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DataService, generateUniqueId } from '../services/data';
+import { DataService } from '../services/data';
 import { Client, Product, PointOfSale, FinanceRecord, Sale } from '../types';
 import { Search, Plus, X, Edit2, User, Star, Upload, Image as ImageIcon, Ban, CheckCircle, Trophy, Crown, MapPin, Loader2, Phone, Users, Package } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -785,27 +785,23 @@ export const Finance: React.FC = () => {
         }
         const existing = financeRecords.find((r) => r.fecha === gastoFecha);
         const newGasto = { descripcion: gastoDescripcion.trim(), monto };
-        let updated: FinanceRecord[];
         if (existing) {
             const gastos = [...(existing.gastos || []), newGasto];
             const egresos = gastos.reduce((s, g) => s + (typeof g === 'object' && 'monto' in g ? Number(g.monto) : 0), 0);
-            updated = financeRecords.map((r) =>
-                r.fecha === gastoFecha ? { ...r, gastos, egresos } : r
-            );
+            const updatedRecord = { ...existing, gastos, egresos };
+            await DataService.updateFinanceRecord(updatedRecord);
+            setFinanceRecords((prev) => prev.map((r) => (r.fecha === gastoFecha ? updatedRecord : r)));
         } else {
-            const newRecord: FinanceRecord = {
-                id: generateUniqueId(),
+            const saved = await DataService.addFinanceRecord({
                 posId,
                 fecha: gastoFecha,
                 ingresos: 0,
                 egresos: monto,
                 ventas: [],
                 gastos: [newGasto],
-            };
-            updated = [...financeRecords, newRecord];
+            });
+            setFinanceRecords((prev) => [...prev, saved]);
         }
-        await DataService.setFinances(updated);
-        setFinanceRecords(updated);
         setShowGastoModal(false);
         setGastoDescripcion('');
         setGastoMonto('');

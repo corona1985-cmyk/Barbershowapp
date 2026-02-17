@@ -227,10 +227,8 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                 const saved = await DataService.addAppointment(aptData);
                 setAppointments(prev => [...prev, saved]);
             } else {
-                const newAppointment: Appointment = { ...aptData, id: generateUniqueId() };
-                const updated = [...appointments, newAppointment];
-                setAppointments(updated);
-                await DataService.setAppointments(updated);
+                const saved = await DataService.addAppointment(aptData);
+                setAppointments(prev => [...prev, saved]);
             }
             setShowModal(false);
             setNewApt(prev => ({ ...prev, hora: undefined, servicios: [], notas: '', clienteId: undefined }));
@@ -249,9 +247,11 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     };
 
     const updateStatus = async (id: number, status: Appointment['estado']) => {
-        const updated = appointments.map(a => a.id === id ? { ...a, estado: status } : a);
-        setAppointments(updated);
-        await DataService.setAppointments(updated);
+        const apt = appointments.find(a => a.id === id);
+        if (!apt) return;
+        const updated = { ...apt, estado: status };
+        setAppointments(prev => prev.map(a => a.id === id ? updated : a));
+        await DataService.updateAppointment(updated);
     };
 
     const handleCompleteAndGoToBilling = async (apt: Appointment) => {
@@ -282,9 +282,8 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
 
     const deleteAppointment = async (id: number) => {
         if (confirm('¿Eliminar cita?')) {
-            const updated = appointments.filter(a => a.id !== id);
-            setAppointments(updated);
-            await DataService.setAppointments(updated);
+            setAppointments(prev => prev.filter(a => a.id !== id));
+            await DataService.deleteAppointment(id);
         }
     };
 
