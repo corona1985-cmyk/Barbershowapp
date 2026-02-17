@@ -334,6 +334,18 @@ export const DataService = {
     await DataService.logAuditAction('delete_user', 'admin', `Deleted user: ${username}`);
   },
 
+  /** Barbería preferida del cliente (por QR o elección). Al iniciar sesión se abre esa barbería. Solo clientes. */
+  getClientPreferredPos: async (username: string): Promise<number | null> => {
+    const snap = await get(ref(db, ROOT + '/clientPreferences/' + encodeURIComponent(username)));
+    const val = snap.val();
+    if (val == null || typeof val.preferredPosId !== 'number') return null;
+    return val.preferredPosId;
+  },
+
+  setClientPreferredPos: async (username: string, posId: number | null): Promise<void> => {
+    await set(ref(db, ROOT + '/clientPreferences/' + encodeURIComponent(username)), { preferredPosId: posId });
+  },
+
   getSettings: async (): Promise<AppSettings> => {
     const snap = await get(ref(db, ROOT + '/settings'));
     const obj = snap.val() || {};

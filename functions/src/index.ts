@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { config } from "firebase-functions/v1";
 
 /** Payload de usuario Master devuelto al frontend (sin contraseña). */
 const MASTER_USER = {
@@ -16,7 +17,6 @@ const MASTER_USER = {
 export const authenticateMasterWithPassword = onCall(
   { region: "us-central1" },
   async (request): Promise<{ user: typeof MASTER_USER }> => {
-    const { config } = await import("firebase-functions");
     const masterPassword =
       process.env.MASTER_PASSWORD || config().master?.password;
     if (!masterPassword) {
@@ -45,7 +45,6 @@ export const authenticateMasterWithPassword = onCall(
 export const sendWhatsAppMessage = onCall(
   { region: "us-central1" },
   async (request): Promise<{ success: boolean; sid?: string }> => {
-    const { config } = await import("firebase-functions");
     const sid = process.env.TWILIO_ACCOUNT_SID || config().twilio?.sid;
     const token = process.env.TWILIO_AUTH_TOKEN || config().twilio?.token;
     const from = process.env.TWILIO_WHATSAPP_FROM || config().twilio?.whatsapp_from;

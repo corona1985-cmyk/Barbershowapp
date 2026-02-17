@@ -69,6 +69,8 @@ const App: React.FC = () => {
     const [accountTier, setAccountTier] = useState<AccountTier>('barberia');
     /** En plan Multi-Sede: sedes del mismo owner para mostrar selector (solo si hay más de una) */
     const [posListForOwner, setPosListForOwner] = useState<PointOfSale[]>([]);
+    /** Solo cliente: barbería preferida (QR/favoritos). Al iniciar sesión se abre esa barbería. */
+    const [preferredPosId, setPreferredPosId] = useState<number | null>(null);
 
     const handleSwitchPos = async (posId: number) => {
         DataService.setActivePosId(posId);
@@ -135,15 +137,34 @@ const App: React.FC = () => {
                     setCurrentView('admin_pos');
                 } else {
                     if (role === 'cliente') {
+                        const preferred = await DataService.getClientPreferredPos(userData.username);
+                        setPreferredPosId(preferred);
                         const params = new URLSearchParams(window.location.search);
                         const refPosId = params.get('ref_pos');
                         if (refPosId) {
                             const posList = await DataService.getPointsOfSale();
                             const found = posList.find(p => p.id === Number(refPosId));
                             if (found) {
+                                await DataService.setClientPreferredPos(userData.username, found.id);
+                                setPreferredPosId(found.id);
                                 await handleSwitchPos(found.id);
                                 setCurrentView('appointments');
                             } else {
+                                DataService.setActivePosId(null);
+                                setCurrentPosId(null);
+                                setCurrentPosName('');
+                                setAccountTier('barberia');
+                                setCurrentView('client_discovery');
+                            }
+                        } else if (preferred != null) {
+                            const posList = await DataService.getPointsOfSale();
+                            const found = posList.find(p => p.id === preferred);
+                            if (found) {
+                                await handleSwitchPos(preferred);
+                                setCurrentView('appointments');
+                            } else {
+                                await DataService.setClientPreferredPos(userData.username, null);
+                                setPreferredPosId(null);
                                 DataService.setActivePosId(null);
                                 setCurrentPosId(null);
                                 setCurrentPosName('');
@@ -225,10 +246,46 @@ const App: React.FC = () => {
                 setCurrentView('admin_pos');
             } else {
                 if (role === 'cliente') {
-                    DataService.setActivePosId(null);
-                    setCurrentPosId(null);
-                    setCurrentPosName('');
-                    setCurrentView('client_discovery');
+                    const preferred = await DataService.getClientPreferredPos(user.username);
+                    setPreferredPosId(preferred);
+                    const params = new URLSearchParams(window.location.search);
+                    const refPosId = params.get('ref_pos');
+                    const posList = await DataService.getPointsOfSale();
+                    if (refPosId) {
+                        const found = posList.find(p => p.id === Number(refPosId));
+                        if (found) {
+                            await DataService.setClientPreferredPos(user.username, found.id);
+                            setPreferredPosId(found.id);
+                            await handleSwitchPos(found.id);
+                            setCurrentView('appointments');
+                        } else {
+                            DataService.setActivePosId(null);
+                            setCurrentPosId(null);
+                            setCurrentPosName('');
+                            setAccountTier('barberia');
+                            setCurrentView('client_discovery');
+                        }
+                    } else if (preferred != null) {
+                        const found = posList.find(p => p.id === preferred);
+                        if (found) {
+                            await handleSwitchPos(preferred);
+                            setCurrentView('appointments');
+                        } else {
+                            await DataService.setClientPreferredPos(user.username, null);
+                            setPreferredPosId(null);
+                            DataService.setActivePosId(null);
+                            setCurrentPosId(null);
+                            setCurrentPosName('');
+                            setAccountTier('barberia');
+                            setCurrentView('client_discovery');
+                        }
+                    } else {
+                        DataService.setActivePosId(null);
+                        setCurrentPosId(null);
+                        setCurrentPosName('');
+                        setAccountTier('barberia');
+                        setCurrentView('client_discovery');
+                    }
                 } else if (user.posId != null) {
                     await handleSwitchPos(user.posId);
                     setCurrentView('dashboard');
@@ -268,6 +325,7 @@ const App: React.FC = () => {
         });
         const newUser: SystemUser = { username: regUsername, password: regPassword, name: regName, role: 'cliente', posId: targetPosId, clientId: client.id };
         await DataService.saveUser(newUser);
+        await DataService.setClientPreferredPos(regUsername, targetPosId);
         DataService.setActivePosId(prevPosId);
         setRegSuccess(true);
         setTimeout(() => {
@@ -295,8 +353,13 @@ const App: React.FC = () => {
         setAcceptedCookies(true);
     };
 
-    const handleClientPosSwitch = (id: number) => {
-        handleSwitchPos(id);
+    const handleClientPosSwitch = async (id: number) => {
+        const currentUser = DataService.getCurrentUser();
+        if (currentUser?.username && (currentUser.role === 'cliente' || (currentUser as any).role === 'cliente')) {
+            await DataService.setClientPreferredPos(currentUser.username, id);
+            setPreferredPosId(id);
+        }
+        await handleSwitchPos(id);
         setCurrentView('appointments');
         window.history.replaceState({}, '', `${window.location.pathname}?ref_pos=${id}`);
     };
@@ -332,7 +395,7 @@ const App: React.FC = () => {
             case 'calendar': return <CalendarView key={k} />;
             case 'whatsapp_console': return <WhatsAppConsole key={k} />;
             case 'user_admin': return <UserAdmin key={k} />;
-            case 'client_discovery': return <ClientDiscovery key={k} onSwitchPos={handleClientPosSwitch} />;
+            case 'client_discovery': return <ClientDiscovery key={k} onSwitchPos={handleClientPosSwitch} preferredPosId={preferredPosId} onRemoveFavorite={async () => { const u = DataService.getCurrentUser(); if (u?.username) { await DataService.setClientPreferredPos(u.username, null); setPreferredPosId(null); } }} />;
             case 'qr_scanner': return null;
             default: return <Dashboard key={k} onChangeView={setCurrentView} />;
         }
