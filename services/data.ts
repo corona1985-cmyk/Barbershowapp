@@ -316,10 +316,11 @@ export const DataService = {
     }
     const snap = await get(ref(db, ROOT + '/users/' + user.username));
     const isUpdate = snap.exists();
+    const existing = snap.exists() ? (snap.val() as SystemUser | null) : null;
     const toWrite: Record<string, unknown> = { ...user, status: user.status || 'active', loginAttempts: user.loginAttempts ?? 0 };
+    if (isUpdate && existing?.lastLogin) toWrite.lastLogin = existing.lastLogin;
     // Al editar, si no se envió contraseña no sobrescribir la existente
     if (isUpdate && (user.password === undefined || user.password === null || user.password === '')) {
-      const existing = snap.val() as SystemUser | null;
       if (existing?.password) toWrite.password = existing.password;
     } else if (toWrite.password && String(toWrite.password).trim() !== '' && !isStoredHash(String(toWrite.password))) {
       toWrite.password = await hashPassword(String(toWrite.password));
