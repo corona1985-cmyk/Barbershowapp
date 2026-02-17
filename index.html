@@ -23,6 +23,7 @@
         input, select, textarea {
             font-size: 16px !important;
         }
+        #qr-print-area { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; overflow: hidden; }
         @media print {
             .no-print, nav, aside, header { display: none !important; }
             .print-header { display: block !important; }
@@ -30,16 +31,21 @@
             main { margin-left: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
             .print-container { padding: 20px !important; }
             .page-break-inside-avoid { page-break-inside: avoid; }
-            /* Solo mostrar la factura al imprimir desde el modal de venta exitosa */
+            /* Imprimir factura: solo #invoice-print-area */
             body * { visibility: hidden; }
             #invoice-print-area, #invoice-print-area * { visibility: visible; }
             #invoice-print-area { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; max-width: none !important; padding: 16px !important; }
+            /* Imprimir QR: cuando body tiene .print-qr, solo #qr-print-area */
+            body.print-qr * { visibility: hidden; }
+            body.print-qr #qr-print-area, body.print-qr #qr-print-area * { visibility: visible; }
+            body.print-qr #qr-print-area { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; height: auto !important; padding: 24px !important; }
         }
     </style>
     <link rel="stylesheet" href="/index.css">
 </head>
 <body class="bg-gray-50 text-slate-800">
     <div id="root"></div>
+    <div id="qr-print-area" aria-hidden="true"></div>
 <script type="module" src="/index.tsx"></script>
 </body>
 </html>

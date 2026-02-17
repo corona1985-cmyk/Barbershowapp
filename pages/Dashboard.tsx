@@ -36,11 +36,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
         (async () => {
             setLoading(true);
             try {
+                const barberId = DataService.getCurrentBarberId();
+                const productsLoader = barberId != null ? DataService.getProducts(barberId) : DataService.getProducts();
                 const [clients, appointments, sales, products, posList] = await Promise.all([
                     DataService.getClients(),
                     DataService.getAppointments(),
                     DataService.getSales(),
-                    DataService.getProducts(),
+                    productsLoader,
                     DataService.getPointsOfSale(),
                 ]);
                 setPointsOfSale(posList);
@@ -50,7 +52,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
                     .sort((a, b) => a.hora.localeCompare(b.hora));
                 const now = new Date();
                 const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-                const barberId = DataService.getCurrentBarberId();
                 const listForUser = barberId != null ? todayAppointments.filter(a => a.barberoId === barberId) : todayAppointments;
                 const next = listForUser.find(a => a.hora >= currentTime) || listForUser[0] || null;
                 if (next) {

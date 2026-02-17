@@ -489,11 +489,16 @@ export const DataService = {
 
   calculatePoints: (amount: number, type: 'product' | 'service') => (type === 'service' ? 20 : Math.floor(amount)),
 
-  getProducts: async (): Promise<Product[]> => {
+  /** Si barberId se pasa (barbero), devuelve solo productos de ese barbero. Sin argumento: todos los de la sede (admin). */
+  getProducts: async (barberId?: number): Promise<Product[]> => {
     if (ACTIVE_POS_ID == null) return [];
     const q = query(ref(db, ROOT + '/products'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
     const snap = await get(q);
-    return snapshotToArray<Product>(snap.val()).map((p) => ({ ...p, id: Number(p.id) }));
+    let list = snapshotToArray<Product>(snap.val()).map((p) => ({ ...p, id: Number(p.id), barberId: p.barberId ?? null }));
+    if (barberId !== undefined) {
+      list = list.filter((p) => p.barberId === barberId);
+    }
+    return list;
   },
 
   setProducts: async (data: Product[]): Promise<void> => {
@@ -501,22 +506,28 @@ export const DataService = {
     if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa.');
     const snap = await get(ref(db, ROOT + '/products'));
     const all: Record<string, Product> = snap.val() || {};
-    const other = Object.fromEntries(Object.entries(all).filter(([, p]) => p.posId !== ACTIVE_POS_ID));
-    const merged = { ...other, ...toObjectById(data) };
+    const merged = { ...all, ...toObjectById(data) };
     await set(ref(db, ROOT + '/products'), merged);
   },
 
-  addProduct: async (product: Omit<Product, 'id' | 'posId'>): Promise<Product> => {
+  addProduct: async (product: Omit<Product, 'id' | 'posId' | 'barberId'>): Promise<Product> => {
     requireRole(['admin', 'superadmin', 'barbero']);
     if (ACTIVE_POS_ID == null) throw new Error('No Active POS');
-    const newProduct = { ...product, id: generateUniqueId(), posId: ACTIVE_POS_ID } as Product;
+    const role = DataService.getCurrentUserRole();
+    const barberId = role === 'barbero' ? DataService.getCurrentBarberId() ?? undefined : undefined;
+    const newProduct = { ...product, id: generateUniqueId(), posId: ACTIVE_POS_ID, barberId: barberId ?? null } as Product;
     await set(ref(db, ROOT + '/products/' + newProduct.id), newProduct);
-    await DataService.logAuditAction('create_product', 'admin', `Created product: ${product.producto}`, ACTIVE_POS_ID);
+    await DataService.logAuditAction('create_product', role === 'barbero' ? 'barbero' : 'admin', `Created product: ${product.producto}`, ACTIVE_POS_ID);
     return newProduct;
   },
 
   updateProduct: async (product: Product): Promise<void> => {
     requireRole(['admin', 'superadmin', 'barbero']);
+    const barberId = DataService.getCurrentBarberId();
+    const role = DataService.getCurrentUserRole();
+    if (role === 'barbero' && barberId != null && product.barberId !== barberId) {
+      throw new Error('Solo puedes editar tus propios productos.');
+    }
     await set(ref(db, ROOT + '/products/' + product.id), product);
   },
 

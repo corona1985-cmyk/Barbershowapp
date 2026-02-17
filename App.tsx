@@ -20,6 +20,7 @@ import { Scissors, Cookie, MapPin, Globe, LogOut, Menu, UserPlus, CheckCircle, A
 import BarberNotificationBell from './components/BarberNotificationBell';
 import WelcomePlanSelector from './components/WelcomePlanSelector';
 import GuestBookingView from './components/GuestBookingView';
+import QRScannerView from './components/QRScannerView';
 import { DataService } from './services/data';
 import { authenticateMasterWithPassword } from './services/firebase';
 
@@ -104,14 +105,18 @@ const App: React.FC = () => {
                     const params = new URLSearchParams(window.location.search);
                     const refPosId = params.get('ref_pos');
                     if (refPosId) {
-                        const posList = await DataService.getPointsOfSale();
-                        const found = posList.find(p => p.id === Number(refPosId));
-                        if (found) {
-                            setReferralPos(found);
-                            setIsRegistering(true);
-                            setShowLoginScreen(true); // QR/referido → ir directo a login/registro
+                        try {
+                            const posList = await DataService.getPointsOfSale();
+                            const found = posList.find(p => p.id === Number(refPosId));
+                            if (found) {
+                                setReferralPos(found);
+                                setGuestBookingPos({ id: found.id, name: found.name }); // QR → ir directo a agendar en esta barbería
+                            }
+                        } catch (e) {
+                            console.error('Error cargando barbería del QR:', e);
                         }
                     }
+                    setIsLoadingSession(false);
                     return;
                 }
                 const userData = JSON.parse(user);
@@ -130,11 +135,28 @@ const App: React.FC = () => {
                     setCurrentView('admin_pos');
                 } else {
                     if (role === 'cliente') {
-                        DataService.setActivePosId(null);
-                        setCurrentPosId(null);
-                        setCurrentPosName('');
-                        setAccountTier('barberia');
-                        setCurrentView('client_discovery');
+                        const params = new URLSearchParams(window.location.search);
+                        const refPosId = params.get('ref_pos');
+                        if (refPosId) {
+                            const posList = await DataService.getPointsOfSale();
+                            const found = posList.find(p => p.id === Number(refPosId));
+                            if (found) {
+                                await handleSwitchPos(found.id);
+                                setCurrentView('appointments');
+                            } else {
+                                DataService.setActivePosId(null);
+                                setCurrentPosId(null);
+                                setCurrentPosName('');
+                                setAccountTier('barberia');
+                                setCurrentView('client_discovery');
+                            }
+                        } else {
+                            DataService.setActivePosId(null);
+                            setCurrentPosId(null);
+                            setCurrentPosName('');
+                            setAccountTier('barberia');
+                            setCurrentView('client_discovery');
+                        }
                     } else {
                         const assignedPosId = userData.posId;
                         if (assignedPosId) await handleSwitchPos(assignedPosId);
@@ -276,15 +298,17 @@ const App: React.FC = () => {
     const handleClientPosSwitch = (id: number) => {
         handleSwitchPos(id);
         setCurrentView('appointments');
+        window.history.replaceState({}, '', `${window.location.pathname}?ref_pos=${id}`);
     };
 
-    /** Al volver a Descubrir Barberías, el cliente debe limpiar la barbería seleccionada para que tenga que entrar de nuevo para ver las opciones. */
+    /** Al volver a Descubrir Barberías, el cliente debe limpiar la barbería seleccionada y la URL. */
     const handleChangeView = (view: ViewState) => {
         if (userRole === 'cliente' && view === 'client_discovery') {
             DataService.setActivePosId(null);
             setCurrentPosId(null);
             setCurrentPosName('');
             DataService.clearCart();
+            window.history.replaceState({}, '', window.location.pathname);
         }
         setCurrentView(view);
     };
@@ -309,6 +333,7 @@ const App: React.FC = () => {
             case 'whatsapp_console': return <WhatsAppConsole key={k} />;
             case 'user_admin': return <UserAdmin key={k} />;
             case 'client_discovery': return <ClientDiscovery key={k} onSwitchPos={handleClientPosSwitch} />;
+            case 'qr_scanner': return null;
             default: return <Dashboard key={k} onChangeView={setCurrentView} />;
         }
     };
@@ -332,8 +357,8 @@ const App: React.FC = () => {
         );
     }
 
-    // 3. INVITADO: Agendar cita sin cuenta (formulario de reserva)
-    if (!isAuthenticated && showBarberiasGuest && guestBookingPos) {
+    // 3. INVITADO: Agendar cita sin cuenta (desde QR o tras elegir barbería)
+    if (!isAuthenticated && guestBookingPos) {
         return (
             <div className="min-h-screen bg-slate-100 p-4 md:p-8">
                 <GuestBookingView
@@ -537,7 +562,21 @@ const App: React.FC = () => {
         );
     }
 
-    // 4. MAIN APP RENDER (General Users)
+    // 4. CLIENTE: Lector QR (pantalla completa con cámara)
+    if (isAuthenticated && userRole === 'cliente' && currentView === 'qr_scanner') {
+        return (
+            <QRScannerView
+                onBack={() => setCurrentView('client_discovery')}
+                onScan={async (posId) => {
+                    await handleSwitchPos(posId);
+                    setCurrentView('appointments');
+                    window.history.replaceState({}, '', `${window.location.pathname}?ref_pos=${posId}`);
+                }}
+            />
+        );
+    }
+
+    // 5. MAIN APP RENDER (General Users)
     return (
         <div className="flex h-screen min-h-0 bg-slate-100 font-sans overflow-hidden">
             <Sidebar 
@@ -567,6 +606,7 @@ const App: React.FC = () => {
                              currentView === 'sales' ? 'Punto de Venta' : 
                              currentView === 'admin_pos' ? 'Gestión Global' :
                              currentView === 'client_discovery' ? 'Barberías' :
+                             currentView === 'qr_scanner' ? 'Escanear QR' :
                              currentView === 'sales_records' ? 'Registros de cortes' :
                              currentView.replace('_', ' ')}
                         </h1>

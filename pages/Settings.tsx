@@ -3,7 +3,7 @@ import { DataService } from '../services/data';
 import { AppSettings, SystemUser, Service, UserRole, Barber, AccountTier, PointOfSale } from '../types';
 import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as SettingsIcon, UserCheck, Power, QrCode, Download, Printer, Percent } from 'lucide-react';
 
-type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'barbers' | 'taxes';
+type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'barbers' | 'taxes' | 'qr';
 
 interface SettingsProps {
     accountTier?: AccountTier;
@@ -34,7 +34,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
             role === 'barbero' ? Promise.resolve([]) : DataService.getUsers(),
             DataService.getServices(),
             role === 'barbero' ? Promise.resolve([]) : DataService.getBarbers(),
-            role === 'barbero' ? Promise.resolve([]) : DataService.getPointsOfSale(),
+            DataService.getPointsOfSale(),
         ]);
         setSettings(settingsData);
         setUsers(usersData);
@@ -162,6 +162,34 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
     const getRegistrationUrl = () => `${baseUrl}?ref_pos=${activePosId}`;
     const getRegistrationUrlForPos = (posId: number) => `${baseUrl}?ref_pos=${posId}`;
 
+    const handlePrintQR = (title: string, qrImageUrl: string) => {
+        const el = document.getElementById('qr-print-area');
+        if (!el) return;
+        const img = new Image();
+        img.onload = () => {
+            el.innerHTML = `
+                <div style="text-align:center; padding:24px; font-family:Inter,sans-serif;">
+                    <h1 style="font-size:1.5rem; font-weight:700; color:#1e293b; margin-bottom:8px;">${title.replace(/</g, '&lt;')}</h1>
+                    <p style="font-size:0.875rem; color:#64748b; margin-bottom:16px;">Escanea para registrarte o agendar cita</p>
+                    <img src="${qrImageUrl}" alt="QR BarberShow" width="280" height="280" style="display:block; margin:0 auto;" />
+                </div>`;
+            document.body.classList.add('print-qr');
+            window.print();
+        };
+        img.onerror = () => {
+            el.innerHTML = `<div style="padding:24px; text-align:center;"><p>QR</p><img src="${qrImageUrl}" alt="QR" width="280" height="280" /></div>`;
+            document.body.classList.add('print-qr');
+            window.print();
+        };
+        img.src = qrImageUrl;
+        const cleanup = () => {
+            document.body.classList.remove('print-qr');
+            el.innerHTML = '';
+            window.removeEventListener('afterprint', cleanup);
+        };
+        window.addEventListener('afterprint', cleanup);
+    };
+
     const isBarber = currentUserRole === 'barbero';
     const canAccessSettings = ['admin', 'superadmin', 'barbero'].includes(currentUserRole);
     if (!canAccessSettings) {
@@ -172,9 +200,9 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
         );
     }
 
-    // Barbero entra directo a pestaña Servicios (Mis servicios); no sobrescribir si eligió Impuestos
+    // Barbero entra directo a pestaña Servicios (Mis servicios); no sobrescribir si eligió Impuestos o QR
     useEffect(() => {
-        if (isBarber && activeTab !== 'services' && activeTab !== 'taxes') setActiveTab('services');
+        if (isBarber && activeTab !== 'services' && activeTab !== 'taxes' && activeTab !== 'qr') setActiveTab('services');
     }, [isBarber]);
 
     return (
@@ -216,12 +244,20 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                     <Scissors size={16} className="mr-2" /> {isBarber ? 'Mis Servicios' : 'Servicios'}
                 </button>
                 {isBarber && (
-                    <button 
-                        onClick={() => setActiveTab('taxes')}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'taxes' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
-                    >
-                        <Percent size={16} className="mr-2" /> Impuestos
-                    </button>
+                    <>
+                        <button 
+                            onClick={() => setActiveTab('qr')}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'qr' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                        >
+                            <QrCode size={16} className="mr-2" /> Código QR
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('taxes')}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'taxes' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                        >
+                            <Percent size={16} className="mr-2" /> Impuestos
+                        </button>
+                    </>
                 )}
                 {!isBarber && (
                     <button 
@@ -294,7 +330,8 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                     <Download size={16} className="mr-2" /> Descargar PNG
                                 </a>
                                 <button 
-                                    onClick={() => window.print()} 
+                                    type="button"
+                                    onClick={() => handlePrintQR(settings.storeName || 'BarberShow - Registro', `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(getRegistrationUrl())}`)}
                                     className="flex items-center px-4 py-2 bg-[#ffd427] text-slate-900 rounded-lg hover:bg-[#e6be23] font-bold text-sm"
                                 >
                                     <Printer size={16} className="mr-2" /> Imprimir Bajante
@@ -331,6 +368,13 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                                     >
                                                         <Download size={14} className="mr-1.5" /> Descargar
                                                     </a>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handlePrintQR(pos.name || `Sede ${pos.id}`, qrImageUrl.replace('200x200', '400x400'))}
+                                                        className="flex items-center px-3 py-1.5 bg-[#ffd427] text-slate-900 rounded-lg hover:bg-[#e6be23] text-sm font-bold"
+                                                    >
+                                                        <Printer size={14} className="mr-1.5" /> Imprimir
+                                                    </button>
                                                 </div>
                                             </div>
                                         );
@@ -372,6 +416,50 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                         <button onClick={handleSaveSettings} className="bg-[#ffd427] text-slate-900 px-4 py-2 rounded-lg font-bold flex items-center hover:bg-[#e6be23]">
                             <Save size={18} className="mr-2" /> Guardar
                         </button>
+                    </div>
+                )}
+
+                {/* QR DE LA BARBERÍA (barbero): mismo QR que General pero en su propia pestaña */}
+                {activeTab === 'qr' && isBarber && (
+                    <div className="max-w-lg">
+                        <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4 flex items-center">
+                            <QrCode size={20} className="mr-2" /> Código QR de la barbería
+                        </h3>
+                        {activePosId != null ? (
+                            <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center text-center">
+                                <p className="text-sm text-slate-600 mb-3">
+                                    {pointsOfSale.find(p => p.id === activePosId)?.name || settings.storeName || 'Sede actual'}
+                                </p>
+                                <div className="bg-white p-4 rounded-xl shadow-sm mb-4">
+                                    <img
+                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getRegistrationUrl())}`}
+                                        alt="QR de Registro"
+                                        className="w-48 h-48 rounded-lg object-contain"
+                                    />
+                                </div>
+                                <p className="text-slate-500 text-sm mb-4">Los clientes pueden escanear este código para registrarse o agendar en esta barbería.</p>
+                                <div className="flex flex-wrap gap-2 justify-center">
+                                    <a
+                                        href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(getRegistrationUrl())}`}
+                                        download="BarberShow_QR_barberia.png"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="flex items-center px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 font-medium text-sm"
+                                    >
+                                        <Download size={16} className="mr-2" /> Descargar PNG
+                                    </a>
+                                    <button
+                                        type="button"
+                                        onClick={() => handlePrintQR(pointsOfSale.find(p => p.id === activePosId)?.name || settings.storeName || 'Barbería', `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(getRegistrationUrl())}`)}
+                                        className="flex items-center px-4 py-2 bg-[#ffd427] text-slate-900 rounded-lg hover:bg-[#e6be23] font-bold text-sm"
+                                    >
+                                        <Printer size={16} className="mr-2" /> Imprimir
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-slate-500 py-6">No hay sede seleccionada. Selecciona una barbería/sede para ver y descargar su código QR.</p>
+                        )}
                     </div>
                 )}
 

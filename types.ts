@@ -92,6 +92,8 @@ export interface Client {
 export interface Product {
     id: number;
     posId: number;
+    /** Si es null/undefined = producto de la sede. Si es número = producto propio de ese barbero. */
+    barberId?: number | null;
     producto: string;
     categoria: string;
     stock: number;
@@ -205,4 +207,4 @@ export interface NotificationLog {
     message: string;
 }
 
-export type ViewState = 'dashboard' | 'clients' | 'appointments' | 'inventory' | 'sales' | 'shop' | 'finance' | 'reports' | 'sales_records' | 'settings' | 'admin_pos' | 'calendar' | 'whatsapp_console' | 'user_admin' | 'client_discovery' | 'master_dashboard';
+export type ViewState = 'dashboard' | 'clients' | 'appointments' | 'inventory' | 'sales' | 'shop' | 'finance' | 'reports' | 'sales_records' | 'settings' | 'admin_pos' | 'calendar' | 'whatsapp_console' | 'user_admin' | 'client_discovery' | 'qr_scanner' | 'master_dashboard';
