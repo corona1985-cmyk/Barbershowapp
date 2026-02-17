@@ -203,10 +203,6 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             alert(`No se puede agendar: la cita duraría ${duration} minutos y se solaparía con otra cita de ese barbero. Elige otra hora o menos servicios.`);
             return;
         }
-<<<<<<< HEAD
-        const newAppointmentData: Omit<Appointment, 'id'> = {
-            posId: DataService.getActivePosId() || 0,
-=======
         const posId = DataService.getActivePosId();
         if (posId == null) {
             setSaving(false);
@@ -215,7 +211,6 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         }
         const aptData = {
             posId,
->>>>>>> 6859cfe8f8266177062d9b3f87532fa53950249e
             clienteId: finalClientId,
             barberoId: barberoId,
             fecha: newApt.fecha!,
@@ -228,20 +223,8 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             fechaCreacion: new Date().toISOString()
         };
         try {
-<<<<<<< HEAD
-            if (userRole === 'cliente') {
-                const saved = await DataService.addAppointment(newAppointmentData);
-                setAppointments(prev => [...prev, saved]);
-            } else {
-                const newAppointment: Appointment = { ...newAppointmentData, id: generateUniqueId() };
-                const updated = [...appointments, newAppointment];
-                setAppointments(updated);
-                await DataService.setAppointments(updated);
-            }
-=======
             const saved = await DataService.addAppointment(aptData);
             setAppointments(prev => [...prev, saved]);
->>>>>>> 6859cfe8f8266177062d9b3f87532fa53950249e
             setShowModal(false);
             setNewApt(prev => ({ ...prev, hora: undefined, servicios: [], notas: '', clienteId: undefined }));
             setIsNewClient(false);
@@ -251,13 +234,8 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             alert('Cita agendada con éxito.');
         } catch (err) {
             console.error('Error al agendar cita:', err);
-<<<<<<< HEAD
-            const msg = err instanceof Error ? err.message : '';
-            alert(msg.includes('permiso') ? 'No tienes permiso para realizar esta acción.' : 'No se pudo guardar la cita. Revisa tu conexión e intenta de nuevo.');
-=======
             const msg = err instanceof Error ? err.message : String(err);
             alert(msg.includes('permiso') || msg.includes('conexión') ? msg : `No se pudo guardar la cita. ${msg}`);
->>>>>>> 6859cfe8f8266177062d9b3f87532fa53950249e
         } finally {
             setSaving(false);
         }
