@@ -472,7 +472,62 @@ export const Inventory: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="overflow-x-auto table-wrapper">
+                {/* Vista tarjetas — solo en móvil */}
+                <div className="md:hidden p-4 space-y-4">
+                    {products.length === 0 ? (
+                        <p className="text-slate-500 text-center py-10 text-sm">No hay productos. Pulsa &quot;Nuevo Producto&quot; para agregar.</p>
+                    ) : (
+                        products.map(p => (
+                            <div
+                                key={p.id}
+                                className="bg-white rounded-2xl border border-slate-200/80 shadow-md shadow-slate-200/50 overflow-hidden transition-shadow hover:shadow-lg hover:shadow-slate-200/60"
+                            >
+                                {/* Barra de acento superior */}
+                                <div className="h-1 bg-gradient-to-r from-[#ffd427] to-amber-400" />
+                                <div className="p-4">
+                                    <div className="flex justify-between items-start gap-3 mb-4">
+                                        <div className="min-w-0 flex-1">
+                                            <span className="inline-block text-xs font-medium text-slate-500 uppercase tracking-wide mb-0.5">{p.categoria}</span>
+                                            <h3 className="font-bold text-slate-900 text-lg leading-tight truncate">{p.producto}</h3>
+                                        </div>
+                                        <button
+                                            onClick={() => handleEditClick(p)}
+                                            className="shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-[#ffd427] hover:text-slate-900 transition-all duration-200"
+                                            title="Editar Producto"
+                                        >
+                                            <Edit2 size={16} />
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                                        <div className="flex flex-col">
+                                            <span className="text-slate-400 text-xs font-medium">Stock</span>
+                                            <span className={`font-bold text-base tabular-nums ${p.stock < 5 ? 'text-red-500' : 'text-slate-800'}`}>{p.stock} und</span>
+                                        </div>
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-slate-400 text-xs font-medium">Estado</span>
+                                            <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${p.stock > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
+                                                {p.stock > 0 ? 'Activo' : 'Sin Stock'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-baseline">
+                                        <div>
+                                            <span className="text-slate-400 text-xs block">Compra</span>
+                                            <span className="text-slate-600 font-medium">${p.precioCompra.toFixed(2)}</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="text-slate-400 text-xs block">Venta</span>
+                                            <span className="text-slate-900 font-bold text-lg">${p.precioVenta.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* Vista tabla — solo en escritorio */}
+                <div className="hidden md:block overflow-x-auto table-wrapper">
                 <table className="w-full min-w-[640px]">
                     <thead className="bg-slate-50 text-slate-600 text-sm font-semibold uppercase tracking-wider">
                         <tr>

@@ -252,7 +252,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 </span>
                             </label>
                         </div>
-                        <div className="flex flex-wrap items-center justify-end gap-3">
+                        <div className="flex flex-wrap items-center justify-center gap-3">
                             <button type="button" onClick={goBack} className="px-4 py-2.5 text-slate-600 hover:text-slate-800 font-medium text-sm">
                                 Cancelar
                             </button>
