@@ -1,5 +1,5 @@
 
-export type UserRole = 'superadmin' | 'admin' | 'barbero' | 'empleado' | 'cliente' | 'platform_owner' | 'support' | 'financial' | 'commercial';
+export type UserRole = 'superadmin' | 'admin' | 'dueno' | 'barbero' | 'empleado' | 'cliente' | 'platform_owner' | 'support' | 'financial' | 'commercial';
 
 /** Plan de la sede: basic = funciones estándar, pro = incluye notificaciones de citas para barbero */
 export type PosPlan = 'basic' | 'pro';

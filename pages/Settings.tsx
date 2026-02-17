@@ -69,10 +69,31 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
     };
 
     const handleSaveUser = async () => {
-        if (!currentUser.username || !currentUser.name || !currentUser.role) return;
-        await DataService.saveUser(currentUser as SystemUser);
-        await loadData();
-        setShowUserModal(false);
+        if (!currentUser.username?.trim() || !currentUser.name?.trim() || !currentUser.role) {
+            alert('Completa nombre de usuario, nombre completo y rol.');
+            return;
+        }
+        try {
+            const toSave: SystemUser = {
+                username: currentUser.username.trim(),
+                name: currentUser.name.trim(),
+                role: currentUser.role,
+                posId: currentUser.posId ?? null,
+                barberId: currentUser.barberId ?? null,
+                clientId: currentUser.clientId ?? null,
+                status: currentUser.status || 'active',
+            };
+            if (currentUser.password != null && String(currentUser.password).trim() !== '') {
+                toSave.password = String(currentUser.password).trim();
+            }
+            await DataService.saveUser(toSave);
+            await loadData();
+            setShowUserModal(false);
+            alert('Usuario guardado correctamente.');
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            alert('No se pudo guardar: ' + msg);
+        }
     };
 
     const handleDeleteUser = async (username: string) => {
@@ -133,7 +154,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
 
     const openUserModal = (user?: SystemUser) => {
         if (user) {
-            setCurrentUser({ ...user }); // Editing
+            setCurrentUser({ ...user, password: '' }); // Editing: no enviar contraseña para no sobrescribir
         } else {
             setCurrentUser({ username: '', name: '', role: 'barbero', password: '' }); // Creating
         }
@@ -191,7 +212,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
     };
 
     const isBarber = currentUserRole === 'barbero';
-    const canAccessSettings = ['admin', 'superadmin', 'barbero'].includes(currentUserRole);
+    const canAccessSettings = ['admin', 'superadmin', 'dueno', 'barbero'].includes(currentUserRole);
     if (!canAccessSettings) {
         return (
             <div className="p-8 text-center text-slate-500">
@@ -490,9 +511,10 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                             <td className="py-3">
                                                 <span className={`px-2 py-0.5 rounded-full text-xs font-semibold uppercase ${
                                                     u.role === 'admin' ? 'bg-purple-100 text-purple-700' :
+                                                    u.role === 'dueno' ? 'bg-amber-100 text-amber-700' :
                                                     u.role === 'barbero' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
                                                 }`}>
-                                                    {u.role}
+                                                    {u.role === 'dueno' ? 'Dueño' : u.role}
                                                 </span>
                                             </td>
                                             <td className="py-3 text-right space-x-2">
@@ -658,8 +680,9 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-1">Rol / Privilegios</label>
-                                <select className="w-full border rounded-lg p-2" value={currentUser.role} onChange={e => setCurrentUser({...currentUser, role: e.target.value as UserRole})}>
+                                <select className="w-full border rounded-lg p-2" value={currentUser.role || ''} onChange={e => setCurrentUser({...currentUser, role: (e.target.value || 'barbero') as UserRole})}>
                                     <option value="admin">Administrador</option>
+                                    <option value="dueno">Dueño</option>
                                     <option value="barbero">Barbero</option>
                                     <option value="cliente">Cliente</option>
                                 </select>

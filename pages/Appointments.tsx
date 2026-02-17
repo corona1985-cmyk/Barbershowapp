@@ -427,13 +427,22 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         
         return (
             <div className="space-y-6">
-                {currentBarberiaName && (
-                    <div className="flex items-center gap-2 bg-[#ffd427]/20 border border-[#ffd427]/50 text-slate-800 px-4 py-3 rounded-xl">
-                        <MapPin size={20} className="text-[#ffd427] flex-shrink-0" />
-                        <span className="font-semibold">Barbería:</span>
-                        <span>{currentBarberiaName}</span>
-                    </div>
-                )}
+                <div className="flex flex-wrap gap-3">
+                    {currentBarberiaName && (
+                        <div className="flex items-center gap-2 bg-[#ffd427]/20 border border-[#ffd427]/50 text-slate-800 px-4 py-3 rounded-xl">
+                            <MapPin size={20} className="text-[#ffd427] flex-shrink-0" />
+                            <span className="font-semibold">Barbería:</span>
+                            <span>{currentBarberiaName}</span>
+                        </div>
+                    )}
+                    {currentBarber && (
+                        <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 text-slate-800 px-4 py-3 rounded-xl">
+                            <User size={20} className="text-slate-500 flex-shrink-0" />
+                            <span className="font-semibold">Barbero:</span>
+                            <span>{currentBarber.name}</span>
+                        </div>
+                    )}
+                </div>
                 <div className="flex justify-between items-center">
                     <h2 className="text-2xl font-bold text-slate-800">Reservar Cita</h2>
                 </div>
