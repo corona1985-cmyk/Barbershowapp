@@ -472,7 +472,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                 <Plus size={16} className="mr-1" /> Nuevo Usuario
                             </button>
                         </div>
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto table-wrapper">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="text-slate-500 text-sm border-b border-slate-200">
@@ -516,7 +516,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                 <Plus size={16} className="mr-1" /> Nuevo Barbero
                             </button>
                         </div>
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto table-wrapper">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="text-slate-500 text-sm border-b border-slate-200">
@@ -576,7 +576,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                 <Plus size={16} className="mr-1" /> {isBarber ? 'Agregar mi servicio' : 'Nuevo Servicio'}
                             </button>
                         </div>
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto table-wrapper">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="text-slate-500 text-sm border-b border-slate-200">

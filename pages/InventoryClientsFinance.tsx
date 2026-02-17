@@ -183,8 +183,8 @@ export const Clients: React.FC = () => {
                         </div>
                     ) : (
                         <>
-                            <div className="hidden md:block overflow-x-auto">
-                                <table className="w-full text-left">
+                            <div className="hidden md:block overflow-x-auto table-wrapper">
+                                <table className="w-full text-left min-w-[640px]">
                                     <thead>
                                         <tr className="bg-slate-50/90 text-slate-500 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
                                             <th className="py-4 px-5">Cliente</th>
@@ -577,7 +577,7 @@ export const Inventory: React.FC = () => {
                 </div>
 
                 {/* Vista tabla — solo en escritorio */}
-                <div className="hidden md:block overflow-x-auto">
+                <div className="hidden md:block overflow-x-auto table-wrapper">
                 <table className="w-full min-w-[640px]">
                     <thead className="bg-slate-50 text-slate-600 text-sm font-semibold uppercase tracking-wider">
                         <tr>
@@ -875,8 +875,8 @@ export const Finance: React.FC = () => {
             {recordsThisMonth.length > 0 && (
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                     <h3 className="text-lg font-bold text-slate-800 mb-4">Gastos del mes</h3>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                    <div className="overflow-x-auto table-wrapper">
+                        <table className="w-full text-left border-collapse min-w-0">
                             <thead>
                                 <tr className="text-slate-500 text-sm border-b border-slate-200">
                                     <th className="py-2">Fecha</th>

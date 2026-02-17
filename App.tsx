@@ -423,7 +423,7 @@ const App: React.FC = () => {
     // 3. INVITADO: Agendar cita sin cuenta (desde QR o tras elegir barbería)
     if (!isAuthenticated && guestBookingPos) {
         return (
-            <div className="min-h-screen bg-slate-100 p-4 md:p-8">
+            <div className="min-h-screen min-h-[100dvh] bg-slate-100 p-4 md:p-8 safe-area-top safe-area-bottom overflow-x-hidden">
                 <GuestBookingView
                     posId={guestBookingPos.id}
                     posName={guestBookingPos.name}
@@ -525,7 +525,7 @@ const App: React.FC = () => {
                                  </div>
                              ) : (
                                  <>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-sm font-medium text-slate-700 mb-1">Usuario</label>
                                             <input type="text" required className="w-full px-4 py-2 border rounded-lg focus:ring-[#ffd427]" value={regUsername} onChange={e => setRegUsername(e.target.value)} />
@@ -657,7 +657,7 @@ const App: React.FC = () => {
             />
             {/* Área principal: flex para que el scroll sea solo en el contenido */}
             <main className="flex-1 flex flex-col min-w-0 min-h-0 md:ml-64 overflow-hidden transition-all duration-300">
-                <header className="flex-shrink-0 flex flex-wrap justify-between items-center p-4 md:p-6 lg:p-8 pb-2 md:pb-4 no-print gap-3 bg-slate-100">
+                <header className="flex-shrink-0 flex flex-wrap justify-between items-center p-4 md:p-6 lg:p-8 pb-2 md:pb-4 no-print gap-3 bg-slate-100 safe-area-top">
                     <div className="flex items-center space-x-2 sm:space-x-3 md:space-x-4 min-w-0">
                         {/* Hamburger Button for Mobile */}
                         <button 

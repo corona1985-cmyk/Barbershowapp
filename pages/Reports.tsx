@@ -303,7 +303,7 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
                     <h3 className="font-bold text-slate-800 mb-4 flex items-center">
                         <Scissors size={20} className="mr-2 text-[#ffd427]" /> Ventas y Citas por Barbero
                     </h3>
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto table-wrapper">
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="text-slate-500 text-sm border-b border-slate-200">
@@ -332,7 +332,7 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
                     <h3 className="font-bold text-slate-800 mb-4 flex items-center">
                         <MapPin size={20} className="mr-2 text-[#ffd427]" /> Ventas por Sede
                     </h3>
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto table-wrapper">
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="text-slate-500 text-sm border-b border-slate-200">

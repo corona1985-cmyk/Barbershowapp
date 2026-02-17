@@ -160,7 +160,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
 
     if (done) {
         return (
-            <div className="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-8 text-center">
+            <div className="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-4 sm:p-8 text-center min-w-0">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <CheckCircle size={32} className="text-green-600" />
                 </div>
@@ -180,7 +180,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
     }
 
     return (
-        <div className="w-full max-w-2xl mx-auto px-0 sm:px-2">
+        <div className="w-full max-w-2xl mx-auto px-0 sm:px-2 min-w-0">
             <button type="button" onClick={onBack} className="flex items-center gap-1 text-slate-600 hover:text-slate-800 mb-4 sm:mb-6 py-2 min-h-[44px]">
                 <ArrowLeft size={20} /> Volver
             </button>

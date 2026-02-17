@@ -257,8 +257,8 @@ const WhatsAppConsole: React.FC = () => {
                                 Abrir mi WhatsApp para todos (uno por uno)
                             </button>
                         </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
+                        <div className="overflow-x-auto table-wrapper">
+                            <table className="w-full text-sm min-w-0">
                                 <thead>
                                     <tr className="border-b border-slate-200 text-slate-600 font-semibold text-left">
                                         <th className="py-3 pr-4">Cliente</th>

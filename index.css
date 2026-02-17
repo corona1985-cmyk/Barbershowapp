@@ -35,14 +35,24 @@ body {
     -webkit-overflow-scrolling: touch;
 }
 
-/* Tablas: scroll horizontal en pantallas pequeñas */
+/* Tablas: scroll horizontal en pantallas pequeñas (PC y móvil) */
 .table-wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    max-width: 100%;
 }
 
 .table-wrapper table {
     min-width: 0;
+}
+
+/* Ocultar scrollbar en contenedores con overflow-x (p. ej. selector de barberos en móvil) */
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
 }
 
 /* Área segura para notches (móviles) */

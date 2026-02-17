@@ -149,8 +149,8 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
                     ) : (
                     <>
                         {/* Desktop: tabla */}
-                        <div className="hidden md:block overflow-x-auto">
-                            <table className="w-full text-left">
+                        <div className="hidden md:block overflow-x-auto table-wrapper">
+                            <table className="w-full text-left min-w-[640px]">
                                 <thead>
                                     <tr className="bg-gradient-to-r from-slate-50 to-slate-50/80 text-slate-600 text-xs font-semibold uppercase tracking-wider border-b-2 border-slate-200">
                                         <th className="py-4 px-5">Fecha</th>
