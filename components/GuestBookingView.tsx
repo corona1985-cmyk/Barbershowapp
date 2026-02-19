@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DataService } from '../services/data';
-import { Appointment, Barber, Service } from '../types';
-import { MapPin, ArrowLeft, CheckCircle } from 'lucide-react';
+import { Appointment, Barber, BarberGalleryPhoto, Service } from '../types';
+import { MapPin, ArrowLeft, CheckCircle, ImageIcon } from 'lucide-react';
 
 interface GuestBookingViewProps {
     posId: number;
@@ -14,7 +14,10 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
     const [services, setServices] = useState<Service[]>([]);
     const [barbers, setBarbers] = useState<Barber[]>([]);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
-    const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState<string>(() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    });
     const [selectedBarberId, setSelectedBarberId] = useState<number>(0);
     const [selectedTime, setSelectedTime] = useState<string>('');
     const [selectedServices, setSelectedServices] = useState<Service[]>([]);
@@ -24,6 +27,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [done, setDone] = useState(false);
+    const [guestBarberGallery, setGuestBarberGallery] = useState<BarberGalleryPhoto[]>([]);
 
     useEffect(() => {
         const prev = DataService.getActivePosId();
@@ -41,7 +45,17 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
         return () => { DataService.setActivePosId(prev); };
     }, [posId]);
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    useEffect(() => {
+        const bid = selectedBarberId || defaultBarberId;
+        if (bid) DataService.getBarberGallery(bid).then(setGuestBarberGallery).catch(() => setGuestBarberGallery([]));
+        else setGuestBarberGallery([]);
+    }, [selectedBarberId, defaultBarberId]);
+
+    const getTodayLocal = (): string => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const todayStr = getTodayLocal();
     const activeBarbers = barbers.filter((b) => b.active);
     const defaultBarberId = activeBarbers.length > 0 ? activeBarbers[0].id : 0;
 
@@ -55,22 +69,40 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
         return slotMinutes >= start && slotMinutes < start + duration;
     };
 
+    const getBarberWorkRange = (barber: Barber | undefined, dateStr: string): { startMins: number; endMins: number } | null => {
+        const day = new Date(dateStr + 'T12:00:00').getDay();
+        const wh = barber?.workingHours?.[day];
+        if (wh) return { startMins: timeToMinutes(wh.start), endMins: timeToMinutes(wh.end) };
+        if (barber?.workingHours && Object.keys(barber.workingHours).length > 0) return null;
+        return { startMins: 9 * 60, endMins: 19 * 60 };
+    };
+
     const generateTimeSlots = (date: string, barberId: number) => {
         const slots: { time: string; taken: boolean; past: boolean }[] = [];
-        const startHour = 9;
-        const endHour = 19;
+        const barber = barbers.find((b) => b.id === barberId);
+        const range = getBarberWorkRange(barber, date);
+        if (range === null) return slots;
+
         const today = new Date();
         const nowMinutes = today.getHours() * 60 + today.getMinutes();
         const taken = appointments.filter((a) => a.fecha === date && a.barberoId === barberId && a.estado !== 'cancelada');
+        const isBlocked = (slotMins: number) => {
+            const blocks = barber?.blockedHours ?? [];
+            if (blocks.some((b) => b.date === date && slotMins < timeToMinutes(b.end) && slotMins + 30 > timeToMinutes(b.start))) return true;
+            const day = new Date(date + 'T12:00:00').getDay();
+            const lunch = barber?.lunchBreak?.[day];
+            if (lunch?.start && lunch?.end && slotMins < timeToMinutes(lunch.end) && slotMins + 30 > timeToMinutes(lunch.start)) return true;
+            return false;
+        };
 
-        for (let h = startHour; h < endHour; h++) {
-            for (const min of [0, 30]) {
-                const hourStr = h.toString().padStart(2, '0') + ':' + (min === 0 ? '00' : '30');
-                const slotMins = h * 60 + min;
-                const isTaken = taken.some((a) => isSlotInsideAppointment(slotMins, a));
-                const past = date < todayStr || (date === todayStr && slotMins <= nowMinutes);
-                slots.push({ time: hourStr, taken: isTaken, past });
-            }
+        for (let m = range.startMins; m < range.endMins; m += 30) {
+            const h = Math.floor(m / 60);
+            const min = m % 60;
+            const hourStr = h.toString().padStart(2, '0') + ':' + (min === 0 ? '00' : '30');
+            const blocked = isBlocked(m);
+            const isTaken = !blocked && taken.some((a) => isSlotInsideAppointment(m, a));
+            const past = date < todayStr || (date === todayStr && m <= nowMinutes);
+            slots.push({ time: hourStr, taken: blocked || isTaken, past });
         }
         return slots;
     };
@@ -207,6 +239,20 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                                         className={`px-3 py-2 rounded-lg text-sm font-medium ${selectedBarberId === b.id ? 'bg-[#ffd427] text-slate-900' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                                     >
                                         {b.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Galería del barbero */}
+                    {guestBarberGallery.length > 0 && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Trabajos de {activeBarbers.find((b) => b.id === (selectedBarberId || defaultBarberId))?.name}</label>
+                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                                {guestBarberGallery.map((p) => (
+                                    <button key={p.id} type="button" className="flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border border-slate-200 shadow-sm hover:ring-2 hover:ring-[#ffd427] focus:outline-none" onClick={() => window.open(p.imageUrl, '_blank')}>
+                                        <img src={p.imageUrl} alt={p.caption || 'Trabajo'} className="w-full h-full object-cover" />
                                     </button>
                                 ))}
                             </div>

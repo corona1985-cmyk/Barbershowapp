@@ -66,6 +66,22 @@ Esto hace:
   `https://gen-lang-client-0624135070.web.app`  
   (o el dominio que tengas en Hosting)
 
+### Cambiar la URL o usar un desvío (redirección)
+
+- **Otra URL (dominio propio):** En [Firebase Console](https://console.firebase.google.com) → **Hosting** → **Añadir dominio personalizado**. Así podrás usar por ejemplo `https://barbershow.com` en lugar de la URL `.web.app`.
+
+- **Desvío (redirigir la URL de Firebase a tu dominio):** Cuando ya tengas un dominio personalizado configurado, puedes hacer que quien entre en `https://....web.app` sea redirigido a tu dominio. En `firebase.json`, dentro de `"hosting"`, añade:
+  ```json
+  "redirects": [
+    {
+      "source": "**",
+      "destination": "https://tu-dominio-real.com",
+      "type": 301
+    }
+  ]
+  ```
+  Sustituye `https://tu-dominio-real.com` por tu URL. Vuelve a desplegar con `npm run deploy:hosting`.
+
 - **Consola Firebase:**  
   [https://console.firebase.google.com/project/gen-lang-client-0624135070](https://console.firebase.google.com/project/gen-lang-client-0624135070)
 
@@ -75,6 +91,11 @@ Esto hace:
 - **Twilio** (envío de WhatsApp desde la app): configurar en Cloud Functions con  
   `firebase functions:config:set twilio.sid="ACxxx" twilio.token="xxx" twilio.whatsapp_from="whatsapp:+14..."`  
   y volver a desplegar Functions.
+- **QR de barbería:** Los códigos QR que se imprimen en Configuración deben apuntar a la URL pública de la app. Crea un archivo `.env` o `.env.production` en la raíz con:
+  ```bash
+  VITE_APP_PUBLIC_URL=https://gen-lang-client-0624135070.web.app
+  ```
+  (o la URL de tu dominio si usas uno). Sin esta variable, los QR usan la URL desde la que se abre la app (por ejemplo localhost), y al escanear no funcionan. Después de añadirla, haz de nuevo `npm run build` y `npm run deploy:hosting`.
 
 ## Resumen de comandos
 

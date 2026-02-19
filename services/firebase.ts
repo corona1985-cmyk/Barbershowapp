@@ -1,7 +1,6 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-
 const firebaseConfig = {
   apiKey: "AIzaSyDDHc3BVRBU8CE2SRPhIzqK0aLQ_gcgAhA",
   authDomain: "gen-lang-client-0624135070.firebaseapp.com",

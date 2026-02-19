@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
 import { Client, Product, PointOfSale, FinanceRecord, Sale } from '../types';
-import { Search, Plus, X, Edit2, User, Star, Upload, Image as ImageIcon, Ban, CheckCircle, Trophy, Crown, MapPin, Loader2, Phone, Users, Package } from 'lucide-react';
+import { Search, Plus, X, Edit2, User, Star, Upload, Image as ImageIcon, Ban, CheckCircle, Trophy, Crown, MapPin, Loader2, Phone, Users, Package, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 
@@ -31,10 +31,10 @@ export const Clients: React.FC = () => {
         const role = DataService.getCurrentUserRole();
         setUserRole(role);
         setIsAdmin(['admin', 'superadmin'].includes(role));
-        const loadClients = role === 'barbero'
-            ? DataService.getClientsWithActivity()
-            : DataService.getClients();
         setLoading(true);
+        const loadClients = role === 'barbero'
+            ? DataService.refreshClientsWithActivity()
+            : DataService.refreshClients();
         Promise.all([loadClients, DataService.getPointsOfSale()]).then(([clientsList, posList]) => {
             setClients(clientsList);
             setPointsOfSale(posList);
@@ -68,6 +68,19 @@ export const Clients: React.FC = () => {
             await DataService.toggleClientStatus(client.id);
             const list = await DataService.getClients();
             setClients(list);
+        }
+    };
+
+    const [refreshing, setRefreshing] = useState(false);
+    const handleRefreshClients = async () => {
+        setRefreshing(true);
+        try {
+            const list = userRole === 'barbero'
+                ? await DataService.refreshClientsWithActivity()
+                : await DataService.refreshClients();
+            setClients(list);
+        } finally {
+            setRefreshing(false);
         }
     };
 
@@ -113,7 +126,7 @@ export const Clients: React.FC = () => {
         return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
     };
 
-    const filtered = clients.filter(c => c.nombre.toLowerCase().includes(search.toLowerCase()) || c.telefono.includes(search));
+    const filtered = clients.filter(c => c.nombre.toLowerCase().includes(search.toLowerCase()) || String(c.telefono ?? '').includes(search));
 
     const topClients = [...clients].sort((a, b) => b.puntos - a.puntos).slice(0, 5);
 
@@ -145,12 +158,23 @@ export const Clients: React.FC = () => {
                             <p className="text-sm text-slate-500 mt-0.5">Busca y administra tu cartera de clientes</p>
                         </div>
                     </div>
-                    {userRole !== 'barbero' && (
-                        <button onClick={handleCreateClick} className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors shadow-sm shrink-0">
-                            <Plus size={18} />
-                            <span>Nuevo Cliente</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            type="button"
+                            onClick={handleRefreshClients}
+                            disabled={refreshing}
+                            className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors disabled:opacity-50"
+                            title="Actualizar lista (ver fotos y datos recientes)"
+                        >
+                            <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
                         </button>
-                    )}
+                        {userRole !== 'barbero' && (
+                            <button onClick={handleCreateClick} className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors shadow-sm">
+                                <Plus size={18} />
+                                <span>Nuevo Cliente</span>
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">

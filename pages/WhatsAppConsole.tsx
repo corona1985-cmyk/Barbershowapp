@@ -1,20 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
 import { Appointment, Barber, Client, NotificationLog } from '../types';
-import { MessageCircle, Send, CheckCircle, AlertCircle, Clock, Calendar, ExternalLink } from 'lucide-react';
+import { MessageCircle, CheckCircle, AlertCircle, Clock, Calendar, ExternalLink, User, Scissors, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 
-/** Normaliza teléfono para enlace wa.me: solo dígitos; si tiene 10 dígitos (México) añade 52 */
-function phoneToWaNumber(phone: string): string {
-    const digits = (phone || '').replace(/\D/g, '');
-    if (digits.length === 10 && !phone?.startsWith('+')) return '52' + digits;
-    return digits;
+/** Normaliza teléfono para enlace wa.me: solo dígitos. No se añade prefijo de país; guarda los números con su código (ej. +52 55…) si quieres México. */
+function phoneToWaNumber(phone: string | number | null | undefined): string {
+    const s = String(phone ?? '');
+    return s.replace(/\D/g, '');
 }
 
 /** Genera enlace WhatsApp con mensaje prellenado */
-function buildWhatsAppLink(phone: string, message: string): string {
+function buildWhatsAppLink(phone: string | number | null | undefined, message: string): string {
     const num = phoneToWaNumber(phone);
     if (!num || num.length < 10) return '';
     return `https://wa.me/${num}?text=${encodeURIComponent(message)}`;
+}
+
+/** True si la cita (fecha + hora) fue hace más de 30 minutos (no mostrar en consola WhatsApp). */
+function isAppointmentPastThreshold(apt: Appointment): boolean {
+    const aptTime = new Date(apt.fecha + 'T' + (apt.hora || '00:00'));
+    const now = new Date();
+    return (now.getTime() - aptTime.getTime()) > 30 * 60 * 1000;
 }
 
 const WhatsAppConsole: React.FC = () => {
@@ -26,12 +32,17 @@ const WhatsAppConsole: React.FC = () => {
     const [pointsOfSale, setPointsOfSale] = useState<{ id: number; name: string }[]>([]);
     const [selectedBarberId, setSelectedBarberId] = useState<number>(0);
     const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
-    const [sending, setSending] = useState(false);
+    /** Clientes resueltos por ID cuando no están en la lista (ej. eliminados); evita "Desconocido". */
+    const [resolvedClients, setResolvedClients] = useState<Record<number, Client | null>>({});
+    /** Historial de envíos: abierto/cerrado. */
+    const [historyOpen, setHistoryOpen] = useState(true);
 
     const refreshLogs = async () => {
         const list = await DataService.getNotificationLogs();
         setLogs(list.sort((a, b) => b.timestamp.localeCompare(a.timestamp)));
     };
+
+    const isBarberUser = (currentUser?.role === 'barbero' || currentUser?.role === 'empleado');
 
     useEffect(() => {
         (async () => {
@@ -45,9 +56,9 @@ const WhatsAppConsole: React.FC = () => {
             setClients(clientsList);
             setBarbers(barbersList);
             setPointsOfSale(posList);
-            if (user && user.role === 'barbero') {
-                const barber = barbersList.find(b => b.name === user.name);
-                if (barber) setSelectedBarberId(barber.id);
+            if (user && (user.role === 'barbero' || user.role === 'empleado')) {
+                const myId = DataService.getCurrentBarberId() ?? barbersList.find(b => b.name === user.name)?.id;
+                if (myId != null) setSelectedBarberId(myId);
             }
             await refreshLogs();
         })();
@@ -58,13 +69,31 @@ const WhatsAppConsole: React.FC = () => {
             const all = await DataService.getAppointments();
             const filtered = all.filter(a => {
                 if (a.fecha !== selectedDate) return false;
-                if (a.estado === 'cancelada' || a.estado === 'completada') return false;
                 if (selectedBarberId !== 0 && a.barberoId !== selectedBarberId) return false;
                 return true;
             });
             setAppointments(filtered);
         })();
     }, [selectedBarberId, selectedDate]);
+
+    // Resolver nombres de clientes que no están en la lista (cita o log con cliente eliminado)
+    useEffect(() => {
+        const aptIds = appointments.map(a => a.clienteId).filter(Boolean);
+        const logIds = logs.map(l => l.clientId).filter(Boolean);
+        const missingIds = [...new Set([...aptIds, ...logIds])].filter(id => !clients.some(c => c.id === id));
+        if (missingIds.length === 0) {
+            setResolvedClients(prev => (Object.keys(prev).length === 0 ? prev : {}));
+            return;
+        }
+        (async () => {
+            const results = await Promise.all(missingIds.map(id => DataService.getClientById(id)));
+            setResolvedClients(prev => {
+                const next = { ...prev };
+                missingIds.forEach((id, i) => { next[id] = results[i] ?? null; });
+                return next;
+            });
+        })();
+    }, [appointments, logs, clients]);
 
     const getPosName = (posId: number) => pointsOfSale.find(p => p.id === posId)?.name || 'BarberShow';
 
@@ -75,9 +104,9 @@ const WhatsAppConsole: React.FC = () => {
     };
 
     const handleOpenWhatsApp = (apt: Appointment) => {
-        const client = clients.find(c => c.id === apt.clienteId);
+        const client = clients.find(c => c.id === apt.clienteId) ?? resolvedClients[apt.clienteId] ?? null;
         if (!client?.telefono) {
-            alert(`${client?.nombre || 'Cliente'} no tiene número de teléfono registrado.`);
+            alert(`${client?.nombre || 'Cliente desconocido'} no tiene número de teléfono registrado.`);
             return;
         }
         const msg = buildMessage(apt, client);
@@ -89,57 +118,39 @@ const WhatsAppConsole: React.FC = () => {
         window.open(url, '_blank', 'noopener,noreferrer');
     };
 
-    const handleOpenAllWhatsApp = () => {
-        const withPhone = appointments.filter(apt => {
-            const client = clients.find(c => c.id === apt.clienteId);
-            return client?.telefono && phoneToWaNumber(client.telefono).length >= 10;
+    const handleCancelAppointment = async (apt: Appointment) => {
+        if (!confirm('¿Cancelar esta cita?')) return;
+        await DataService.updateAppointment({ ...apt, estado: 'cancelada' });
+        const all = await DataService.getAppointments();
+        const filtered = all.filter(a => {
+            if (a.fecha !== selectedDate) return false;
+            if (selectedBarberId !== 0 && a.barberoId !== selectedBarberId) return false;
+            return true;
         });
-        if (withPhone.length === 0) {
-            alert('Ningún cliente con cita tiene número de WhatsApp válido.');
-            return;
-        }
-        withPhone.forEach((apt, i) => {
-            const client = clients.find(c => c.id === apt.clienteId)!;
-            const url = buildWhatsAppLink(client.telefono!, buildMessage(apt, client));
-            setTimeout(() => window.open(url, '_blank', 'noopener,noreferrer'), i * 1500);
-        });
-        alert(`Se abrirán ${withPhone.length} conversaciones de WhatsApp (una cada 1.5 s para evitar bloqueos). Acepta las ventanas emergentes si el navegador lo pide.`);
+        setAppointments(filtered);
     };
 
-    const handleSendBatch = async () => {
-        if (!confirm(`¿Abrir WhatsApp y registrar recordatorios para las citas del día? (Se abrirá una ventana por cada cliente con teléfono)`)) return;
-        setSending(true);
-        let sentCount = 0;
-        for (const apt of appointments) {
-            const client = clients.find(c => c.id === apt.clienteId);
-            if (!client?.telefono) continue;
-            const msg = buildMessage(apt, client);
-            const url = buildWhatsAppLink(client.telefono, msg);
-            if (url) {
-                window.open(url, '_blank', 'noopener,noreferrer');
-                sentCount++;
-                await new Promise(r => setTimeout(r, 800));
-                await DataService.logNotification({
-                    posId: DataService.getActivePosId() || 0,
-                    barberId: apt.barberoId,
-                    clientId: apt.clienteId,
-                    type: 'whatsapp',
-                    status: 'sent',
-                    timestamp: new Date().toISOString(),
-                    message: msg
-                });
-            }
-        }
-        setSending(false);
-        await refreshLogs();
-        alert(sentCount ? `Se abrieron ${sentCount} chats de WhatsApp y se registró el envío. Envía el mensaje en cada ventana.` : 'Ningún cliente con cita tiene teléfono registrado.');
+    const handleDeleteAppointment = async (apt: Appointment) => {
+        if (!confirm('¿Eliminar esta cita de forma permanente?')) return;
+        await DataService.deleteAppointment(apt.id);
+        setAppointments(prev => prev.filter(a => a.id !== apt.id));
     };
 
-    const appointmentsWithClient = appointments.map(apt => ({
-        apt,
-        client: clients.find(c => c.id === apt.clienteId),
-        barber: barbers.find(b => b.id === apt.barberoId),
-    })).filter(x => x.client);
+    const estadoLabel: Record<string, string> = { pendiente: 'PENDIENTE', confirmada: 'CONFIRMADA', cancelada: 'CANCELADA', completada: 'COMPLETADA' };
+    const estadoClass: Record<string, string> = {
+        pendiente: 'bg-amber-100 text-amber-800',
+        confirmada: 'bg-green-100 text-green-800',
+        cancelada: 'bg-red-100 text-red-700',
+        completada: 'bg-slate-100 text-slate-600',
+    };
+
+    const appointmentsWithClient = appointments
+        .filter(apt => !isAppointmentPastThreshold(apt))
+        .map(apt => ({
+            apt,
+            client: clients.find(c => c.id === apt.clienteId) ?? resolvedClients[apt.clienteId] ?? null,
+            barber: barbers.find(b => b.id === apt.barberoId),
+        }));
 
     return (
         <div className="space-y-6">
@@ -148,20 +159,14 @@ const WhatsAppConsole: React.FC = () => {
             </h2>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Opción C: Enviar a todos y registrar en historial */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border-2 border-green-200 border-t-4 border-t-green-500">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-slate-800 flex items-center">
-                            <Send size={20} className="mr-2 text-green-600" /> Enviar recordatorios a todos
-                        </h3>
-                        <span className="text-xs font-bold uppercase tracking-wider text-green-600 bg-green-50 px-2 py-1 rounded">Desde tu número</span>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                {/* Filtros: día y barbero */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+                        <Calendar size={20} className="mr-2 text-slate-500" /> Filtros
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center">
-                                <Calendar size={16} className="mr-1" /> Día de las citas
-                            </label>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Día</label>
                             <input
                                 type="date"
                                 className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-[#ffd427] focus:border-[#ffd427]"
@@ -170,133 +175,143 @@ const WhatsAppConsole: React.FC = () => {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Filtrar por Barbero</label>
-                            <select 
-                                className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-[#ffd427] focus:border-[#ffd427]"
-                                value={selectedBarberId}
-                                onChange={e => setSelectedBarberId(Number(e.target.value))}
-                            >
-                                <option value="0">Todos</option>
-                                {barbers.map(b => (
-                                    <option key={b.id} value={b.id}>{b.name}</option>
-                                ))}
-                            </select>
+                            {isBarberUser ? (
+                                <>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">Envío por barbero</label>
+                                    <div className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 text-slate-700 font-medium">
+                                        Mis clientes agendados (solo citas conmigo)
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">Barbero</label>
+                                    <select 
+                                        className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-[#ffd427] focus:border-[#ffd427]"
+                                        value={selectedBarberId}
+                                        onChange={e => setSelectedBarberId(Number(e.target.value))}
+                                    >
+                                        <option value="0">Todos</option>
+                                        {barbers.map(b => (
+                                            <option key={b.id} value={b.id}>{b.name}</option>
+                                        ))}
+                                    </select>
+                                </>
+                            )}
                         </div>
                     </div>
-
-                    <div className="bg-green-50 p-4 rounded-lg border border-green-100 mb-6">
-                        <p className="text-green-800 font-medium">
-                            Citas del día: <span className="text-2xl font-bold block mt-1">{appointments.length}</span>
-                        </p>
-                        <p className="text-xs text-green-700 mt-1">Se abre WhatsApp con el mensaje listo. Tú envías desde <strong>tu número</strong> (el cliente recibe el mensaje de tu WhatsApp).</p>
-                    </div>
-
-                    <button 
-                        onClick={handleSendBatch}
-                        disabled={sending || appointments.length === 0}
-                        className={`w-full py-4 rounded-xl font-bold shadow-lg transition-all flex justify-center items-center gap-2 ${
-                            sending || appointments.length === 0 
-                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
-                            : 'bg-green-600 hover:bg-green-700 text-white hover:shadow-green-300/50'
-                        }`}
-                    >
-                        <MessageCircle size={22} />
-                        {sending ? 'Abriendo WhatsApp...' : 'Abrir mi WhatsApp y enviar a todos'}
-                    </button>
-                    <p className="text-xs text-slate-500 mt-2 text-center">
-                        Se abrirá una ventana por cada cliente. Solo tienes que pulsar Enviar en tu WhatsApp.
-                    </p>
                 </div>
 
-                {/* Log Viewer */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-96">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
-                        <Clock size={20} className="mr-2 text-slate-500" /> Historial de Envíos
-                    </h3>
-                    <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
-                        {logs.length === 0 ? (
-                            <div className="text-center text-slate-400 mt-10">Sin registros recientes</div>
-                        ) : (
-                            logs.map(log => {
-                                const client = clients.find(c => c.id === log.clientId);
-                                return (
-                                    <div key={log.id} className="flex items-start p-3 bg-slate-50 rounded-lg border border-slate-100">
-                                        <div className={`mt-1 mr-3 ${log.status === 'sent' ? 'text-green-500' : 'text-red-500'}`}>
-                                            {log.status === 'sent' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                {/* Log Viewer - colapsable */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+                    <button
+                        type="button"
+                        onClick={() => setHistoryOpen(prev => !prev)}
+                        className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
+                    >
+                        <h3 className="text-lg font-bold text-slate-800 flex items-center">
+                            <Clock size={20} className="mr-2 text-slate-500" /> Historial de Envíos
+                            {logs.length > 0 && (
+                                <span className="ml-2 text-sm font-normal text-slate-500">({logs.length})</span>
+                            )}
+                        </h3>
+                        {historyOpen ? <ChevronUp size={20} className="text-slate-500" /> : <ChevronDown size={20} className="text-slate-500" />}
+                    </button>
+                    {historyOpen && (
+                        <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar px-4 pb-4 min-h-[12rem] max-h-96">
+                            {logs.length === 0 ? (
+                                <div className="text-center text-slate-400 py-10">Sin registros recientes</div>
+                            ) : (
+                                logs.map(log => {
+                                    const client = clients.find(c => c.id === log.clientId) ?? resolvedClients[log.clientId] ?? null;
+                                    return (
+                                        <div key={log.id} className="flex items-start p-3 bg-slate-50 rounded-lg border border-slate-100">
+                                            <div className={`mt-1 mr-3 ${log.status === 'sent' ? 'text-green-500' : 'text-red-500'}`}>
+                                                {log.status === 'sent' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-medium text-slate-800">Para: {client?.nombre || 'Cliente desconocido'}</p>
+                                                <p className="text-xs text-slate-500 mb-1">{new Date(log.timestamp).toLocaleString()}</p>
+                                                <p className="text-xs text-slate-600 italic">"{log.message}"</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="text-sm font-medium text-slate-800">Para: {client?.nombre || 'Desconocido'}</p>
-                                            <p className="text-xs text-slate-500 mb-1">{new Date(log.timestamp).toLocaleString()}</p>
-                                            <p className="text-xs text-slate-600 italic">"{log.message}"</p>
-                                        </div>
-                                    </div>
-                                );
-                            })
-                        )}
-                    </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Lista de citas del día: abrir WhatsApp por cliente */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
-                    <MessageCircle size={20} className="mr-2 text-green-600" /> Citas del día – Enviar desde tu WhatsApp
+                    <MessageCircle size={20} className="mr-2 text-green-600" />
+                    {isBarberUser ? 'Mis clientes agendados – Enviar desde tu WhatsApp' : 'Citas del día – Enviar desde tu WhatsApp'}
                 </h3>
                 {appointmentsWithClient.length === 0 ? (
-                    <p className="text-slate-500 text-center py-6">No hay citas agendadas para el día seleccionado (pendientes o confirmadas).</p>
+                    <p className="text-slate-500 text-center py-6">
+                        {isBarberUser ? 'No tienes citas agendadas para el día seleccionado.' : 'No hay citas para el día seleccionado.'}
+                    </p>
                 ) : (
-                    <>
-                        <div className="flex flex-wrap gap-2 mb-4">
-                            <button
-                                type="button"
-                                onClick={handleOpenAllWhatsApp}
-                                disabled={appointmentsWithClient.filter(x => x.client?.telefono && phoneToWaNumber(x.client.telefono).length >= 10).length === 0}
-                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <ExternalLink size={18} />
-                                Abrir mi WhatsApp para todos (uno por uno)
-                            </button>
-                        </div>
-                        <div className="overflow-x-auto table-wrapper">
-                            <table className="w-full text-sm min-w-0">
-                                <thead>
-                                    <tr className="border-b border-slate-200 text-slate-600 font-semibold text-left">
-                                        <th className="py-3 pr-4">Cliente</th>
-                                        <th className="py-3 pr-4">Teléfono</th>
-                                        <th className="py-3 pr-4">Hora</th>
-                                        <th className="py-3 pr-4">Barbero</th>
-                                        <th className="py-3 text-right">Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {appointmentsWithClient
-                                        .sort((a, b) => a.apt.hora.localeCompare(b.apt.hora))
-                                        .map(({ apt, client, barber }) => {
-                                            const hasPhone = client?.telefono && phoneToWaNumber(client.telefono).length >= 10;
-                                            return (
-                                                <tr key={apt.id} className="border-b border-slate-100 hover:bg-slate-50">
-                                                    <td className="py-3 pr-4 font-medium text-slate-800">{client?.nombre}</td>
-                                                    <td className="py-3 pr-4 text-slate-600">{client?.telefono || '—'}</td>
-                                                    <td className="py-3 pr-4">{apt.hora}</td>
-                                                    <td className="py-3 pr-4">{barber?.name || '—'}</td>
-                                                    <td className="py-3 text-right">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleOpenWhatsApp(apt)}
-                                                            disabled={!hasPhone}
-                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors text-xs"
-                                                        >
-                                                            <ExternalLink size={14} />
-                                                            Abrir mi WhatsApp
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                </tbody>
-                            </table>
-                        </div>
-                    </>
+                    <ul className="space-y-3">
+                        {appointmentsWithClient
+                            .sort((a, b) => a.apt.hora.localeCompare(b.apt.hora))
+                            .map(({ apt, client, barber }) => {
+                                const hasPhone = client?.telefono && phoneToWaNumber(client.telefono).length >= 10;
+                                const serviceNames = (apt.servicios && apt.servicios.length)
+                                    ? apt.servicios.map(s => s.name).join(', ')
+                                    : '—';
+                                const estado = apt.estado || 'pendiente';
+                                return (
+                                    <li
+                                        key={apt.id}
+                                        className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow"
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between gap-2 mb-2">
+                                                    <span className="inline-flex items-center gap-1.5 text-slate-700 font-medium">
+                                                        <Clock size={16} className="text-slate-500 shrink-0" />
+                                                        {apt.hora}
+                                                    </span>
+                                                    <span className={`text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded ${estadoClass[estado] || estadoClass.pendiente}`}>
+                                                        {estadoLabel[estado] || estado}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 text-slate-800 font-medium">
+                                                    <User size={16} className="text-slate-500 shrink-0" />
+                                                    {client?.nombre ?? 'Cliente desconocido'}
+                                                </div>
+                                                <div className="flex items-center gap-1.5 text-slate-600 text-sm mt-0.5">
+                                                    <Scissors size={14} className="text-slate-400 shrink-0" />
+                                                    {serviceNames}
+                                                </div>
+                                                <p className="text-sm text-slate-500 mt-0.5">Barbero: {barber?.name ?? '—'}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenWhatsApp(apt)}
+                                                    disabled={!hasPhone}
+                                                    title={hasPhone ? 'Abrir WhatsApp' : 'Sin teléfono'}
+                                                    className="p-2.5 rounded-lg border-2 border-green-400 text-green-600 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 transition-colors"
+                                                >
+                                                    <MessageCircle size={22} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => apt.estado === 'cancelada' ? handleDeleteAppointment(apt) : handleCancelAppointment(apt)}
+                                                    title={apt.estado === 'cancelada' ? 'Eliminar cita' : 'Cancelar cita'}
+                                                    className="p-2.5 rounded-lg border-2 border-slate-200 text-slate-500 hover:bg-slate-100 hover:border-slate-300 transition-colors"
+                                                >
+                                                    <Trash2 size={20} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                    </ul>
                 )}
             </div>
         </div>

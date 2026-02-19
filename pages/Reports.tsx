@@ -3,6 +3,7 @@ import { DataService } from '../services/data';
 import { Sale, Appointment, Product, Client, Barber, AccountTier, PointOfSale } from '../types';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { TrendingUp, Users, Calendar, ShoppingBag, Printer, Scissors, MapPin, Loader2 } from 'lucide-react';
+import { handlePrint } from '../utils/print';
 
 const COLORS = ['#ffd427', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
@@ -156,7 +157,12 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 no-print">
                 <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Reportes y Estadísticas</h2>
                 <button 
-                    onClick={() => window.print()}
+                    onClick={() => handlePrint({
+                        name: 'Reporte',
+                        shareText: noSedeActiva
+                            ? 'Reporte BarberShow – Sin sede seleccionada.'
+                            : `Reporte BarberShow – ${new Date().toLocaleDateString('es-ES')}\nVentas del periodo, citas por estado, productos más vendidos. (Abre en navegador para imprimir completo.)`,
+                    })}
                     className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors shadow-sm"
                 >
                     <Printer size={18} />

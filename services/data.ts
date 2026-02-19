@@ -6,6 +6,9 @@ import {
   Product,
   Service,
   Barber,
+  BarberWorkingHours,
+  BarberBlockedSlot,
+  BarberGalleryPhoto,
   Appointment,
   Sale,
   FinanceRecord,
@@ -20,47 +23,10 @@ import {
 
 const ROOT = 'barbershow';
 
-// Mock Initial Data para primera carga / seed
-const INITIAL_POS: PointOfSale[] = [
-  { id: 1, name: 'Barbería Central', address: 'Av. Principal 123', ownerId: 'barbero', isActive: true, plan: 'pro', tier: 'barberia' },
-  { id: 2, name: 'Sucursal Norte', address: 'Calle Norte 456', ownerId: 'barbero2', isActive: true, plan: 'basic', tier: 'solo' },
-];
-
-const INITIAL_CLIENTS: Client[] = [
-  { id: 1, posId: 1, nombre: 'Juan Pérez', telefono: '+1234567890', email: 'juan@email.com', ultimaVisita: '2024-01-10', notas: 'Cliente frecuente', fechaRegistro: '2023-01-01', puntos: 350, status: 'active', whatsappOptIn: true, photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80' },
-  { id: 2, posId: 1, nombre: 'María García', telefono: '+0987654321', email: 'maria@email.com', ultimaVisita: '2024-01-12', notas: 'Prefiere cita los sábados', fechaRegistro: '2023-02-15', puntos: 120, status: 'active', whatsappOptIn: true, photoUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80' },
-  { id: 3, posId: 1, nombre: 'Pedro Suspendido', telefono: '+1122334455', email: 'pedro@email.com', ultimaVisita: '2023-12-01', notas: 'Pagos pendientes', fechaRegistro: '2023-06-10', puntos: 10, status: 'suspended' },
-  { id: 4, posId: 2, nombre: 'Carlos Norte', telefono: '+55555555', email: 'carlos@norte.com', ultimaVisita: '2024-02-01', notas: 'Nuevo en sucursal', fechaRegistro: '2024-01-01', puntos: 50, status: 'active' },
-  { id: 5, posId: 1, nombre: 'Usuario Cliente', telefono: '+9988776655', email: 'cliente@demo.com', ultimaVisita: '2024-02-10', notas: 'Usuario Demo', fechaRegistro: '2024-01-01', puntos: 100, status: 'active', whatsappOptIn: true },
-];
-
-const INITIAL_PRODUCTS: Product[] = [
-  { id: 1, posId: 1, producto: 'Shampoo Anticaspa', categoria: 'Cuidado Capilar', stock: 15, precioCompra: 8.5, precioVenta: 15, estado: 'activo' },
-  { id: 2, posId: 1, producto: 'Cera Moldeadora', categoria: 'Estilo', stock: 8, precioCompra: 12, precioVenta: 25, estado: 'activo' },
-  { id: 3, posId: 1, producto: 'Aceite para Barba', categoria: 'Barba', stock: 3, precioCompra: 15, precioVenta: 30, estado: 'activo' },
-  { id: 4, posId: 2, producto: 'Gel Fijador', categoria: 'Estilo', stock: 20, precioCompra: 5, precioVenta: 10, estado: 'activo' },
-];
-
-const INITIAL_SERVICES: Service[] = [
-  { id: 1, posId: 1, name: 'Corte de Cabello', price: 25, duration: 30 },
-  { id: 2, posId: 1, name: 'Corte de Barba', price: 20, duration: 25 },
-  { id: 3, posId: 1, name: 'Corte + Barba', price: 40, duration: 50 },
-  { id: 4, posId: 1, name: 'Afeitado Clásico', price: 30, duration: 35 },
-  { id: 5, posId: 2, name: 'Corte Express', price: 15, duration: 15 },
-];
-
-const INITIAL_BARBERS: Barber[] = [
-  { id: 1, posId: 1, name: 'Carlos Rodríguez', specialty: 'Cortes Clásicos', active: true },
-  { id: 2, posId: 1, name: 'Miguel Ángel', specialty: 'Barbas y Afeitados', active: true },
-  { id: 3, posId: 2, name: 'Ana Norte', specialty: 'Colorimetría', active: true },
-];
-
-const INITIAL_USERS: SystemUser[] = [
+// Solo usuarios mínimos para poder acceder y crear sedes/barberos desde la app. El resto está en la base de datos (ver database-seed.json).
+const INITIAL_USERS_MINIMAL: SystemUser[] = [
   { username: 'master', role: 'platform_owner', name: 'Master Admin', password: 'root', posId: null, status: 'active' },
   { username: 'superadmin', role: 'superadmin', name: 'Super Admin Global', password: 'admin', permissions: { canManageUsers: true, canViewReports: true }, status: 'active' },
-  { username: 'barbero', role: 'barbero', name: 'Carlos Barbero', password: '123', posId: 1, barberId: 1, status: 'active' },
-  { username: 'barbero2', role: 'barbero', name: 'Laura Barbero (Norte)', password: '123', posId: 2, barberId: 3, status: 'active' },
-  { username: 'cliente', role: 'cliente', name: 'Usuario Cliente', password: '123', posId: 1, status: 'active' },
 ];
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -146,28 +112,26 @@ export const DataService = {
   initialize: async (): Promise<void> => {
     const snap = await get(ref(db, ROOT + '/pointsOfSale'));
     if (!snap.exists()) {
-      await set(ref(db, ROOT + '/pointsOfSale'), toObjectById(INITIAL_POS));
-      await set(ref(db, ROOT + '/clients'), toObjectById(INITIAL_CLIENTS));
-      await set(ref(db, ROOT + '/products'), toObjectById(INITIAL_PRODUCTS));
-      await set(ref(db, ROOT + '/services'), toObjectById(INITIAL_SERVICES));
-      await set(ref(db, ROOT + '/barbers'), toObjectById(INITIAL_BARBERS));
+      await set(ref(db, ROOT + '/pointsOfSale'), {});
+      await set(ref(db, ROOT + '/clients'), {});
+      await set(ref(db, ROOT + '/products'), {});
+      await set(ref(db, ROOT + '/services'), {});
+      await set(ref(db, ROOT + '/barbers'), {});
       await set(ref(db, ROOT + '/appointments'), {});
       await set(ref(db, ROOT + '/sales'), {});
       await set(ref(db, ROOT + '/finances'), {});
-      await set(ref(db, ROOT + '/users'), toObjectByUsername(INITIAL_USERS));
+      await set(ref(db, ROOT + '/users'), toObjectByUsername(INITIAL_USERS_MINIMAL));
       await set(ref(db, ROOT + '/notificationLogs'), {});
       await set(ref(db, ROOT + '/auditLogs'), {});
       await set(ref(db, ROOT + '/financialTransactions'), {});
       await set(ref(db, ROOT + '/globalSettings'), DEFAULT_GLOBAL_SETTINGS);
-      await set(ref(db, ROOT + '/settings/1'), { ...DEFAULT_SETTINGS, posId: 1 });
-      await set(ref(db, ROOT + '/settings/2'), { ...DEFAULT_SETTINGS, storeName: 'BarberShow Norte', posId: 2 });
       await set(ref(db, ROOT + '/userCart'), []);
     }
-    // Asegurar que los usuarios por defecto existan siempre (por si la BD ya tenía datos sin users)
+    // Asegurar que al menos master y superadmin existan (por si la BD ya tenía datos sin users)
     const usersSnap = await get(ref(db, ROOT + '/users'));
     const currentUsers = usersSnap.val() || {};
     const updates: Record<string, SystemUser> = {};
-    for (const u of INITIAL_USERS) {
+    for (const u of INITIAL_USERS_MINIMAL) {
       if (!currentUsers[u.username]) {
         updates[u.username] = { ...u, status: u.status || 'active', loginAttempts: 0 };
       }
@@ -276,6 +240,34 @@ export const DataService = {
       return null;
     }
   },
+
+  /** Obtiene el usuario actual desde Firebase (datos actualizados: name, photoUrl, etc.). */
+  getCurrentUserFromFirebase: async (): Promise<SystemUser | null> => {
+    const current = DataService.getCurrentUser();
+    if (!current?.username) return null;
+    const snap = await get(ref(db, ROOT + '/users/' + current.username));
+    if (!snap.exists()) return null;
+    return snap.val() as SystemUser;
+  },
+
+  /** El usuario logueado actualiza solo su propio nombre y/o foto. No toca contraseña ni otros campos. Actualiza localStorage para que la foto se vea en toda la app al instante. */
+  updateCurrentUserProfile: async (updates: { name?: string; photoUrl?: string | null }): Promise<void> => {
+    const current = DataService.getCurrentUser();
+    if (!current?.username) throw new Error('No hay sesión iniciada.');
+    const snap = await get(ref(db, ROOT + '/users/' + current.username));
+    if (!snap.exists()) throw new Error('Usuario no encontrado.');
+    const existing = snap.val() as Record<string, unknown>;
+    const merged = { ...existing };
+    if (updates.name !== undefined) merged.name = updates.name;
+    if (updates.photoUrl !== undefined) merged.photoUrl = updates.photoUrl || null;
+    Object.keys(merged).forEach((k) => { if (merged[k] === undefined) delete merged[k]; });
+    await set(ref(db, ROOT + '/users/' + current.username), merged);
+    const nextUser = { ...current, name: (merged.name as string) ?? current.name, photoUrl: (merged.photoUrl as string) ?? current.photoUrl };
+    try {
+      localStorage.setItem('currentUser', JSON.stringify(nextUser));
+    } catch (_) {}
+  },
+
   getCurrentUserRole: (): string => {
     try {
       const userStr = localStorage.getItem('currentUser');
@@ -427,13 +419,25 @@ export const DataService = {
     return out;
   },
 
+  /** Fuerza recarga de clientes desde Firebase (invalida caché). Para ver fotos y datos actualizados tras Mi perfil. */
+  refreshClients: async (): Promise<Client[]> => {
+    cacheInvalidate('clients');
+    return DataService.getClients();
+  },
+
+  /** Igual que refreshClients pero para la lista de barbero (clientes con actividad). */
+  refreshClientsWithActivity: async (): Promise<Client[]> => {
+    cacheInvalidate('clients');
+    return DataService.getClientsWithActivity();
+  },
+
   /** Busca un cliente por teléfono en toda la base de datos (cualquier barbería). Normaliza solo dígitos. */
   findClientByPhone: async (phone: string): Promise<Client | null> => {
-    const normalized = (phone || '').replace(/\D/g, '');
+    const normalized = String(phone ?? '').replace(/\D/g, '');
     if (normalized.length < 6) return null;
     const snap = await get(ref(db, ROOT + '/clients'));
     const arr = snapshotToArray<Client>(snap.val()) || [];
-    const found = arr.find((c) => (c.telefono || '').replace(/\D/g, '') === normalized);
+    const found = arr.find((c) => String(c.telefono || '').replace(/\D/g, '') === normalized);
     return found ? { ...found, id: Number(found.id) } : null;
   },
 
@@ -476,7 +480,7 @@ export const DataService = {
 
   /** Busca cliente por teléfono; si existe lo devuelve. Si no, crea uno nuevo. Evita duplicados. */
   addClientOrGetExisting: async (client: Omit<Client, 'id' | 'posId'>): Promise<Client> => {
-    const phone = (client.telefono || '').trim();
+    const phone = String(client.telefono ?? '').trim();
     if (phone.length >= 6) {
       const existing = await DataService.findClientByPhone(phone);
       if (existing) return existing;
@@ -488,6 +492,87 @@ export const DataService = {
     requireRole(['admin', 'superadmin', 'barbero']);
     await set(ref(db, ROOT + '/clients/' + client.id), client);
     cacheInvalidate('clients');
+  },
+
+  /** Obtiene un cliente por ID (cualquier sede). */
+  getClientById: async (id: number): Promise<Client | null> => {
+    const snap = await get(ref(db, ROOT + '/clients/' + id));
+    if (!snap.exists()) return null;
+    const c = snap.val() as Client;
+    return { ...c, id: Number(c.id) };
+  },
+
+  /** Solo rol cliente: actualiza su propio perfil (nombre, teléfono, foto). Escribe el cliente completo para que photoUrl se persista bien en la lista. Sincroniza nombre y foto al usuario (users) y a localStorage. */
+  updateClientProfileForCurrentUser: async (updates: { nombre?: string; telefono?: string; photoUrl?: string | null }): Promise<void> => {
+    const user = DataService.getCurrentUser();
+    if (!user || user.role !== 'cliente') throw new Error('Solo los clientes pueden editar su perfil aquí.');
+    const clientId = user.clientId;
+    if (clientId == null) throw new Error('No tienes un perfil de cliente vinculado. Contacta al administrador.');
+    const client = await DataService.getClientById(clientId);
+    if (!client) throw new Error('Perfil de cliente no encontrado.');
+    const newNombre = updates.nombre !== undefined ? updates.nombre : client.nombre;
+    const newTelefono = updates.telefono !== undefined ? updates.telefono : client.telefono;
+    let newPhotoUrl: string | null = updates.photoUrl !== undefined ? (updates.photoUrl || null) : (client.photoUrl ?? null);
+    if (typeof newPhotoUrl === 'string' && newPhotoUrl.length > 500000) {
+      throw new Error('La imagen es demasiado grande. Usa una foto más pequeña o pega una URL de imagen.');
+    }
+    const merged: Client = {
+      ...client,
+      id: clientId,
+      nombre: newNombre,
+      telefono: newTelefono,
+      photoUrl: newPhotoUrl ?? undefined,
+    };
+    const toWrite = JSON.parse(JSON.stringify(merged)) as Record<string, unknown>;
+    Object.keys(toWrite).forEach((k) => { if (toWrite[k] === undefined) delete toWrite[k]; });
+    await set(ref(db, ROOT + '/clients/' + clientId), toWrite);
+    cacheInvalidate('clients');
+    const photoValue = newPhotoUrl;
+    const nameValue = newNombre || user.name;
+    const userSnap = await get(ref(db, ROOT + '/users/' + user.username));
+    if (userSnap.exists()) {
+      const existingUser = userSnap.val() as Record<string, unknown>;
+      const userMerged = { ...existingUser, name: nameValue, photoUrl: photoValue };
+      Object.keys(userMerged).forEach((k) => { if (userMerged[k] === undefined) delete userMerged[k]; });
+      await set(ref(db, ROOT + '/users/' + user.username), userMerged);
+    }
+    try {
+      const cur = DataService.getCurrentUser();
+      if (cur?.username === user.username) {
+        localStorage.setItem('currentUser', JSON.stringify({ ...cur, name: nameValue, photoUrl: photoValue || undefined }));
+      }
+    } catch (_) {}
+  },
+
+  /** Asegura que el usuario cliente tenga un registro Client y clientId; si no existe, lo crea y enlaza. */
+  ensureClientProfileForCurrentUser: async (): Promise<Client> => {
+    const user = DataService.getCurrentUser();
+    if (!user || user.role !== 'cliente') throw new Error('Solo aplica para usuarios con rol cliente.');
+    if (user.clientId != null) {
+      const existing = await DataService.getClientById(user.clientId);
+      if (existing) return existing;
+    }
+    const effectivePosId = ACTIVE_POS_ID ?? 1;
+    const newClient: Client = {
+      id: generateUniqueId(),
+      posId: effectivePosId,
+      nombre: user.name || user.username || 'Cliente',
+      telefono: '',
+      email: '',
+      ultimaVisita: '',
+      notas: '',
+      fechaRegistro: new Date().toISOString().split('T')[0],
+      puntos: 0,
+      status: 'active',
+    };
+    await set(ref(db, ROOT + '/clients/' + newClient.id), newClient);
+    cacheInvalidate('clients');
+    const userSnap = await get(ref(db, ROOT + '/users/' + user.username));
+    const existingUser = userSnap.val() as SystemUser | null;
+    if (existingUser) {
+      await set(ref(db, ROOT + '/users/' + user.username), { ...existingUser, clientId: newClient.id });
+    }
+    return newClient;
   },
 
   toggleClientStatus: async (id: number): Promise<void> => {
@@ -651,8 +736,107 @@ export const DataService = {
 
   updateBarber: async (barber: Barber): Promise<void> => {
     requireRole(['admin', 'superadmin']);
-    await set(ref(db, ROOT + '/barbers/' + barber.id), barber);
+    const sanitized = JSON.parse(JSON.stringify(barber)) as Barber;
+    await set(ref(db, ROOT + '/barbers/' + barber.id), sanitized);
     cacheInvalidate('barbers');
+  },
+
+  /** El barbero puede actualizar solo su propio horario de trabajo; admin/superadmin pueden actualizar cualquiera. */
+  updateBarberWorkingHours: async (barberId: number, workingHours: BarberWorkingHours): Promise<void> => {
+    const role = DataService.getCurrentUserRole();
+    const currentBarberId = DataService.getCurrentBarberId();
+    if (role === 'barbero' && currentBarberId !== barberId) throw new Error('Solo puedes editar tu propio horario.');
+    if (role !== 'barbero') requireRole(['admin', 'superadmin']);
+    const snap = await get(ref(db, ROOT + '/barbers/' + barberId));
+    if (!snap.exists()) throw new Error('Barbero no encontrado.');
+    const barber = snap.val() as Barber;
+    const payload: Record<string, unknown> = { ...barber };
+    if (workingHours && Object.keys(workingHours).length > 0) payload.workingHours = workingHours;
+    else delete payload.workingHours;
+    await set(ref(db, ROOT + '/barbers/' + barberId), payload);
+    cacheInvalidate('barbers');
+  },
+
+  /** Horario de comida. El barbero solo puede editar el suyo. */
+  updateBarberLunchBreak: async (barberId: number, lunchBreak: BarberWorkingHours): Promise<void> => {
+    const role = DataService.getCurrentUserRole();
+    const currentBarberId = DataService.getCurrentBarberId();
+    if (role === 'barbero' && currentBarberId !== barberId) throw new Error('Solo puedes editar tu propio horario de comida.');
+    if (role !== 'barbero') requireRole(['admin', 'superadmin']);
+    const snap = await get(ref(db, ROOT + '/barbers/' + barberId));
+    if (!snap.exists()) throw new Error('Barbero no encontrado.');
+    const barber = snap.val() as Barber;
+    const payload: Record<string, unknown> = { ...barber };
+    if (lunchBreak && Object.keys(lunchBreak).length > 0) {
+      const sanitized: Record<number, { start: string; end: string }> = {};
+      for (const [day, val] of Object.entries(lunchBreak)) {
+        if (val && typeof val === 'object' && val.start != null && val.end != null) sanitized[Number(day)] = { start: String(val.start), end: String(val.end) };
+      }
+      if (Object.keys(sanitized).length > 0) payload.lunchBreak = sanitized;
+      else delete payload.lunchBreak;
+    } else delete payload.lunchBreak;
+    await set(ref(db, ROOT + '/barbers/' + barberId), payload);
+    cacheInvalidate('barbers');
+  },
+
+  /** Bloquear/desbloquear horas (salidas). El barbero solo puede editar las suyas. */
+  updateBarberBlockedHours: async (barberId: number, blockedHours: BarberBlockedSlot[]): Promise<void> => {
+    const role = DataService.getCurrentUserRole();
+    const currentBarberId = DataService.getCurrentBarberId();
+    if (role === 'barbero' && currentBarberId !== barberId) throw new Error('Solo puedes editar tus propias horas bloqueadas.');
+    if (role !== 'barbero') requireRole(['admin', 'superadmin']);
+    const snap = await get(ref(db, ROOT + '/barbers/' + barberId));
+    if (!snap.exists()) throw new Error('Barbero no encontrado.');
+    const barber = snap.val() as Barber;
+    const payload: Record<string, unknown> = { ...barber };
+    if (blockedHours?.length) payload.blockedHours = blockedHours;
+    else delete payload.blockedHours;
+    await set(ref(db, ROOT + '/barbers/' + barberId), payload);
+    cacheInvalidate('barbers');
+  },
+
+  getBarberGallery: async (barberId: number): Promise<BarberGalleryPhoto[]> => {
+    const snap = await get(ref(db, ROOT + '/barberGallery/' + barberId));
+    if (!snap.exists()) return [];
+    const val = snap.val();
+    if (val == null || typeof val !== 'object') return [];
+    const obj = val as Record<string, BarberGalleryPhoto & { id?: number }>;
+    return Object.entries(obj)
+      .filter(([, v]) => v != null)
+      .map(([k, v]) => ({ ...v, id: typeof v.id === 'number' ? v.id : Number(k) || 0 } as BarberGalleryPhoto))
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  },
+
+  addBarberGalleryPhoto: async (barberId: number, data: { imageUrl?: string; serviceId?: number | null; caption?: string }): Promise<BarberGalleryPhoto> => {
+    const role = DataService.getCurrentUserRole();
+    const currentBarberId = DataService.getCurrentBarberId();
+    if (role === 'barbero' && currentBarberId !== barberId) throw new Error('Solo puedes agregar fotos a tu propia galería.');
+    if (role !== 'barbero') requireRole(['admin', 'superadmin']);
+    const posId = ACTIVE_POS_ID;
+    if (posId == null) throw new Error('No hay sede activa.');
+    const imageUrl = data.imageUrl?.trim();
+    if (!imageUrl) throw new Error('Indica una imagen (sube un archivo o pega una URL).');
+    const id = generateUniqueId();
+    const photo: BarberGalleryPhoto = {
+      id,
+      barberId,
+      posId,
+      imageUrl,
+      serviceId: data.serviceId ?? null,
+      caption: data.caption?.trim() || undefined,
+      createdAt: new Date().toISOString(),
+    };
+    const payload = JSON.parse(JSON.stringify(photo)) as Record<string, unknown>;
+    await set(ref(db, ROOT + '/barberGallery/' + barberId + '/' + id), payload);
+    return photo;
+  },
+
+  deleteBarberGalleryPhoto: async (barberId: number, photoId: number): Promise<void> => {
+    const role = DataService.getCurrentUserRole();
+    const currentBarberId = DataService.getCurrentBarberId();
+    if (role === 'barbero' && currentBarberId !== barberId) throw new Error('Solo puedes eliminar fotos de tu propia galería.');
+    if (role !== 'barbero') requireRole(['admin', 'superadmin']);
+    await remove(ref(db, ROOT + '/barberGallery/' + barberId + '/' + photoId));
   },
 
   deleteBarber: async (id: number): Promise<void> => {
@@ -696,11 +880,12 @@ export const DataService = {
     return arr.some((a) => a.barberoId === barberId && a.fecha === date && a.hora === time && a.estado !== 'cancelada');
   },
 
-  /** Añade una cita sin reemplazar las demás (para reservas de invitados sin cuenta). */
+  /** Añade una cita sin reemplazar las demás (para reservas de cliente o invitado). Sin undefined para evitar fallos en móvil. */
   addAppointment: async (appointment: Omit<Appointment, 'id'>): Promise<Appointment> => {
     const id = generateUniqueId();
     const apt: Appointment = { ...appointment, id };
-    await update(ref(db, ROOT + '/appointments/' + id), apt);
+    const toWrite = JSON.parse(JSON.stringify(apt)) as Record<string, unknown>;
+    await set(ref(db, ROOT + '/appointments/' + id), toWrite);
     cacheInvalidate('appointments');
     cacheInvalidate('clientsActivity');
     return apt;

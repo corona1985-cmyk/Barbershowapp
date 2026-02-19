@@ -3,6 +3,7 @@ import { DataService, generateUniqueId } from '../services/data';
 import { Product, Service, Client, SaleItem, Sale, AppointmentForSale } from '../types';
 import { Search, Plus, Minus, Trash2, User, CreditCard, Banknote, Smartphone, CheckCircle, Package, Scissors, ShoppingCart, FileText, Loader2, Printer, MessageCircle } from 'lucide-react';
 import Invoice from '../components/Invoice';
+import { handlePrint } from '../utils/print';
 
 interface SalesProps {
     salesFromAppointment?: AppointmentForSale | null;
@@ -491,7 +492,20 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
                             <div className="flex flex-col sm:flex-row gap-3">
                             <button
                                 type="button"
-                                onClick={() => window.print()}
+                                onClick={() => handlePrint({
+                                    name: 'Factura',
+                                    shareText: [
+                                        `${storeName} – Comprobante de venta`,
+                                        `Ref: ${lastCompletedSale.numeroVenta}`,
+                                        `Fecha: ${lastCompletedSale.fecha} ${lastCompletedSale.hora}`,
+                                        lastSaleClientName ? `Cliente: ${lastSaleClientName}` : null,
+                                        '',
+                                        ...lastCompletedSale.items.map(i => `• ${i.name} x${i.quantity} – ${currencySymbol}${(i.price * i.quantity).toFixed(2)}`),
+                                        '',
+                                        `Total: ${currencySymbol}${lastCompletedSale.total.toFixed(2)}`,
+                                        'Gracias por su preferencia.',
+                                    ].filter(Boolean).join('\n'),
+                                })}
                                 className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold rounded-xl transition-colors no-print"
                             >
                                 <Printer size={20} />
@@ -512,7 +526,7 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
                                         'Gracias por su preferencia.',
                                     ].filter(Boolean);
                                     const text = lines.join('\n');
-                                    const phone = lastSaleClientPhone?.replace(/\s+/g, '').replace(/^\+/, '') || '';
+                                    const phone = String(lastSaleClientPhone ?? '').replace(/\s+/g, '').replace(/^\+/, '') || '';
                                     const url = phone
                                         ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
                                         : `https://wa.me/?text=${encodeURIComponent(text)}`;

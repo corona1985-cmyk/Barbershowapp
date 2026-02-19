@@ -13,6 +13,7 @@ import CalendarView from './pages/CalendarView';
 import WhatsAppConsole from './pages/WhatsAppConsole';
 import UserAdmin from './pages/UserAdmin';
 import ClientDiscovery from './pages/ClientDiscovery';
+import ClientProfile from './pages/ClientProfile';
 import MasterDashboard from './pages/MasterDashboard';
 import { Clients, Inventory, Finance } from './pages/InventoryClientsFinance';
 import { ViewState, UserRole, PointOfSale, SystemUser, AppointmentForSale, AccountTier } from './types';
@@ -29,6 +30,7 @@ const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>('dashboard');
     const [userRole, setUserRole] = useState<UserRole>('admin');
     const [fullName, setFullName] = useState('');
+    const [userPhotoUrl, setUserPhotoUrl] = useState('');
     const [acceptedCookies, setAcceptedCookies] = useState(false);
     
     // Mobile Sidebar State
@@ -127,6 +129,7 @@ const App: React.FC = () => {
                 setUserRole(role);
                 setFullName(userData.name);
                 setUsername(userData.username ?? '');
+                setUserPhotoUrl((userData as any).photoUrl ?? '');
 
                 if (role === 'platform_owner') {
                     setCurrentView('master_dashboard');
@@ -232,11 +235,12 @@ const App: React.FC = () => {
             }
 
             const role = user.role === 'empleado' ? 'barbero' : user.role;
-            const userData = { username: user.username, role, name: user.name, posId: user.posId, barberId: (user as any).barberId, clientId: (user as any).clientId, loginTime: new Date().toISOString() };
+            const userData = { username: user.username, role, name: user.name, photoUrl: (user as any).photoUrl, posId: user.posId, barberId: (user as any).barberId, clientId: (user as any).clientId, loginTime: new Date().toISOString() };
             localStorage.setItem('currentUser', JSON.stringify(userData));
             setIsAuthenticated(true);
             setUserRole(role);
             setFullName(user.name);
+            setUserPhotoUrl((user as any).photoUrl ?? '');
 
             if (role === 'platform_owner') setCurrentView('master_dashboard');
             else if (role === 'superadmin') {
@@ -303,38 +307,55 @@ const App: React.FC = () => {
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!regUsername || !regPassword || !regName || !regPhone) return;
-        const existing = await DataService.findUserByUsername(regUsername);
-        if (existing) {
-            setLoginError('El usuario ya existe');
+        setLoginError('');
+        const userTrim = (regUsername || '').trim().toLowerCase();
+        const nameTrim = (regName || '').trim();
+        const phoneTrim = (regPhone || '').trim().replace(/\D/g, '');
+        if (!userTrim || !regPassword || !nameTrim) {
+            setLoginError('Completa usuario, nombre y contraseña.');
             return;
         }
-        const targetPosId = referralPos ? referralPos.id : 1;
-        const prevPosId = DataService.getActivePosId();
-        DataService.setActivePosId(targetPosId);
-        const client = await DataService.addClientOrGetExisting({
-            nombre: regName,
-            telefono: regPhone,
-            email: `${regUsername}@example.com`,
-            notas: referralPos ? `Registrado vía QR en ${referralPos.name}` : 'Registro Autoservicio Web',
-            fechaRegistro: new Date().toISOString().split('T')[0],
-            puntos: 0,
-            status: 'active',
-            whatsappOptIn: true,
-            ultimaVisita: 'N/A'
-        });
-        const newUser: SystemUser = { username: regUsername, password: regPassword, name: regName, role: 'cliente', posId: targetPosId, clientId: client.id };
-        await DataService.saveUser(newUser);
-        await DataService.setClientPreferredPos(regUsername, targetPosId);
-        DataService.setActivePosId(prevPosId);
-        setRegSuccess(true);
-        setTimeout(() => {
-            setRegSuccess(false);
-            setIsRegistering(false);
-            setUsername(regUsername);
-            setPassword('');
-            setLoginError('Registro exitoso. Por favor inicie sesión.');
-        }, 2000);
+        if (phoneTrim.length < 8) {
+            setLoginError('Ingresa un teléfono válido (al menos 8 dígitos).');
+            return;
+        }
+        try {
+            const existing = await DataService.findUserByUsername(userTrim);
+            if (existing) {
+                setLoginError('El usuario ya existe. Elige otro o inicia sesión.');
+                return;
+            }
+            const targetPosId = referralPos ? referralPos.id : 1;
+            const prevPosId = DataService.getActivePosId();
+            DataService.setActivePosId(targetPosId);
+            const client = await DataService.addClientOrGetExisting({
+                nombre: nameTrim,
+                telefono: regPhone.trim(),
+                email: `${userTrim}@example.com`,
+                notas: referralPos ? `Registrado vía QR en ${referralPos.name}` : 'Registro Autoservicio Web',
+                fechaRegistro: new Date().toISOString().split('T')[0],
+                puntos: 0,
+                status: 'active',
+                whatsappOptIn: true,
+                ultimaVisita: 'N/A'
+            });
+            const newUser: SystemUser = { username: userTrim, password: regPassword, name: nameTrim, role: 'cliente', posId: targetPosId, clientId: client.id };
+            await DataService.saveUser(newUser);
+            await DataService.setClientPreferredPos(userTrim, targetPosId);
+            DataService.setActivePosId(prevPosId);
+            setRegSuccess(true);
+            setTimeout(() => {
+                setRegSuccess(false);
+                setIsRegistering(false);
+                setUsername(userTrim);
+                setPassword('');
+                setLoginError('Registro exitoso. Por favor inicie sesión.');
+            }, 2000);
+        } catch (err) {
+            console.error('Error en registro:', err);
+            const msg = err instanceof Error ? err.message : String(err);
+            setLoginError(msg.includes('conexión') || msg.includes('permiso') ? msg : `No se pudo completar el registro. ${msg}`);
+        }
     };
 
     const handleLogout = () => {
@@ -396,6 +417,7 @@ const App: React.FC = () => {
             case 'whatsapp_console': return <WhatsAppConsole key={k} />;
             case 'user_admin': return <UserAdmin key={k} />;
             case 'client_discovery': return <ClientDiscovery key={k} onSwitchPos={handleClientPosSwitch} preferredPosId={preferredPosId} onRemoveFavorite={async () => { const u = DataService.getCurrentUser(); if (u?.username) { await DataService.setClientPreferredPos(u.username, null); setPreferredPosId(null); } }} />;
+            case 'client_profile': return <ClientProfile key={k} onChangeView={setCurrentView} onProfileUpdated={() => { const u = DataService.getCurrentUser(); if (u) { setFullName(u.name ?? fullName); setUserPhotoUrl(u.photoUrl ?? ''); } }} />;
             case 'qr_scanner': return null;
             default: return <Dashboard key={k} onChangeView={setCurrentView} />;
         }
@@ -507,6 +529,11 @@ const App: React.FC = () => {
 
                     {isRegistering ? (
                          <form onSubmit={handleRegister} className="space-y-4 animate-in slide-in-from-right duration-300">
+                             {loginError && (
+                                 <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
+                                     {loginError}
+                                 </div>
+                             )}
                              {referralPos && (
                                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-center mb-4">
                                      <MapPin size={20} className="text-[#ffd427] mr-2" />
@@ -732,8 +759,12 @@ const App: React.FC = () => {
                             <p className="text-sm font-bold text-slate-800">{fullName || username}</p>
                             <p className="text-xs text-slate-500 capitalize">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
                         </div>
-                        <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-tr from-[#ffd427] to-amber-500 rounded-full flex items-center justify-center text-slate-900 font-bold border-2 border-white shadow-md overflow-hidden">
-                            {(username || fullName).charAt(0).toUpperCase() || '?'}
+                        <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-tr from-[#ffd427] to-amber-500 rounded-full flex items-center justify-center text-slate-900 font-bold border-2 border-white shadow-md overflow-hidden shrink-0">
+                            {userPhotoUrl ? (
+                                <img src={userPhotoUrl} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                                (username || fullName).charAt(0).toUpperCase() || '?'
+                            )}
                         </div>
                         
                         {/* Extra Logout Button in Header */}

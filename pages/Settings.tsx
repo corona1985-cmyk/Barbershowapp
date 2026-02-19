@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
-import { AppSettings, SystemUser, Service, UserRole, Barber, AccountTier, PointOfSale } from '../types';
-import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as SettingsIcon, UserCheck, Power, QrCode, Download, Printer, Percent } from 'lucide-react';
+import { AppSettings, SystemUser, Service, UserRole, Barber, BarberWorkingHours, BarberBlockedSlot, BarberGalleryPhoto, AccountTier, PointOfSale } from '../types';
+import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as SettingsIcon, UserCheck, Power, QrCode, Download, Printer, Percent, Clock, CalendarOff, ImagePlus } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { handlePrintQR as handlePrintQRNative } from '../utils/print';
 
 type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'barbers' | 'taxes' | 'qr';
 
@@ -25,7 +27,19 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
 
     const [currentUser, setCurrentUser] = useState<Partial<SystemUser>>({ username: '', name: '', role: 'cliente', password: '' });
     const [currentService, setCurrentService] = useState<Partial<Service>>({ name: '', price: 0, duration: 30 });
+    const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
     const [currentBarber, setCurrentBarber] = useState<Partial<Barber>>({ name: '', specialty: '', active: true });
+    const [myBarberWorkingHours, setMyBarberWorkingHours] = useState<BarberWorkingHours>({});
+    const [myBarberLunchBreak, setMyBarberLunchBreak] = useState<BarberWorkingHours>({});
+    const [savingHours, setSavingHours] = useState(false);
+    const [myBarberBlockedHours, setMyBarberBlockedHours] = useState<BarberBlockedSlot[]>([]);
+    const [savingBlocked, setSavingBlocked] = useState(false);
+    const [showAddBlock, setShowAddBlock] = useState(false);
+    const [newBlock, setNewBlock] = useState<BarberBlockedSlot>({ date: '', start: '10:00', end: '11:00' });
+    const [galleryPhotos, setGalleryPhotos] = useState<BarberGalleryPhoto[]>([]);
+    const [galleryUploading, setGalleryUploading] = useState(false);
+    const [galleryCaption, setGalleryCaption] = useState('');
+    const [galleryUrl, setGalleryUrl] = useState('');
 
     const loadData = async () => {
         const role = DataService.getCurrentUserRole();
@@ -33,7 +47,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
             DataService.getSettings(),
             role === 'barbero' ? Promise.resolve([]) : DataService.getUsers(),
             DataService.getServices(),
-            role === 'barbero' ? Promise.resolve([]) : DataService.getBarbers(),
+            DataService.getBarbers(),
             DataService.getPointsOfSale(),
         ]);
         setSettings(settingsData);
@@ -46,6 +60,17 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
         }
         setServices(servicesList);
         setBarbers(barbersData);
+        if (role === 'barbero') {
+            const myId = DataService.getCurrentBarberId();
+            const me = barbersData.find((b: Barber) => b.id === myId);
+            if (me?.workingHours) setMyBarberWorkingHours(me.workingHours);
+            else setMyBarberWorkingHours({});
+            setMyBarberLunchBreak(me?.lunchBreak ?? {});
+            setMyBarberBlockedHours(me?.blockedHours ?? []);
+            if (myId != null) {
+                try { const gallery = await DataService.getBarberGallery(myId); setGalleryPhotos(gallery); } catch { setGalleryPhotos([]); }
+            }
+        }
         setCurrentUserRole(role);
         setActivePosId(DataService.getActivePosId());
     };
@@ -179,11 +204,24 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
         setShowBarberModal(true);
     };
 
-    const baseUrl = window.location.origin + window.location.pathname;
+    // URL base para los QR: en producción/native usar siempre la URL pública del despliegue.
+    // En Android/iOS (Capacitor) window.location es tipo capacitor://localhost → los QR salían rotos.
+    const rawPublicUrl = typeof import.meta !== 'undefined' && import.meta.env?.VITE_APP_PUBLIC_URL;
+    const isNativeApp = Capacitor.isNativePlatform();
+    const defaultPublicUrl = 'https://gen-lang-client-0624135070.web.app';
+    const baseUrl = rawPublicUrl
+        ? String(rawPublicUrl).replace(/\/+$/, '')
+        : isNativeApp
+            ? defaultPublicUrl
+            : (window.location.origin + (window.location.pathname || '').replace(/\/+$/, '') || window.location.origin);
     const getRegistrationUrl = () => `${baseUrl}?ref_pos=${activePosId}`;
     const getRegistrationUrlForPos = (posId: number) => `${baseUrl}?ref_pos=${posId}`;
 
     const handlePrintQR = (title: string, qrImageUrl: string) => {
+        if (Capacitor.isNativePlatform()) {
+            handlePrintQRNative();
+            return;
+        }
         const el = document.getElementById('qr-print-area');
         if (!el) return;
         const img = new Image();
@@ -587,6 +625,207 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                 <strong>Perfil incompleto.</strong> Tu usuario no tiene un barbero asignado. Pide al administrador que te asigne en <strong>Admin Usuarios</strong> (o en Barberos + usuario con rol barbero). Hasta entonces no podrás agregar tus propios servicios ni ver tus citas correctamente.
                             </div>
                         )}
+                        {isBarber && DataService.getCurrentBarberId() != null && (
+                            <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                                <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-1"><Clock size={18} /> Horario en que trabajas</h4>
+                                <p className="text-xs text-slate-500 mb-3">Marca los días y horas en que atiendes. Los clientes solo verán slots en este horario.</p>
+                                <div className="space-y-2 mb-3">
+                                    {[0,1,2,3,4,5,6].map((day) => {
+                                        const wh = myBarberWorkingHours[day] ?? null;
+                                        const enabled = wh != null;
+                                        return (
+                                            <div key={day} className="flex items-center gap-2 flex-wrap">
+                                                <input type="checkbox" id={`mywh-${day}`} checked={enabled} className="rounded text-[#ffd427] focus:ring-[#ffd427]" onChange={e => {
+                                                    const next = { ...myBarberWorkingHours };
+                                                    if (e.target.checked) next[day] = { start: '09:00', end: '19:00' };
+                                                    else delete next[day];
+                                                    setMyBarberWorkingHours(next);
+                                                }} />
+                                                <label htmlFor={`mywh-${day}`} className="w-8 text-sm font-medium text-slate-600">{DAY_NAMES[day]}</label>
+                                                {enabled && (
+                                                    <>
+                                                        <input type="time" className="border rounded px-2 py-1 text-sm w-24" value={wh.start} onChange={e => setMyBarberWorkingHours({ ...myBarberWorkingHours, [day]: { ...wh, start: e.target.value } })} />
+                                                        <span className="text-slate-400">–</span>
+                                                        <input type="time" className="border rounded px-2 py-1 text-sm w-24" value={wh.end} onChange={e => setMyBarberWorkingHours({ ...myBarberWorkingHours, [day]: { ...wh, end: e.target.value } })} />
+                                                    </>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+</div>
+                                <p className="text-sm font-medium text-slate-700 mt-3 mb-2">Horario de comida</p>
+                                <p className="text-xs text-slate-500 mb-2">Opcional: indica en qué rango no atiendes (comida). Los clientes no verán slots en esa franja.</p>
+                                <div className="space-y-2 mb-3">
+                                    {[0,1,2,3,4,5,6].map((day) => {
+                                        const lb = myBarberLunchBreak[day] ?? null;
+                                        const hasLunch = lb != null && (lb.start || lb.end);
+                                        return (
+                                            <div key={day} className="flex items-center gap-2 flex-wrap">
+                                                <label className="w-8 text-sm font-medium text-slate-600">{DAY_NAMES[day]}</label>
+                                                <input type="time" className="border rounded px-2 py-1 text-sm w-24" value={lb?.start ?? ''} placeholder="Inicio" onChange={e => {
+                                                    const start = e.target.value;
+                                                    const end = lb?.end ?? (start || '14:00');
+                                                    setMyBarberLunchBreak(prev => ({ ...prev, [day]: { start: start || '13:00', end } }));
+                                                }} />
+                                                <span className="text-slate-400">–</span>
+                                                <input type="time" className="border rounded px-2 py-1 text-sm w-24" value={lb?.end ?? ''} onChange={e => {
+                                                    const end = e.target.value;
+                                                    const start = lb?.start ?? '13:00';
+                                                    setMyBarberLunchBreak(prev => ({ ...prev, [day]: { start, end: end || '14:00' } }));
+                                                }} />
+                                                {hasLunch && (
+                                                    <button type="button" onClick={() => { const next = { ...myBarberLunchBreak }; delete next[day]; setMyBarberLunchBreak(next); }} className="text-slate-400 hover:text-red-500 text-xs">Quitar</button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <button onClick={async () => {
+                                    setSavingHours(true);
+                                    try {
+                                        await DataService.updateBarberWorkingHours(DataService.getCurrentBarberId()!, myBarberWorkingHours);
+                                        await DataService.updateBarberLunchBreak(DataService.getCurrentBarberId()!, myBarberLunchBreak);
+                                        const updated = await DataService.getBarbers();
+                                        setBarbers(updated);
+                                        const me = updated.find((b: Barber) => b.id === DataService.getCurrentBarberId());
+                                        if (me?.workingHours) setMyBarberWorkingHours(me.workingHours);
+                                        if (me?.lunchBreak) setMyBarberLunchBreak(me.lunchBreak);
+                                        alert('Horario y comida guardados.');
+                                    } catch (err) {
+                                        alert(err instanceof Error ? err.message : 'Error al guardar.');
+                                    } finally {
+                                        setSavingHours(false);
+                                    }
+                                }} disabled={savingHours} className="px-4 py-2 bg-[#ffd427] text-slate-900 font-bold rounded-lg hover:bg-[#e6be23] disabled:opacity-50 text-sm">
+                                    {savingHours ? 'Guardando...' : 'Guardar mi horario'}
+                                </button>
+                            </div>
+                        )}
+                        {isBarber && DataService.getCurrentBarberId() != null && (
+                            <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                                <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-1"><CalendarOff size={18} /> Bloquear horas (salidas)</h4>
+                                <p className="text-xs text-slate-500 mb-3">Marca rangos de hora en los que no atenderás (ej. salida, cita personal). Esos slots no se mostrarán a los clientes.</p>
+                                <ul className="space-y-2 mb-3 max-h-40 overflow-y-auto">
+                                    {(myBarberBlockedHours ?? []).sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start)).map((bl, i) => (
+                                        <li key={i} className="flex items-center justify-between gap-2 py-1.5 px-2 bg-slate-50 rounded border border-slate-100">
+                                            <span className="text-sm text-slate-700"><strong>{bl.date}</strong> {bl.start} – {bl.end}</span>
+                                            <button type="button" onClick={() => {
+                                                const next = (myBarberBlockedHours ?? []).filter((_, j) => j !== i);
+                                                setMyBarberBlockedHours(next);
+                                            }} className="text-red-500 hover:text-red-700 p-1" title="Eliminar"><Trash2 size={16} /></button>
+                                        </li>
+                                    ))}
+                                    {(!myBarberBlockedHours || myBarberBlockedHours.length === 0) && (
+                                        <li className="text-sm text-slate-400 italic">Sin bloques. Agrega uno si necesitas bloquear horas.</li>
+                                    )}
+                                </ul>
+                                {showAddBlock && (
+                                    <div className="flex flex-wrap items-center gap-2 p-3 bg-amber-50/50 border border-amber-200 rounded-lg mb-3">
+                                        <input type="date" className="border rounded px-2 py-1 text-sm" value={newBlock.date} onChange={e => setNewBlock(b => ({ ...b, date: e.target.value }))} min={new Date().toISOString().split('T')[0]} />
+                                        <input type="time" className="border rounded px-2 py-1 text-sm w-24" value={newBlock.start} onChange={e => setNewBlock(b => ({ ...b, start: e.target.value }))} />
+                                        <span className="text-slate-500">–</span>
+                                        <input type="time" className="border rounded px-2 py-1 text-sm w-24" value={newBlock.end} onChange={e => setNewBlock(b => ({ ...b, end: e.target.value }))} />
+                                        <button type="button" onClick={() => {
+                                            if (!newBlock.date || newBlock.start >= newBlock.end) { alert('Fecha obligatoria y la hora fin debe ser mayor que la de inicio.'); return; }
+                                            setMyBarberBlockedHours(prev => [...(prev ?? []), { ...newBlock }]);
+                                            setNewBlock({ date: '', start: '10:00', end: '11:00' });
+                                            setShowAddBlock(false);
+                                        }} className="px-3 py-1 bg-green-600 text-white rounded text-sm">Agregar</button>
+                                        <button type="button" onClick={() => setShowAddBlock(false)} className="px-3 py-1 border border-slate-300 rounded text-sm">Cancelar</button>
+                                    </div>
+                                )}
+                                {!showAddBlock && (
+                                    <button type="button" onClick={() => setShowAddBlock(true)} className="mr-2 px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50">+ Agregar bloqueo</button>
+                                )}
+                                <button type="button" onClick={async () => {
+                                    setSavingBlocked(true);
+                                    try {
+                                        await DataService.updateBarberBlockedHours(DataService.getCurrentBarberId()!, myBarberBlockedHours ?? []);
+                                        const updated = await DataService.getBarbers();
+                                        setBarbers(updated);
+                                        const me = updated.find((b: Barber) => b.id === DataService.getCurrentBarberId());
+                                        setMyBarberBlockedHours(me?.blockedHours ?? []);
+                                        alert('Horas bloqueadas guardadas.');
+                                    } catch (err) {
+                                        alert(err instanceof Error ? err.message : 'Error al guardar.');
+                                    } finally {
+                                        setSavingBlocked(false);
+                                    }
+                                }} disabled={savingBlocked} className="px-4 py-2 bg-slate-700 text-white font-medium rounded-lg hover:bg-slate-800 disabled:opacity-50 text-sm">
+                                    {savingBlocked ? 'Guardando...' : 'Guardar bloqueos'}
+                                </button>
+                            </div>
+                        )}
+                        {isBarber && DataService.getCurrentBarberId() != null && (
+                            <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                                <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-1"><ImagePlus size={18} /> Fotos de mis trabajos / cortes</h4>
+                                <p className="text-xs text-slate-500 mb-3">Sube fotos de cortes o servicios que hayas hecho. Los clientes las verán al elegirte para una cita.</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">
+                                    {galleryPhotos.map((p) => (
+                                        <div key={p.id} className="relative group rounded-lg overflow-hidden border border-slate-200 aspect-square bg-slate-100">
+                                            <img src={p.imageUrl} alt={p.caption || 'Trabajo'} className="w-full h-full object-cover" />
+                                            {p.caption && <p className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-1.5 truncate">{p.caption}</p>}
+                                            <button type="button" onClick={async () => { if (confirm('¿Eliminar esta foto?')) { await DataService.deleteBarberGalleryPhoto(DataService.getCurrentBarberId()!, p.id); setGalleryPhotos(prev => prev.filter(x => x.id !== p.id)); } }} className="absolute top-1 right-1 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600" title="Eliminar"><Trash2 size={14} /></button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <label className="cursor-pointer px-3 py-2 bg-[#ffd427] text-slate-900 font-medium rounded-lg hover:bg-[#e6be23] text-sm inline-flex items-center gap-1">
+                                        <ImagePlus size={16} /> Subir foto
+                                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file || !file.type.startsWith('image/')) return;
+                                            setGalleryUploading(true);
+                                            const barberId = DataService.getCurrentBarberId()!;
+                                            const compressToDataUrl = (): Promise<string> => new Promise((resolve, reject) => {
+                                                const img = new Image();
+                                                const url = URL.createObjectURL(file);
+                                                img.onload = () => {
+                                                    URL.revokeObjectURL(url);
+                                                    const max = 500;
+                                                    let w = img.width, h = img.height;
+                                                    if (w > max || h > max) {
+                                                        if (w > h) { h = Math.round((h * max) / w); w = max; } else { w = Math.round((w * max) / h); h = max; }
+                                                    }
+                                                    const canvas = document.createElement('canvas');
+                                                    canvas.width = w; canvas.height = h;
+                                                    const ctx = canvas.getContext('2d');
+                                                    if (!ctx) { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result as string); reader.readAsDataURL(file); return; }
+                                                    ctx.drawImage(img, 0, 0, w, h);
+                                                    resolve(canvas.toDataURL('image/jpeg', 0.75));
+                                                };
+                                                img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer la imagen.')); };
+                                                img.src = url;
+                                            });
+                                            try {
+                                                const dataUrl = await compressToDataUrl();
+                                                const photo = await DataService.addBarberGalleryPhoto(barberId, { imageUrl: dataUrl, caption: galleryCaption || undefined });
+                                                setGalleryPhotos(prev => [photo, ...prev]);
+                                                setGalleryCaption('');
+                                                e.target.value = '';
+                                            } catch (err) {
+                                                alert(err instanceof Error ? err.message : 'Error al subir.');
+                                            } finally {
+                                                setGalleryUploading(false);
+                                            }
+                                        }} disabled={galleryUploading} />
+                                    </label>
+                                    <input type="text" className="border rounded-lg px-2 py-1.5 text-sm w-48" placeholder="Descripción (opcional)" value={galleryCaption} onChange={e => setGalleryCaption(e.target.value)} />
+                                    {galleryUploading && <span className="text-sm text-slate-500">Subiendo...</span>}
+                                    <span className="text-slate-400 text-sm">o</span>
+                                    <input type="url" className="border rounded-lg px-2 py-1.5 text-sm w-52" placeholder="Pega URL de imagen" value={galleryUrl} onChange={e => setGalleryUrl(e.target.value)} />
+                                    <button type="button" disabled={galleryUploading || !galleryUrl.trim()} onClick={async () => {
+                                        if (!galleryUrl.trim()) return;
+                                        setGalleryUploading(true);
+                                        try {
+                                            const photo = await DataService.addBarberGalleryPhoto(DataService.getCurrentBarberId()!, { imageUrl: galleryUrl.trim(), caption: galleryCaption || undefined });
+                                            setGalleryPhotos(prev => [photo, ...prev]);
+                                            setGalleryCaption(''); setGalleryUrl('');
+                                        } catch (err) { alert(err instanceof Error ? err.message : 'Error al agregar.'); } finally { setGalleryUploading(false); }
+                                    }} className="px-3 py-1.5 bg-slate-600 text-white rounded-lg text-sm hover:bg-slate-700 disabled:opacity-50">Agregar desde URL</button>
+                                </div>
+                            </div>
+                        )}
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 border-b border-slate-100 pb-2">
                             <div>
                                 <h3 className="text-lg font-bold text-slate-800">{isBarber ? 'Tus servicios y precios de tus cortes' : 'Catálogo de Servicios (Sede Actual)'}</h3>
@@ -744,8 +983,8 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
 
             {/* BARBER MODAL */}
             {showBarberModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 my-4">
                         <h3 className="text-xl font-bold mb-4">{currentBarber.id ? 'Editar Barbero' : 'Nuevo Barbero'}</h3>
                         <div className="space-y-3">
                             <div>
@@ -760,6 +999,93 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                 <input type="checkbox" id="barberActive" checked={currentBarber.active} onChange={e => setCurrentBarber({...currentBarber, active: e.target.checked})} className="rounded text-[#ffd427] focus:ring-[#ffd427]" />
                                 <label htmlFor="barberActive" className="text-sm font-medium text-slate-700">Barbero Activo (Disponible)</label>
                             </div>
+                            <div className="border-t border-slate-200 pt-3 mt-3">
+                                <p className="text-sm font-medium text-slate-700 mb-2 flex items-center gap-1"><Clock size={14} /> Horario de trabajo</p>
+                                <p className="text-xs text-slate-500 mb-2">Días y horas en que atiende. Si no defines, se usa 09:00–19:00 todos los días.</p>
+                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                    {[0,1,2,3,4,5,6].map((day) => {
+                                        const wh = currentBarber.workingHours?.[day] ?? null;
+                                        const enabled = wh != null;
+                                        return (
+                                            <div key={day} className="flex items-center gap-2 flex-wrap">
+                                                <input type="checkbox" id={`wh-${day}`} checked={enabled} className="rounded text-[#ffd427] focus:ring-[#ffd427]" onChange={e => {
+                                                    const next = { ...(currentBarber.workingHours || {}) };
+                                                    if (e.target.checked) next[day] = { start: '09:00', end: '19:00' };
+                                                    else delete next[day];
+                                                    setCurrentBarber({ ...currentBarber, workingHours: next });
+                                                }} />
+                                                <label htmlFor={`wh-${day}`} className="w-8 text-sm font-medium text-slate-600">{DAY_NAMES[day]}</label>
+                                                {enabled && (
+                                                    <>
+                                                        <input type="time" className="border rounded px-2 py-1 text-sm w-24" value={wh.start} onChange={e => setCurrentBarber({ ...currentBarber, workingHours: { ...(currentBarber.workingHours || {}), [day]: { ...wh, start: e.target.value } } })} />
+                                                        <span className="text-slate-400">–</span>
+                                                        <input type="time" className="border rounded px-2 py-1 text-sm w-24" value={wh.end} onChange={e => setCurrentBarber({ ...currentBarber, workingHours: { ...(currentBarber.workingHours || {}), [day]: { ...wh, end: e.target.value } } })} />
+                                                    </>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <div className="border-t border-slate-200 pt-3 mt-3">
+                                <p className="text-sm font-medium text-slate-700 mb-2">Horario de comida</p>
+                                <p className="text-xs text-slate-500 mb-2">Opcional: rango en que no atiende por día. Se guarda al guardar el barbero.</p>
+                                <div className="space-y-2 max-h-40 overflow-y-auto">
+                                    {[0,1,2,3,4,5,6].map((day) => {
+                                        const lb = (currentBarber as Barber).lunchBreak?.[day] ?? null;
+                                        return (
+                                            <div key={day} className="flex items-center gap-2 flex-wrap">
+                                                <label className="w-8 text-sm font-medium text-slate-600">{DAY_NAMES[day]}</label>
+                                                <input type="time" className="border rounded px-2 py-1 text-sm w-24" value={lb?.start ?? ''} onChange={e => {
+                                                    const start = e.target.value;
+                                                    const end = lb?.end ?? '14:00';
+                                                    setCurrentBarber({ ...currentBarber, lunchBreak: { ...((currentBarber as Barber).lunchBreak || {}), [day]: { start: start || '13:00', end } } });
+                                                }} />
+                                                <span className="text-slate-400">–</span>
+                                                <input type="time" className="border rounded px-2 py-1 text-sm w-24" value={lb?.end ?? ''} onChange={e => {
+                                                    const end = e.target.value;
+                                                    const start = lb?.start ?? '13:00';
+                                                    setCurrentBarber({ ...currentBarber, lunchBreak: { ...((currentBarber as Barber).lunchBreak || {}), [day]: { start, end: end || '14:00' } } });
+                                                }} />
+                                                {(lb?.start || lb?.end) && (
+                                                    <button type="button" onClick={() => { const next = { ...((currentBarber as Barber).lunchBreak || {}) }; delete next[day]; setCurrentBarber({ ...currentBarber, lunchBreak: next }); }} className="text-slate-400 hover:text-red-500 text-xs">Quitar</button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            {currentBarber.id != null && (
+                                <div className="border-t border-slate-200 pt-3 mt-3">
+                                    <p className="text-sm font-medium text-slate-700 mb-2 flex items-center gap-1"><CalendarOff size={14} /> Horas bloqueadas (salidas)</p>
+                                    <p className="text-xs text-slate-500 mb-2">Rangos en que no atiende. Se guardan al guardar el barbero.</p>
+                                    <ul className="space-y-1.5 mb-2 max-h-32 overflow-y-auto">
+                                        {((currentBarber as Barber).blockedHours ?? []).sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start)).map((bl, i) => (
+                                            <li key={i} className="flex items-center justify-between gap-2 py-1 px-2 bg-slate-50 rounded text-sm">
+                                                <span>{bl.date} {bl.start} – {bl.end}</span>
+                                                <button type="button" onClick={() => {
+                                                    const list = ((currentBarber as Barber).blockedHours ?? []).filter((_, j) => j !== i);
+                                                    setCurrentBarber({ ...currentBarber, blockedHours: list });
+                                                }} className="text-red-500 hover:text-red-700 p-0.5" title="Eliminar"><Trash2 size={14} /></button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <input type="date" className="border rounded px-2 py-1 text-sm" id="modal-block-date" />
+                                        <input type="time" className="border rounded px-2 py-1 text-sm w-24" id="modal-block-start" defaultValue="10:00" />
+                                        <span className="text-slate-500">–</span>
+                                        <input type="time" className="border rounded px-2 py-1 text-sm w-24" id="modal-block-end" defaultValue="11:00" />
+                                        <button type="button" onClick={() => {
+                                            const date = (document.getElementById('modal-block-date') as HTMLInputElement)?.value;
+                                            const start = (document.getElementById('modal-block-start') as HTMLInputElement)?.value || '10:00';
+                                            const end = (document.getElementById('modal-block-end') as HTMLInputElement)?.value || '11:00';
+                                            if (!date || start >= end) { alert('Fecha obligatoria y la hora fin debe ser mayor que la de inicio.'); return; }
+                                            const list = [...((currentBarber as Barber).blockedHours ?? []), { date, start, end }];
+                                            setCurrentBarber({ ...currentBarber, blockedHours: list });
+                                        }} className="px-2 py-1 bg-slate-600 text-white rounded text-sm">+ Agregar</button>
+                                    </div>
+                                </div>
+                            )}
                             <div className="flex justify-end space-x-2 mt-4">
                                 <button onClick={() => setShowBarberModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
                                 <button onClick={handleSaveBarber} className="px-4 py-2 bg-[#ffd427] text-slate-900 font-bold rounded-lg hover:bg-[#e6be23]">Guardar</button>

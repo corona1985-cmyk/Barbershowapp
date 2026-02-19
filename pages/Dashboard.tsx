@@ -3,14 +3,12 @@ import { DataService } from '../services/data';
 import { ViewState, Appointment, Client, PointOfSale } from '../types';
 import { Users, Calendar, ShoppingBag, AlertTriangle, TrendingUp, Clock, Loader2, MessageCircle } from 'lucide-react';
 
-/** Teléfono a formato wa.me (solo dígitos; 10 dígitos sin + → prefijo 52) */
-function phoneToWa(phone: string): string {
-    const d = (phone || '').replace(/\D/g, '');
-    if (d.length === 10 && !phone?.startsWith('+')) return '52' + d;
-    return d;
+/** Teléfono a formato wa.me: solo dígitos (sin añadir prefijo de país). */
+function phoneToWa(phone: string | number | null | undefined): string {
+    return String(phone ?? '').replace(/\D/g, '');
 }
 
-function buildWaLink(phone: string, message: string): string {
+function buildWaLink(phone: string | number | null | undefined, message: string): string {
     const num = phoneToWa(phone);
     if (!num || num.length < 10) return '';
     return `https://wa.me/${num}?text=${encodeURIComponent(message)}`;

@@ -1,0 +1,52 @@
+{
+  "pointsOfSale": {
+    "1": {
+      "id": 1,
+      "name": "Corte & Estilo",
+      "address": "Av. Reforma 100",
+      "ownerId": "barbero",
+      "isActive": true,
+      "plan": "pro",
+      "tier": "barberia"
+    },
+    "2": {
+      "id": 2,
+      "name": "La Barba",
+      "address": "Calle Juárez 45",
+      "ownerId": "barbero2",
+      "isActive": true,
+      "plan": "pro",
+      "tier": "barberia"
+    }
+  },
+  "barbers": {
+    "1": {
+      "id": 1,
+      "posId": 1,
+      "name": "Carlos Rodríguez",
+      "specialty": "Cortes Clásicos",
+      "active": true
+    },
+    "2": {
+      "id": 2,
+      "posId": 2,
+      "name": "Ana Martínez",
+      "specialty": "Barbas y Estilo",
+      "active": true
+    }
+  },
+  "settings": {
+    "1": {
+      "taxRate": 0.16,
+      "storeName": "Corte & Estilo",
+      "currencySymbol": "$",
+      "posId": 1
+    },
+    "2": {
+      "taxRate": 0.16,
+      "storeName": "La Barba",
+      "currencySymbol": "$",
+      "posId": 2
+    }
+  }
+}

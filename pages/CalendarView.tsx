@@ -55,7 +55,12 @@ const CalendarView: React.FC = () => {
             if (isBarberoView && currentBarberId != null) return a.barberoId === currentBarberId;
             if (selectedBarber !== 'all' && a.barberoId !== selectedBarber) return false;
             return true;
-        }).sort((a, b) => a.hora.localeCompare(b.hora));
+        }).sort((a, b) => {
+            const aConfirmada = a.estado === 'confirmada' ? 1 : 0;
+            const bConfirmada = b.estado === 'confirmada' ? 1 : 0;
+            if (bConfirmada !== aConfirmada) return bConfirmada - aConfirmada;
+            return a.hora.localeCompare(b.hora);
+        });
     };
 
     const getStatusStyle = (estado: Appointment['estado']) => {

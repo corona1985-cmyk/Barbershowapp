@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DataService } from '../services/data';
-import { Appointment, Barber, Client, Service, AppointmentForSale, SaleItem, AccountTier } from '../types';
+import { Appointment, Barber, BarberGalleryPhoto, Client, Service, AppointmentForSale, SaleItem, AccountTier } from '../types';
 import { ViewState } from '../types';
-import { Calendar, Clock, User, Scissors, Check, X, Trash2, Printer, MessageCircle, MapPin, Loader2 } from 'lucide-react';
+import { Calendar, Clock, User, Scissors, Check, X, Trash2, Printer, MessageCircle, MapPin, Loader2, ImageIcon, RefreshCw } from 'lucide-react';
+import { handlePrint } from '../utils/print';
 
 interface AppointmentsProps {
     onChangeView?: (view: ViewState) => void;
@@ -10,24 +11,32 @@ interface AppointmentsProps {
     accountTier?: AccountTier;
 }
 
-const LOAD_TIMEOUT_MS = 15000; // 15 s: si la BD no responde, dejar de cargar y mostrar error/retry
+const LOAD_TIMEOUT_MS = 22000; // 22 s: en móvil la red puede ser lenta
+const SAVE_TIMEOUT_MS = 25000; // 25 s: si guardar tarda más, mostrar error y quitar "Guardando..."
+
+/** Fecha de hoy en zona local YYYY-MM-DD (evita que UTC marque slots como "Pasado" en fechas futuras). */
+const getTodayLocal = (): string => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteForBilling, accountTier = 'barberia' }) => {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [barbers, setBarbers] = useState<Barber[]>([]);
-    const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState<string>(getTodayLocal);
     const [userRole, setUserRole] = useState<string>('');
     const [selectedBarberForView, setSelectedBarberForView] = useState<number>(0);
     const [currentBarberiaName, setCurrentBarberiaName] = useState<string>('');
+    const [clientBarberGallery, setClientBarberGallery] = useState<BarberGalleryPhoto[]>([]);
     
     // Modal State
     const [showModal, setShowModal] = useState(false);
     const [clients, setClients] = useState<Client[]>([]);
     const [services, setServices] = useState<Service[]>([]);
     const [newApt, setNewApt] = useState<Partial<Appointment>>({
-        fecha: new Date().toISOString().split('T')[0],
+        fecha: getTodayLocal(),
         servicios: []
     });
     const [isNewClient, setIsNewClient] = useState(false);
@@ -40,44 +49,61 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     const [clientPhoneForBooking, setClientPhoneForBooking] = useState('');
     /** Guardando cita (evita doble clic y muestra feedback) */
     const [saving, setSaving] = useState(false);
+    /** Clientes que no estaban en la lista (ej. eliminados o de otra sede) pero sí existen en la BD; así evitamos "Cliente Desconocido" cuando el registro sigue existiendo. */
+    const [resolvedClients, setResolvedClients] = useState<Record<number, Client | null>>({});
+    /** Orden de la lista: por hora o por tipo/estado (confirmadas siempre primero). */
+    const [sortBy, setSortBy] = useState<'hora' | 'estado'>('hora');
 
     const loadData = React.useCallback(async () => {
         setLoadError(false);
         setLoading(true);
-        const timeoutId = window.setTimeout(() => {
-            setLoading(false);
-            setLoadError(true);
-        }, LOAD_TIMEOUT_MS);
         try {
             const role = DataService.getCurrentUserRole();
             setUserRole(role);
             const clientsLoader = role === 'barbero' ? DataService.getClientsWithActivity() : DataService.getClients();
-            const [appts, barbersList, clientsList, servicesList, posList] = await Promise.all([
+            const loadPromise = Promise.all([
                 DataService.getAppointments(),
                 DataService.getBarbers(),
                 clientsLoader,
                 DataService.getServices(),
                 DataService.getPointsOfSale(),
             ]);
-            clearTimeout(timeoutId);
-            setAppointments(appts);
-            setBarbers(barbersList);
-            setClients(clientsList);
-            setServices(servicesList);
+            const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('Tiempo de espera agotado. Revisa tu conexión.')), LOAD_TIMEOUT_MS)
+            );
+            const [appts, barbersList, clientsList, servicesList, posList] = await Promise.race([loadPromise, timeoutPromise]);
+            const apptsSafe = Array.isArray(appts) ? appts : [];
+            const barbersSafe = Array.isArray(barbersList) ? barbersList : [];
+            const clientsSafe = Array.isArray(clientsList) ? clientsList : [];
+            const servicesSafe = Array.isArray(servicesList) ? servicesList : [];
+            const posListSafe = Array.isArray(posList) ? posList : [];
+            setAppointments(apptsSafe);
+            setBarbers(barbersSafe);
+            setClients(clientsSafe);
+            setServices(servicesSafe);
             const activePosId = DataService.getActivePosId();
-            const pos = posList.find(p => p.id === activePosId);
+            const pos = posListSafe.find(p => p.id === activePosId);
             setCurrentBarberiaName(pos ? pos.name : '');
-            const activeBarbers = barbersList.filter(b => b.active);
+            const activeBarbers = barbersSafe.filter(b => b.active);
             if (activeBarbers.length > 0) setSelectedBarberForView(activeBarbers[0].id);
             if (role === 'cliente') {
                 const currUser = DataService.getCurrentUser();
                 if (currUser) {
-                    const clientRecord = clientsList.find(c => c.nombre === currUser.name);
+                    const clientRecord = clientsSafe.find(c => c.nombre === currUser.name);
                     if (clientRecord) setNewApt(prev => ({ ...prev, clienteId: clientRecord.id }));
                 }
             }
+            // Resolver nombres de clientes que no están en la lista (ej. cliente eliminado de la sede pero la cita sigue)
+            const missingIds = [...new Set(apptsSafe.map(a => a.clienteId).filter(id => id && !clientsSafe.some(c => c.id === id)))];
+            if (missingIds.length > 0) {
+                const results = await Promise.all(missingIds.map(id => DataService.getClientById(id)));
+                const next: Record<number, Client | null> = {};
+                missingIds.forEach((id, i) => { next[id] = results[i] ?? null; });
+                setResolvedClients(next);
+            } else {
+                setResolvedClients({});
+            }
         } catch (err) {
-            clearTimeout(timeoutId);
             console.error('Error cargando citas:', err);
             setLoadError(true);
         } finally {
@@ -89,18 +115,37 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         loadData();
     }, [loadData]);
 
-    const filteredAppointments = appointments.filter(a => a.fecha === selectedDate);
-    const sortedAppointments = filteredAppointments.sort((a, b) => a.hora.localeCompare(b.hora));
+    // En Android: refrescar la agenda al volver a la app o a la pestaña
+    useEffect(() => {
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') loadData();
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => document.removeEventListener('visibilitychange', onVisibility);
+    }, [loadData]);
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const filteredAppointments = appointments.filter(a => a.fecha === selectedDate);
+    const sortedAppointments = useMemo(() => {
+        const order: Appointment['estado'][] = ['confirmada', 'pendiente', 'completada', 'cancelada'];
+        const estadoRank = (e: Appointment['estado']) => order.indexOf(e);
+        return [...filteredAppointments].sort((a, b) => {
+            const aConfirmada = a.estado === 'confirmada' ? 1 : 0;
+            const bConfirmada = b.estado === 'confirmada' ? 1 : 0;
+            if (bConfirmada !== aConfirmada) return bConfirmada - aConfirmada;
+            if (sortBy === 'hora') return a.hora.localeCompare(b.hora);
+            return estadoRank(a.estado) - estadoRank(b.estado);
+        });
+    }, [filteredAppointments, sortBy]);
+
+    const todayStr = getTodayLocal();
     const now = new Date();
     const minTimeToday = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
     const isDateTimeInPast = (fecha: string, hora: string): boolean => {
+        const todayStrLocal = getTodayLocal();
+        if (fecha < todayStrLocal) return true;
+        if (fecha > todayStrLocal) return false;
         const today = new Date();
-        const todayStr = today.toISOString().split('T')[0];
-        if (fecha < todayStr) return true;
-        if (fecha > todayStr) return false;
         const [h, m] = hora.split(':').map(Number);
         const slotMinutes = (h || 0) * 60 + (m || 0);
         const nowMinutes = today.getHours() * 60 + today.getMinutes();
@@ -182,7 +227,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             return;
         }
         const clientRecord = clients.find(c => c.id === finalClientId);
-        if (clientRecord && !(clientRecord.telefono || '').trim()) {
+        if (clientRecord && !String(clientRecord.telefono ?? '').trim()) {
             setSaving(false);
             alert('El cliente debe tener un número de teléfono para confirmar la cita. Edite el cliente o use "Buscar por teléfono".');
             return;
@@ -223,13 +268,12 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             fechaCreacion: new Date().toISOString()
         };
         try {
-            if (userRole === 'cliente') {
-                const saved = await DataService.addAppointment(aptData);
-                setAppointments(prev => [...prev, saved]);
-            } else {
-                const saved = await DataService.addAppointment(aptData);
-                setAppointments(prev => [...prev, saved]);
-            }
+            const savePromise = DataService.addAppointment(aptData);
+            const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('La conexión tardó demasiado. Revisa tu internet e intenta de nuevo.')), SAVE_TIMEOUT_MS)
+            );
+            const saved = await Promise.race([savePromise, timeoutPromise]);
+            setAppointments(prev => [...prev, saved]);
             setShowModal(false);
             setNewApt(prev => ({ ...prev, hora: undefined, servicios: [], notas: '', clienteId: undefined }));
             setIsNewClient(false);
@@ -237,10 +281,11 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             setNewClientPhone('');
             setClientPhoneForBooking('');
             alert('Cita agendada con éxito.');
+            await loadData();
         } catch (err) {
             console.error('Error al agendar cita:', err);
             const msg = err instanceof Error ? err.message : String(err);
-            alert(msg.includes('permiso') || msg.includes('conexión') ? msg : `No se pudo guardar la cita. ${msg}`);
+            alert(msg.includes('permiso') || msg.includes('conexión') || msg.includes('tardó demasiado') ? msg : `No se pudo guardar la cita. ${msg}`);
         } finally {
             setSaving(false);
         }
@@ -252,19 +297,25 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         const updated = { ...apt, estado: status };
         setAppointments(prev => prev.map(a => a.id === id ? updated : a));
         await DataService.updateAppointment(updated);
+        await loadData();
     };
 
     const handleCompleteAndGoToBilling = async (apt: Appointment) => {
         await updateStatus(apt.id, 'completada');
         const client = clients.find(c => c.id === apt.clienteId);
         const clienteNombre = client?.nombre ?? 'Cliente';
-        const items: SaleItem[] = (apt.servicios || []).map(s => ({
+        // Solo servicios de este barbero (o de la sede sin barbero): evita facturar servicios de otro barbero
+        const serviciosDelBarbero = (apt.servicios || []).filter(
+            (s) => s.barberId == null || s.barberId === apt.barberoId
+        );
+        const items: SaleItem[] = serviciosDelBarbero.map(s => ({
             id: s.id,
             name: s.name,
             price: s.price,
             quantity: 1,
             type: 'servicio' as const,
         }));
+        const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
         if (onCompleteForBilling && onChangeView) {
             onCompleteForBilling({
                 appointmentId: apt.id,
@@ -274,7 +325,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                 fecha: apt.fecha,
                 hora: apt.hora,
                 items,
-                total: apt.total ?? items.reduce((sum, i) => sum + i.price * i.quantity, 0),
+                total,
             });
             onChangeView('sales');
         }
@@ -284,6 +335,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         if (confirm('¿Eliminar cita?')) {
             setAppointments(prev => prev.filter(a => a.id !== id));
             await DataService.deleteAppointment(id);
+            await loadData();
         }
     };
 
@@ -316,7 +368,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         } else {
             const newClient = await DataService.addClient({
                 nombre: client.nombre,
-                telefono: client.telefono || '',
+                telefono: String(client.telefono ?? ''),
                 email: client.email || '',
                 notas: client.notas || '',
                 fechaRegistro: client.fechaRegistro || new Date().toISOString().split('T')[0],
@@ -354,39 +406,65 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     };
 
     // Client Visual Grid Logic: un slot está ocupado si cae dentro de la duración de alguna cita existente
+    const getBarberWorkRange = (barber: Barber | undefined, dateStr: string): { startMins: number; endMins: number } | null => {
+        const day = new Date(dateStr + 'T12:00:00').getDay();
+        const wh = barber?.workingHours?.[day];
+        const toMins = (hora: string) => {
+            const [h, m] = hora.split(':').map(Number);
+            return (h || 0) * 60 + (m || 0);
+        };
+        if (wh) return { startMins: toMins(wh.start), endMins: toMins(wh.end) };
+        if (barber?.workingHours && Object.keys(barber.workingHours).length > 0) return null;
+        return { startMins: 9 * 60, endMins: 19 * 60 };
+    };
+
     const generateTimeSlots = (date: string, barberId: number) => {
         const slots: { time: string; taken: boolean; past: boolean }[] = [];
-        const startHour = 9; // 9 AM
-        const endHour = 19; // 7 PM
+        const barber = barbers.find(b => b.id === barberId);
+        const range = getBarberWorkRange(barber, date);
+        if (range === null) return slots;
+        const startMins = range.startMins;
+        const endMins = range.endMins;
+
         const today = new Date();
-        const todayStr = today.toISOString().split('T')[0];
+        const todayStrLocal = getTodayLocal();
         const nowMinutes = today.getHours() * 60 + today.getMinutes();
-
         const taken = appointments.filter(a => a.fecha === date && a.barberoId === barberId && a.estado !== 'cancelada');
+        const toMins = (hora: string) => {
+            const [h, m] = hora.split(':').map(Number);
+            return (h || 0) * 60 + (m || 0);
+        };
+        const isBlocked = (slotMins: number) => {
+            const blocks = barber?.blockedHours ?? [];
+            if (blocks.some(b => b.date === date && slotMins < toMins(b.end) && slotMins + 30 > toMins(b.start))) return true;
+            const day = new Date(date + 'T12:00:00').getDay();
+            const lunch = barber?.lunchBreak?.[day];
+            if (lunch?.start && lunch?.end && slotMins < toMins(lunch.end) && slotMins + 30 > toMins(lunch.start)) return true;
+            return false;
+        };
 
-        for (let h = startHour; h < endHour; h++) {
-            const hourStr = h.toString().padStart(2, '0') + ':00';
-            const slotMins = h * 60;
-            const isTaken = taken.some(a => isSlotInsideAppointment(slotMins, a));
-            const past = date < todayStr || (date === todayStr && slotMins <= nowMinutes);
-            slots.push({ time: hourStr, taken: isTaken, past });
-
-            const halfHourStr = h.toString().padStart(2, '0') + ':30';
-            const halfSlotMins = h * 60 + 30;
-            const isHalfTaken = taken.some(a => isSlotInsideAppointment(halfSlotMins, a));
-            const halfPast = date < todayStr || (date === todayStr && halfSlotMins <= nowMinutes);
-            slots.push({ time: halfHourStr, taken: isHalfTaken, past: halfPast });
+        for (let m = startMins; m < endMins; m += 30) {
+            const h = Math.floor(m / 60);
+            const min = m % 60;
+            const timeStr = h.toString().padStart(2, '0') + ':' + (min === 0 ? '00' : '30');
+            const blocked = isBlocked(m);
+            const isTaken = !blocked && taken.some(a => isSlotInsideAppointment(m, a));
+            const past = date < todayStrLocal || (date === todayStrLocal && m <= nowMinutes);
+            slots.push({ time: timeStr, taken: blocked || isTaken, past });
         }
         return slots;
     };
 
     const handleSlotClick = (time: string, taken: boolean, past?: boolean) => {
         if (taken || past) return;
+        const current = newApt.servicios || [];
+        const soloDelBarbero = current.filter((s) => s.barberId == null || s.barberId === selectedBarberForView);
         setNewApt({
             ...newApt,
             fecha: selectedDate,
             hora: time,
-            barberoId: selectedBarberForView
+            barberoId: selectedBarberForView,
+            servicios: soloDelBarbero
         });
         setShowModal(true);
     };
@@ -394,6 +472,14 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     // Solo clientes ven "Reservar Cita" (elegir barbero/fecha/hora). Superadmin, admin y barbero ven "Agenda de Citas" para agendar.
     const role = (userRole || '').toLowerCase();
     const isClientView = role === 'cliente';
+    useEffect(() => {
+        if (isClientView) DataService.getBarbers().then(setBarbers);
+    }, [isClientView, selectedDate]);
+    useEffect(() => {
+        if (isClientView && selectedBarberForView) {
+            DataService.getBarberGallery(selectedBarberForView).then(setClientBarberGallery).catch(() => setClientBarberGallery([]));
+        } else setClientBarberGallery([]);
+    }, [isClientView, selectedBarberForView]);
 
     if (loading) {
         return (
@@ -487,6 +573,19 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                         </div>
                     </div>
 
+                    {currentBarber && clientBarberGallery.length > 0 && (
+                        <div className="mb-6">
+                            <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-1"><ImageIcon size={18} /> Trabajos de {currentBarber.name}</h3>
+                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                                {clientBarberGallery.map((p) => (
+                                    <button key={p.id} type="button" className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border border-slate-200 shadow-sm hover:ring-2 hover:ring-[#ffd427] focus:outline-none" onClick={() => window.open(p.imageUrl, '_blank')}>
+                                        <img src={p.imageUrl} alt={p.caption || 'Trabajo'} className="w-full h-full object-cover" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
                         <Clock className="mr-2" size={20} /> Horarios Disponibles
                     </h3>
@@ -535,7 +634,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                         <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
                             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                                 <h3 className="text-xl font-bold text-slate-800">Confirmar Reserva</h3>
-                                <button onClick={() => { setShowModal(false); setClientPhoneForBooking(''); }} className="text-slate-400 hover:text-slate-600"><X size={24}/></button>
+                                <button onClick={() => { setShowModal(false); setClientPhoneForBooking(''); setNewApt(prev => ({ ...prev, servicios: [] })); }} className="text-slate-400 hover:text-slate-600"><X size={24}/></button>
                             </div>
                             <div className="p-6 space-y-4">
                                 <div className="bg-yellow-50 p-4 rounded-lg text-yellow-800 text-sm border border-yellow-100">
@@ -632,18 +731,37 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                     <span className="font-medium">{currentBarberiaName}</span>
                 </div>
             )}
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center flex-wrap gap-3">
                 <h2 className="text-2xl font-bold text-slate-800">Agenda de Citas</h2>
                 <div className="flex space-x-2">
+                    <button
+                        type="button"
+                        onClick={() => loadData()}
+                        disabled={loading}
+                        className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors shadow-sm disabled:opacity-60"
+                        title="Actualizar lista de citas"
+                    >
+                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                        <span className="hidden sm:inline">Actualizar</span>
+                    </button>
                     <button 
-                        onClick={() => window.print()}
+                        onClick={() => handlePrint({
+                            name: 'Agenda de Citas',
+                            shareText: sortedAppointments.length
+                                ? `Agenda ${selectedDate}\n${sortedAppointments.map(a => {
+                                    const c = clients.find(x => x.id === a.clienteId) ?? resolvedClients[a.clienteId] ?? null;
+                                    const b = barbers.find(x => x.id === a.barberoId);
+                                    return `${a.hora} - ${c?.nombre ?? 'Cliente desconocido'} - ${b?.name ?? ''} - ${a.estado}`;
+                                  }).join('\n')}`
+                                : `Agenda ${selectedDate}\nSin citas.`,
+                        })}
                         className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors shadow-sm"
                     >
                         <Printer size={18} />
                         <span className="hidden sm:inline">Imprimir</span>
                     </button>
                     <button 
-                        onClick={() => setShowModal(true)}
+                        onClick={() => { setNewApt(prev => ({ ...prev, servicios: [] })); setShowModal(true); }}
                         className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2 rounded-lg font-bold flex items-center space-x-2 transition-colors shadow-sm"
                     >
                         <Calendar size={18} />
@@ -652,14 +770,27 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                 </div>
             </div>
 
-            <div className="flex items-center space-x-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                <label className="font-medium text-slate-700">Filtrar Fecha:</label>
-                <input 
-                    type="date" 
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
-                />
+            <div className="flex flex-wrap items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <div className="flex items-center space-x-2">
+                    <label className="font-medium text-slate-700">Filtrar Fecha:</label>
+                    <input 
+                        type="date" 
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
+                    />
+                </div>
+                <div className="flex items-center gap-2">
+                    <label className="font-medium text-slate-700">Ordenar:</label>
+                    <select 
+                        value={sortBy} 
+                        onChange={(e) => setSortBy(e.target.value as 'hora' | 'estado')}
+                        className="border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427] text-slate-700"
+                    >
+                        <option value="hora">Por hora</option>
+                        <option value="estado">Por tipo (estado)</option>
+                    </select>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -670,11 +801,11 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                     </div>
                 ) : (
                     sortedAppointments.map(apt => {
-                        const client = clients.find(c => c.id === apt.clienteId);
+                        const client = clients.find(c => c.id === apt.clienteId) ?? resolvedClients[apt.clienteId] ?? null;
                         const barber = barbers.find(b => b.id === apt.barberoId);
                         
                         // Robust WhatsApp Link Generation
-                        const rawPhone = client?.telefono || '';
+                        const rawPhone = String(client?.telefono ?? '');
                         // Remove all non-numeric characters
                         const cleanPhone = rawPhone.replace(/\D/g, '');
                         // If phone starts with 0 (common in some regions), remove it, or adapt based on country code logic if needed.
@@ -702,7 +833,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                 <div className="space-y-2 mb-4">
                                     <div className="flex items-center text-slate-700">
                                         <User size={16} className="mr-2 text-slate-400" />
-                                        <span className="font-medium">{client?.nombre || 'Cliente Desconocido'}</span>
+                                        <span className="font-medium">{client?.nombre || 'Cliente desconocido (eliminado o sin registro)'}</span>
                                     </div>
                                     <div className="flex items-center text-slate-600 text-sm">
                                         <Scissors size={16} className="mr-2 text-slate-400" />
@@ -751,7 +882,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                             <h3 className="text-xl font-bold text-slate-800">Nueva Cita</h3>
-                            <button onClick={() => { setShowModal(false); setIsNewClient(false); setNewClientName(''); setNewClientPhone(''); setSearchPhone(''); setClientFoundByPhone(null); setSearchAttempted(false); }} className="text-slate-400 hover:text-slate-600"><X size={24}/></button>
+                            <button onClick={() => { setShowModal(false); setIsNewClient(false); setNewClientName(''); setNewClientPhone(''); setSearchPhone(''); setClientFoundByPhone(null); setSearchAttempted(false); setNewApt(prev => ({ ...prev, servicios: [] })); }} className="text-slate-400 hover:text-slate-600"><X size={24}/></button>
                         </div>
                         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
                             <div className="grid grid-cols-2 gap-4">
@@ -810,7 +941,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                         </select>
                                         {newApt.clienteId && (() => {
                                             const sel = clients.find(c => c.id === newApt.clienteId);
-                                            return sel && !(sel.telefono || '').trim() ? (
+                                            return sel && !String(sel.telefono ?? '').trim() ? (
                                                 <p className="mt-1 text-amber-600 text-sm">Este cliente no tiene teléfono. Agregue uno en Gestión de Clientes o busque por otro.</p>
                                             ) : null;
                                         })()}
@@ -863,7 +994,12 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                             {!isPlanSolo && (
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Barbero</label>
-                                    <select className="w-full border border-slate-300 rounded-lg p-2" value={newApt.barberoId || ''} onChange={e => setNewApt({...newApt, barberoId: Number(e.target.value)})}>
+                                    <select className="w-full border border-slate-300 rounded-lg p-2" value={newApt.barberoId || ''} onChange={e => {
+                                        const newBarberoId = Number(e.target.value);
+                                        const current = newApt.servicios || [];
+                                        const soloDelBarbero = current.filter((s) => s.barberId == null || s.barberId === newBarberoId);
+                                        setNewApt({ ...newApt, barberoId: newBarberoId, servicios: soloDelBarbero });
+                                    }}>
                                         <option value="">Seleccionar Barbero</option>
                                         {barbers.map(b => (
                                             <option key={b.id} value={b.id} disabled={!b.active}>

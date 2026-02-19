@@ -1,11 +1,15 @@
 /**
  * Hash de contraseñas con PBKDF2 (Web Crypto API).
  * Las contraseñas no se guardan en texto plano; se almacena "salt:hash" en hex.
+ * Si crypto.subtle no está disponible (ej. contexto no seguro), se usa comparación legacy.
  */
 
 const PBKDF2_ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const HASH_BITS = 256;
+
+const webCrypto = typeof globalThis !== 'undefined' ? globalThis.crypto : undefined;
+const hasSubtle = webCrypto?.subtle != null;
 
 function bufferToHex(buffer: ArrayBuffer): string {
   return Array.from(new Uint8Array(buffer))
@@ -33,18 +37,20 @@ export function isStoredHash(stored: string | null | undefined): boolean {
 /**
  * Genera un hash seguro de la contraseña (salt:hash en hex).
  * Usar al guardar o cambiar contraseña.
+ * Si Web Crypto no está disponible, devuelve la contraseña en texto plano (entorno sin HTTPS).
  */
 export async function hashPassword(plainPassword: string): Promise<string> {
   if (!plainPassword || typeof plainPassword !== 'string') return '';
-  const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-  const key = await crypto.subtle.importKey(
+  if (!hasSubtle || !webCrypto) return plainPassword;
+  const salt = webCrypto.getRandomValues(new Uint8Array(SALT_BYTES));
+  const key = await webCrypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(plainPassword),
     'PBKDF2',
     false,
     ['deriveBits']
   );
-  const bits = await crypto.subtle.deriveBits(
+  const bits = await webCrypto.subtle.deriveBits(
     {
       name: 'PBKDF2',
       salt,
@@ -63,17 +69,17 @@ export async function hashPassword(plainPassword: string): Promise<string> {
  */
 export async function verifyPassword(plainPassword: string, stored: string | null | undefined): Promise<boolean> {
   if (!plainPassword || stored == null || stored === '') return false;
-  if (isStoredHash(stored)) {
+  if (hasSubtle && isStoredHash(stored)) {
     const [saltHex, hashHex] = stored.split(':');
     const salt = hexToBuffer(saltHex);
-    const key = await crypto.subtle.importKey(
+    const key = await webCrypto!.subtle.importKey(
       'raw',
       new TextEncoder().encode(plainPassword),
       'PBKDF2',
       false,
       ['deriveBits']
     );
-    const bits = await crypto.subtle.deriveBits(
+    const bits = await webCrypto!.subtle.deriveBits(
       {
         name: 'PBKDF2',
         salt,
@@ -85,6 +91,6 @@ export async function verifyPassword(plainPassword: string, stored: string | nul
     );
     return bufferToHex(bits) === hashHex;
   }
-  // Legacy: contraseña en texto plano (migración)
+  // Legacy o sin crypto.subtle: comparación en texto plano
   return plainPassword === stored;
 }

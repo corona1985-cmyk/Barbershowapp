@@ -64,6 +64,7 @@ export interface SystemUser {
     role: UserRole;
     password?: string; // Optional for mock
     name: string;
+    photoUrl?: string; // Foto de perfil (admin, barbero, superadmin, cliente en su perfil de usuario)
     posId?: number | null; // Null for superadmin or global users, specific ID for tenant users
     barberId?: number | null; // Solo para rol barbero: id del registro en Barber (barbers table)
     clientId?: number | null; // Solo para rol cliente: id del registro en Client (clients table)
@@ -112,12 +113,46 @@ export interface Service {
     barberId?: number | null;
 }
 
+/** Horario de un día: start/end en formato "HH:mm". Si no está definido, el barbero no trabaja ese día. */
+export interface BarberWorkingDay {
+    start: string;
+    end: string;
+}
+
+/** Por día de semana: 0 = Domingo, 1 = Lunes, ..., 6 = Sábado. Solo los días que trabaja. */
+export type BarberWorkingHours = Partial<Record<number, BarberWorkingDay>>;
+
+/** Bloqueo de horas: el barbero no atiende en este rango (ej. salida, cita personal). */
+export interface BarberBlockedSlot {
+    date: string;   // "YYYY-MM-DD"
+    start: string; // "HH:mm"
+    end: string;   // "HH:mm"
+}
+
 export interface Barber {
     id: number;
     posId: number;
     name: string;
     specialty: string;
     active: boolean;
+    /** Horario por día (0-6). Si no hay nada, se asume 09:00-19:00 todos los días. */
+    workingHours?: BarberWorkingHours;
+    /** Horas bloqueadas (salidas, no disponibles) por fecha. */
+    blockedHours?: BarberBlockedSlot[];
+    /** Horario de comida por día de semana (0-6). Mismo formato que workingHours; si está definido, no se ofrecen slots en ese rango. */
+    lunchBreak?: BarberWorkingHours;
+}
+
+/** Foto de un trabajo/corte del barbero para que los clientes la vean. */
+export interface BarberGalleryPhoto {
+    id: number;
+    barberId: number;
+    posId: number;
+    imageUrl: string;
+    /** Servicio asociado (opcional). */
+    serviceId?: number | null;
+    caption?: string;
+    createdAt: string;
 }
 
 export interface Appointment {
@@ -207,4 +242,4 @@ export interface NotificationLog {
     message: string;
 }
 
-export type ViewState = 'dashboard' | 'clients' | 'appointments' | 'inventory' | 'sales' | 'shop' | 'finance' | 'reports' | 'sales_records' | 'settings' | 'admin_pos' | 'calendar' | 'whatsapp_console' | 'user_admin' | 'client_discovery' | 'qr_scanner' | 'master_dashboard';
+export type ViewState = 'dashboard' | 'clients' | 'appointments' | 'inventory' | 'sales' | 'shop' | 'finance' | 'reports' | 'sales_records' | 'settings' | 'admin_pos' | 'calendar' | 'whatsapp_console' | 'user_admin' | 'client_discovery' | 'client_profile' | 'qr_scanner' | 'master_dashboard';
