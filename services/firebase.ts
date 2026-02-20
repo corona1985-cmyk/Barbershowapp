@@ -35,3 +35,31 @@ export async function authenticateMasterWithPassword(username: string, password:
   const result = await fn({ username: username.trim(), password });
   return result.data;
 }
+
+/** Crea sesión de pago para un plan (Stripe/MP). La Cloud Function createPlanCheckout debe existir y devolver { url: string }. */
+export async function createPlanCheckout(params: {
+  plan: string;
+  ciclo: 'mensual' | 'anual';
+  email: string;
+  nombreNegocio?: string;
+  nombreRepresentante?: string;
+}): Promise<{ url: string }> {
+  const functions = getFunctions(app);
+  const fn = httpsCallable<typeof params, { url: string }>(functions, 'createPlanCheckout');
+  const result = await fn(params);
+  return result.data;
+}
+
+/** Activa el plan en Firebase tras una compra en Google Play. La Cloud Function debe verificar el token con Google y crear la sede. */
+export async function activatePlanFromPlay(params: {
+  purchaseToken: string;
+  productId: string;
+  email: string;
+  nombreNegocio?: string;
+  nombreRepresentante?: string;
+}): Promise<{ success: boolean; message?: string }> {
+  const functions = getFunctions(app);
+  const fn = httpsCallable<typeof params, { success: boolean; message?: string }>(functions, 'activatePlanFromPlay');
+  const result = await fn(params);
+  return result.data;
+}

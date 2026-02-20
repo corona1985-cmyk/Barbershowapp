@@ -3,7 +3,7 @@ import { DataService } from '../services/data';
 import { SystemUser, Permissions, UserRole, PointOfSale, Barber } from '../types';
 import { Shield, Plus, Edit2, Trash2, CheckSquare, Square, MapPin, X, Scissors } from 'lucide-react';
 
-const ROLES_WITH_SEDE: UserRole[] = ['admin', 'barbero', 'cliente'];
+const ROLES_WITH_SEDE: UserRole[] = ['admin', 'barbero', 'empleado', 'cliente'];
 
 const UserAdmin: React.FC = () => {
     const [users, setUsers] = useState<SystemUser[]>([]);
@@ -82,7 +82,7 @@ const UserAdmin: React.FC = () => {
     const showSedeSelector = currentUser.role && ROLES_WITH_SEDE.includes(currentUser.role as UserRole);
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 w-full max-w-full min-w-0">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                 <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center">
                     <Shield className="mr-2 flex-shrink-0" /> <span className="min-w-0">Administración de Usuarios y Privilegios</span>
@@ -91,6 +91,11 @@ const UserAdmin: React.FC = () => {
                     <Plus size={18} />
                     <span>Nuevo Usuario</span>
                 </button>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800 w-full max-w-full min-w-0 break-words">
+                <p className="mb-1"><strong>Transferir un barbero a otra barbería:</strong></p>
+                <p>Editar usuario → cambiar <strong>Barbería / Sede de acceso</strong> → elegir <strong>Perfil de barbero</strong> en esa sede → Guardar.</p>
+                <p>Si no hay perfil en la nueva sede, créelo en Configuración → Barberos.</p>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">

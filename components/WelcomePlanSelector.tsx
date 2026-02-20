@@ -1,23 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AccountTier } from '../types';
-import { Scissors, User, Users, MapPin, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send } from 'lucide-react';
+import { Scissors, User, Users, MapPin, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle } from 'lucide-react';
 import { DataService } from '../services/data';
+import { createPlanCheckout, activatePlanFromPlay } from '../services/firebase';
+import {
+    isPlayBillingAvailable,
+    initPlayBilling,
+    purchasePlan,
+    addPlayPurchaseListener,
+    getPlayProductId,
+    getActivePlayTransactions,
+} from '../services/playBilling';
 
-/** Configuración de contacto: pon aquí tu número WhatsApp (código país + número sin +) para mostrar el botón. Ej: '18295992941' para RD */
+/** Configuración de contacto: correo y WhatsApp para solicitudes de acceso empresarial */
 const CONTACT = {
     whatsapp: '18295992941', // 829 599 2941 (República Dominicana)
     email: 'contacto@barbershow.com',
+    /** Destino de las solicitudes de acceso (formulario "Enviar solicitud") */
+    solicitudEmail: 'corona1985@iccdigitalgroup.com',
+    solicitudWhatsApp: '18295992941',
 };
 
 type Step = 'who' | 'barber_plan' | 'barber_registered' | 'barber_contact' | 'client_registered' | 'client_new';
 type UserType = 'barbero' | 'cliente';
 
-/** Planes con todo lo incluido detallado para que el cliente sepa qué obtiene */
-const TIER_OPTIONS: { value: AccountTier; label: string; description: string; benefits: string[]; icon: React.ReactNode }[] = [
+/** Planes con precios (USD/mes) */
+const TIER_OPTIONS: { value: AccountTier; label: string; description: string; price: number; benefits: string[]; icon: React.ReactNode }[] = [
     {
         value: 'solo',
         label: 'Plan Solo',
         description: 'Una persona, un local.',
+        price: 14.95,
         benefits: [
             'Interfaz simple: todo es "mi negocio", sin sedes ni lista de barberos',
             'Menú reducido: Dashboard, Citas, Clientes, Ventas (POS), Configuración básica (servicios, datos del negocio)',
@@ -32,6 +45,7 @@ const TIER_OPTIONS: { value: AccountTier; label: string; description: string; be
         value: 'barberia',
         label: 'Plan Barbería',
         description: 'Varios barberos, una sede.',
+        price: 19.95,
         benefits: [
             'Todo lo del plan Solo',
             'Varios barberos: alta y baja de barberos; asignar citas y ventas por barbero',
@@ -48,6 +62,7 @@ const TIER_OPTIONS: { value: AccountTier; label: string; description: string; be
         value: 'multisede',
         label: 'Plan Multi-Sede',
         description: 'Varias ubicaciones o cadena.',
+        price: 29.95,
         benefits: [
             'Todo lo del plan Barbería',
             'Varias sedes: crear y gestionar múltiples ubicaciones',
@@ -79,9 +94,51 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
     const [formTelefono, setFormTelefono] = useState('');
     const [formMotivo, setFormMotivo] = useState('');
     const [formAceptoTerminos, setFormAceptoTerminos] = useState(false);
+    /** Ciclo de facturación para "Pagar en la app". */
+    const [cicloPago, setCicloPago] = useState<'mensual' | 'anual'>('mensual');
+    const [payLoading, setPayLoading] = useState(false);
+    const [payPlayLoading, setPayPlayLoading] = useState(false);
+    /** Datos para activar el plan tras una compra en Google Play (solo Android). */
+    const pendingPlayRef = useRef<{ email: string; nombreNegocio: string; nombreRepresentante: string; plan: AccountTier; cycle: 'mensual' | 'anual' } | null>(null);
 
     useEffect(() => {
         DataService.getGlobalSettings().then((s) => setSupportEmail(s?.supportEmail || CONTACT.email)).catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        if (isPlayBillingAvailable()) initPlayBilling();
+    }, []);
+
+    useEffect(() => {
+        const remove = addPlayPurchaseListener(async () => {
+            const pending = pendingPlayRef.current;
+            if (!pending) return;
+            try {
+                const transactions = await getActivePlayTransactions();
+                const productId = getPlayProductId(pending.plan, pending.cycle);
+                const tx = transactions.find((t) => t.productIdentifier === productId) ?? transactions[0];
+                if (!tx?.purchaseToken) {
+                    alert('Compra recibida. Si no se activa tu plan, contacta a soporte con tu correo.');
+                    pendingPlayRef.current = null;
+                    return;
+                }
+                const result = await activatePlanFromPlay({
+                    purchaseToken: tx.purchaseToken,
+                    productId: tx.productIdentifier,
+                    email: pending.email,
+                    nombreNegocio: pending.nombreNegocio || undefined,
+                    nombreRepresentante: pending.nombreRepresentante || undefined,
+                });
+                pendingPlayRef.current = null;
+                if (result.success) alert('Plan activado. Ya puedes iniciar sesión con tu correo.');
+                else alert(result.message || 'No se pudo activar el plan. Contacta a soporte.');
+            } catch (e) {
+                console.error(e);
+                alert('Error al activar el plan. Contacta a soporte con tu correo.');
+                pendingPlayRef.current = null;
+            }
+        });
+        return remove;
     }, []);
 
     const plan = selectedPlan ? TIER_OPTIONS.find((o) => o.value === selectedPlan) : null;
@@ -104,12 +161,8 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
         else if (step === 'client_new') setStep('client_registered');
     };
 
-    const handleEnviarSolicitud = () => {
-        if (!formAceptoTerminos) {
-            alert('Debes aceptar los Términos de Servicio y la Política de Privacidad.');
-            return;
-        }
-        const body = [
+    const getSolicitudBody = () =>
+        [
             `Plan solicitado: ${plan?.label ?? selectedPlan}`,
             '',
             `Nombre: ${formNombre}`,
@@ -120,7 +173,95 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
             'Motivo / Mensaje:',
             formMotivo || '(Sin mensaje adicional)',
         ].join('\n');
-        window.location.href = `mailto:${supportEmail}?subject=Solicitud de acceso - ${plan?.label ?? selectedPlan} - BarberShow&body=${encodeURIComponent(body)}`;
+
+    const handleEnviarSolicitudCorreo = () => {
+        if (!formAceptoTerminos) {
+            alert('Debes aceptar los Términos de Servicio y la Política de Privacidad.');
+            return;
+        }
+        const body = getSolicitudBody();
+        const subject = `Solicitud de acceso - ${plan?.label ?? selectedPlan} - BarberShow`;
+        const mailto = `mailto:${CONTACT.solicitudEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        const a = document.createElement('a');
+        a.href = mailto;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    };
+
+    const handleEnviarSolicitudWhatsApp = () => {
+        if (!formAceptoTerminos) {
+            alert('Debes aceptar los Términos de Servicio y la Política de Privacidad.');
+            return;
+        }
+        const body = getSolicitudBody();
+        const url = `https://wa.me/${CONTACT.solicitudWhatsApp}?text=${encodeURIComponent(body)}`;
+        window.open(url, '_blank', 'noopener,noreferrer');
+    };
+
+    const handlePagarEnApp = async () => {
+        if (!formAceptoTerminos) {
+            alert('Debes aceptar los Términos de Servicio y la Política de Privacidad.');
+            return;
+        }
+        if (!formEmail?.trim()) {
+            alert('Indica tu correo electrónico para continuar al pago.');
+            return;
+        }
+        if (!plan || !selectedPlan) return;
+        setPayLoading(true);
+        try {
+            const { url } = await createPlanCheckout({
+                plan: selectedPlan,
+                ciclo: cicloPago,
+                email: formEmail.trim(),
+                nombreNegocio: formNegocio.trim() || undefined,
+                nombreRepresentante: formNombre.trim() || undefined,
+            });
+            if (url) window.location.href = url;
+        } catch (e) {
+            console.error(e);
+            alert('El pago en la app aún no está configurado. Por ahora usa "Enviar por WhatsApp" o "Enviar por correo". En el proyecto ver el archivo PLANES_EN_APP.md para activar el pago con Stripe o Mercado Pago.');
+        } finally {
+            setPayLoading(false);
+        }
+    };
+
+    const handlePagarConGooglePlay = async () => {
+        if (!formAceptoTerminos) {
+            alert('Debes aceptar los Términos de Servicio y la Política de Privacidad.');
+            return;
+        }
+        if (!formEmail?.trim()) {
+            alert('Indica tu correo electrónico para activar tu plan tras la compra.');
+            return;
+        }
+        if (!plan || !selectedPlan) return;
+        setPayPlayLoading(true);
+        pendingPlayRef.current = {
+            email: formEmail.trim(),
+            nombreNegocio: formNegocio.trim(),
+            nombreRepresentante: formNombre.trim(),
+            plan: selectedPlan,
+            cycle: cicloPago,
+        };
+        try {
+            const result = await purchasePlan(selectedPlan, cicloPago);
+            if (result.success) {
+                // El diálogo de Google Play se abrió; el resultado llega por addPlayPurchaseListener.
+                alert('Completa el pago en la ventana de Google Play. Al confirmar, tu plan se activará automáticamente.');
+            } else {
+                pendingPlayRef.current = null;
+                alert(result.message || 'No se pudo abrir la tienda.');
+            }
+        } catch (e) {
+            pendingPlayRef.current = null;
+            console.error(e);
+            alert('Error al abrir Google Play.');
+        } finally {
+            setPayPlayLoading(false);
+        }
     };
 
     /** Layout dos paneles como ICC Tech: izquierda = plan elegido, derecha = formulario solicitud */
@@ -154,7 +295,11 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                     {plan.icon}
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-bold text-white">{plan.label}</h3>
+                                    <div className="flex items-baseline gap-2">
+                                        <h3 className="text-lg font-bold text-white">{plan.label}</h3>
+                                        <span className="text-[#ffd427] font-bold">${plan.price.toFixed(2)}/mes</span>
+                                    </div>
+                                    <p className="text-slate-400 text-sm mt-0.5">Paga 1 año: <span className="text-green-400 font-semibold">-40%</span> → ${(plan.price * 0.6).toFixed(2)}/mes</p>
                                     <p className="text-slate-400 text-sm">{plan.description}</p>
                                 </div>
                             </div>
@@ -185,6 +330,19 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                         <h2 className="text-2xl font-bold text-slate-800 mb-1">Solicitud de acceso empresarial</h2>
                         <p className="text-slate-500 text-sm mb-6">Complete el formulario para registrar su negocio. Nos pondremos en contacto a la brevedad.</p>
 
+                        <div className="mb-4 p-3 bg-slate-100 rounded-lg border border-slate-200">
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Facturación</label>
+                            <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="ciclo" checked={cicloPago === 'mensual'} onChange={() => setCicloPago('mensual')} className="text-[#ffd427] focus:ring-[#ffd427]" />
+                                    <span className="text-sm text-slate-700">Mensual (${plan?.price.toFixed(2)}/mes)</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="ciclo" checked={cicloPago === 'anual'} onChange={() => setCicloPago('anual')} className="text-[#ffd427] focus:ring-[#ffd427]" />
+                                    <span className="text-sm text-slate-700">Anual <span className="text-green-600 font-medium">-40%</span> (${(plan ? plan.price * 0.6 : 0).toFixed(2)}/mes · ${(plan ? plan.price * 0.6 * 12 : 0).toFixed(2)}/año)</span>
+                                </label>
+                            </div>
+                        </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del representante</label>
@@ -258,12 +416,44 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             </button>
                             <button
                                 type="button"
-                                onClick={handleEnviarSolicitud}
+                                onClick={handleEnviarSolicitudCorreo}
+                                title={`Enviar a ${CONTACT.solicitudEmail}`}
+                                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-colors text-sm"
+                            >
+                                Enviar por correo <Send size={18} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleEnviarSolicitudWhatsApp}
+                                title="Enviar por WhatsApp al 829 599 2941"
                                 className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold rounded-lg transition-colors text-sm"
                             >
-                                Enviar solicitud <Send size={18} />
+                                Enviar por WhatsApp <MessageCircle size={18} />
                             </button>
+                            <button
+                                type="button"
+                                onClick={handlePagarEnApp}
+                                disabled={payLoading}
+                                title="Pagar con tarjeta y activar plan en la app"
+                                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors text-sm disabled:opacity-70"
+                            >
+                                {payLoading ? 'Redirigiendo...' : 'Pagar en la app'}
+                            </button>
+                            {isPlayBillingAvailable() && (
+                                <button
+                                    type="button"
+                                    onClick={handlePagarConGooglePlay}
+                                    disabled={payPlayLoading}
+                                    title="Pagar con Google Play y activar plan"
+                                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg transition-colors text-sm disabled:opacity-70"
+                                >
+                                    {payPlayLoading ? 'Abriendo...' : 'Pagar con Google Play'}
+                                </button>
+                            )}
                         </div>
+                        <p className="mt-3 text-center text-xs text-slate-500">
+                            Enviar solicitud a {CONTACT.solicitudEmail} o WhatsApp 829 599 2941 · O pagar en la app (tarjeta o Google Play)
+                        </p>
                         <p className="mt-6 text-center">
                             <button type="button" onClick={onGoToLogin} className="text-slate-500 hover:text-[#ffd427] text-sm font-medium">
                                 Ya tengo cuenta – Iniciar sesión
@@ -351,7 +541,11 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                         {opt.icon}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <span className="font-semibold text-white block text-sm">{opt.label}</span>
+                                        <div className="flex items-baseline justify-between gap-2">
+                                            <span className="font-semibold text-white block text-sm">{opt.label}</span>
+                                            <span className="text-[#ffd427] font-bold text-sm whitespace-nowrap">${opt.price.toFixed(2)}/mes</span>
+                                        </div>
+                                        <p className="text-xs text-slate-400 mt-0.5">Paga 1 año: <span className="text-green-400 font-semibold">-40%</span> → ${(opt.price * 0.6).toFixed(2)}/mes</p>
                                         <span className="text-xs text-slate-400 block mt-0.5">{opt.description}</span>
                                         <ul className="mt-2 space-y-1 text-slate-400 text-xs">
                                             {opt.benefits.map((b, i) => (

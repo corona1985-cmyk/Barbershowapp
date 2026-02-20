@@ -24,6 +24,7 @@ import GuestBookingView from './components/GuestBookingView';
 import QRScannerView from './components/QRScannerView';
 import { DataService } from './services/data';
 import { authenticateMasterWithPassword } from './services/firebase';
+import { initPlayBilling, isPlayBillingAvailable } from './services/playBilling';
 
 const App: React.FC = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -73,13 +74,16 @@ const App: React.FC = () => {
     const [posListForOwner, setPosListForOwner] = useState<PointOfSale[]>([]);
     /** Solo cliente: barbería preferida (QR/favoritos). Al iniciar sesión se abre esa barbería. */
     const [preferredPosId, setPreferredPosId] = useState<number | null>(null);
+    /** Sede actual (para comprobar vencimiento de suscripción). */
+    const [currentPos, setCurrentPos] = useState<PointOfSale | null>(null);
 
     const handleSwitchPos = async (posId: number) => {
         DataService.setActivePosId(posId);
         setCurrentPosId(posId);
         try {
             const posList = await DataService.getPointsOfSale();
-            const pos = posList.find(p => p.id === posId);
+            const pos = posList.find(p => p.id === posId) ?? null;
+            setCurrentPos(pos);
             setCurrentPosName(pos ? pos.name : 'Desconocido');
             setIsPlanPro(pos?.plan === 'pro');
             setAccountTier(pos?.tier ?? 'barberia');
@@ -90,12 +94,24 @@ const App: React.FC = () => {
                 setPosListForOwner([]);
             }
         } catch {
+            setCurrentPos(null);
             setCurrentPosName('Desconocido');
             setIsPlanPro(false);
             setAccountTier('barberia');
             setPosListForOwner([]);
         }
     };
+
+    /** Suscripción vencida: solo aplica a admin/dueno/barbero con sede que tiene subscriptionExpiresAt en el pasado. */
+    const isSubscriptionExpired = (userRole === 'admin' || userRole === 'dueno' || userRole === 'barbero')
+        && currentPos != null
+        && currentPos.subscriptionExpiresAt != null
+        && !DataService.isSubscriptionActive(currentPos);
+
+    // Inicializar Google Play Billing en Android al arranque (verificación de compras).
+    useEffect(() => {
+        if (isPlayBillingAvailable()) initPlayBilling();
+    }, []);
 
     useEffect(() => {
         const user = localStorage.getItem('currentUser');
@@ -430,7 +446,42 @@ const App: React.FC = () => {
         return <MasterDashboard onLogout={handleLogout} />;
     }
 
-    // 2. LOADING (restaurando sesión)
+    // 2. SUSCRIPCIÓN VENCIDA (admin/dueno/barbero con sede vencida)
+    if (isAuthenticated && isSubscriptionExpired && currentPos) {
+        const expiresAt = currentPos.subscriptionExpiresAt;
+        const expiryDate = expiresAt ? new Date(expiresAt).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+        return (
+            <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col items-center justify-center p-6 text-white">
+                <div className="max-w-md w-full text-center space-y-6">
+                    <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto">
+                        <Shield size={32} className="text-amber-400" />
+                    </div>
+                    <h1 className="text-2xl font-bold">Suscripción vencida</h1>
+                    <p className="text-slate-300">
+                        La suscripción de <strong className="text-white">{currentPosName || currentPos.name}</strong> venció{expiryDate ? ` el ${expiryDate}` : ''}. Renueva para seguir usando BarberShow.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        <button
+                            type="button"
+                            onClick={() => { setIsAuthenticated(false); setShowLoginScreen(false); setUsername(''); setPassword(''); }}
+                            className="px-6 py-3 bg-[#ffd427] text-slate-900 font-semibold rounded-xl hover:bg-amber-400 transition-colors"
+                        >
+                            Renovar ahora
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleLogout}
+                            className="px-6 py-3 border border-slate-500 text-slate-300 rounded-xl hover:bg-slate-700/50 transition-colors"
+                        >
+                            Cerrar sesión
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // 3. LOADING (restaurando sesión)
     if (!isAuthenticated && isLoadingSession) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">

@@ -155,6 +155,16 @@ export const DataService = {
     return out;
   },
 
+  /** True si la sede no tiene fecha de vencimiento o si la fecha es futura. */
+  isSubscriptionActive: (pos: PointOfSale | null | undefined): boolean => {
+    if (!pos?.subscriptionExpiresAt) return true;
+    try {
+      return new Date(pos.subscriptionExpiresAt) > new Date();
+    } catch {
+      return true;
+    }
+  },
+
   /** Plan de la sede activa; usado para habilitar funciones Pro (ej. notificaciones barbero). */
   getCurrentPosPlan: async (): Promise<'basic' | 'pro'> => {
     if (ACTIVE_POS_ID == null) return 'basic';

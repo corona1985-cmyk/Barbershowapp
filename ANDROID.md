@@ -105,3 +105,13 @@ Cuando termines de depurar, **vuelve a comentar** el bloque `server` en `capacit
 - **Nombre visible:** BarberShow (en `android/app/src/main/res/values/strings.xml`).
 
 Para cambiar el package en el futuro: además de `capacitor.config.ts` (`appId`), hay que actualizar `applicationId` y `namespace` en `android/app/build.gradle` y el package en `MainActivity.java` y en la estructura de carpetas bajo `android/app/src/main/java/`.
+
+## Google Play Billing (suscripciones en Android)
+
+En la app Android, los barberos pueden **pagar planes con Google Play** (botón "Pagar con Google Play" en la pantalla de bienvenida / selector de planes).
+
+- **Plugin:** `@squareetlabs/capacitor-subscriptions` (Google Billing 7). Se inicializa al arranque en `App.tsx` y solo tiene efecto cuando la app corre como **nativa en Android** (no en web).
+- **Product IDs** en Play Console deben coincidir con los definidos en `services/playBilling.ts`: `plan_solo_monthly`, `plan_solo_yearly`, `plan_barberia_monthly`, `plan_barberia_yearly`, `plan_multisede_monthly`, `plan_multisede_yearly`.
+- Backend: hace falta implementar la Cloud Function **`activatePlanFromPlay`** (y opcionalmente `verifyGooglePlayReceipt`) para verificar el pago con Google y crear la sede. Ver **`PLAY_BILLING.md`** en la raíz del proyecto.
+
+Después de cambiar algo en el código o añadir plugins, ejecuta **`npm run android:sync`** (o `npm run android`) para que el proyecto Android incluya los cambios.

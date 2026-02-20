@@ -460,6 +460,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                                         <th className="px-6 py-4">Dirección</th>
                                         <th className="px-6 py-4">Dueño</th>
                                         <th className="px-6 py-4 text-center">Plan</th>
+                                        <th className="px-6 py-4 text-center">Vence</th>
                                         <th className="px-6 py-4 text-center">Estado</th>
                                         <th className="px-6 py-4 text-right">Acciones</th>
                                     </tr>
@@ -484,6 +485,15 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                                                 {(sede.tier === 'barberia' || sede.tier === 'multisede') && (
                                                     <span className="ml-1 text-[10px] text-amber-400" title="Incluye notificaciones de citas para barbero">🔔</span>
                                                 )}
+                                            </td>
+                                            <td className="px-6 py-4 text-center text-xs text-slate-400">
+                                                {sede.subscriptionExpiresAt
+                                                    ? (() => {
+                                                        const exp = new Date(sede.subscriptionExpiresAt);
+                                                        const isExpired = exp <= new Date();
+                                                        return <span className={isExpired ? 'text-red-400 font-medium' : ''} title={exp.toLocaleString('es')}>{exp.toLocaleDateString('es')} {isExpired ? '(vencida)' : ''}</span>;
+                                                    })()
+                                                    : '—'}
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 <span className={`px-2 py-1 rounded text-xs font-bold ${sede.isActive ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`}>

@@ -21,13 +21,14 @@ const AdminPOS: React.FC = () => {
     };
 
     const handleSave = async () => {
-        if (!currentPos.name || !currentPos.address || !currentPos.ownerId) {
-            alert('Por favor complete todos los campos');
+        if (!currentPos.name || !currentPos.address) {
+            alert('Complete al menos el nombre y la dirección de la sede.');
             return;
         }
         const tier = currentPos.tier ?? 'solo';
         const plan = tier === 'solo' ? 'basic' : 'pro';
-        const toSave = { ...currentPos, tier, plan } as PointOfSale;
+        const ownerId = (currentPos.ownerId ?? '').trim() || undefined;
+        const toSave = { ...currentPos, tier, plan, ownerId: ownerId ?? '' } as PointOfSale;
         if (currentPos.id) {
             await DataService.updatePointOfSale(toSave);
         } else {
@@ -53,7 +54,7 @@ const AdminPOS: React.FC = () => {
         setShowModal(true);
     };
 
-    const owners = users.filter(u => u.role === 'admin');
+    const owners = users.filter(u => ['admin', 'dueno', 'superadmin', 'platform_owner', 'barbero', 'empleado'].includes(u.role ?? ''));
 
     return (
         <div className="space-y-6">
@@ -166,7 +167,7 @@ const AdminPOS: React.FC = () => {
                                         <option key={u.username} value={u.username}>{u.name} ({u.username})</option>
                                     ))}
                                 </select>
-                                <p className="text-xs text-slate-500 mt-1">Solo aparecen usuarios con rol 'Dueño' o 'Admin'.</p>
+                                <p className="text-xs text-slate-500 mt-1">Opcional. Aparecen Superadmin, Dueño, Admin y Barberos.</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Plan</label>

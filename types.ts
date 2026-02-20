@@ -20,6 +20,8 @@ export interface PointOfSale {
     plan?: PosPlan;
     /** Tier de negocio: solo = un barbero una sede, barberia = varios barberos una sede, multisede = varias sedes */
     tier?: AccountTier;
+    /** Fecha límite de la suscripción pagada (ISO string). Si falta = sin vencimiento por pago. Si está en el pasado, la sede se considera vencida y se bloquea el acceso hasta renovar. */
+    subscriptionExpiresAt?: string;
 }
 
 export interface AppSettings {
