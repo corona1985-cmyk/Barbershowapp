@@ -24,8 +24,21 @@ const CONTACT = {
 type Step = 'who' | 'barber_plan' | 'barber_registered' | 'barber_contact' | 'client_registered' | 'client_new';
 type UserType = 'barbero' | 'cliente';
 
-/** Planes con precios (USD/mes) */
+/** Planes con precios (USD/mes). Gratuito = solo ver citas, 10/mes. */
 const TIER_OPTIONS: { value: AccountTier; label: string; description: string; price: number; benefits: string[]; icon: React.ReactNode }[] = [
+    {
+        value: 'gratuito',
+        label: 'Plan Gratuito',
+        description: 'Solo ver y gestionar citas. Hasta 10 citas al mes.',
+        price: 0,
+        benefits: [
+            'Solo agenda de citas: ver citas agendadas',
+            'Contador de citas mensuales (máximo 10 por mes)',
+            'Sin ventas POS, ni clientes, ni reportes ni inventario',
+            'Ideal para probar la app o negocios muy pequeños',
+        ],
+        icon: <Scissors size={32} className="text-slate-600" />,
+    },
     {
         value: 'solo',
         label: 'Plan Solo',
@@ -297,9 +310,11 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 <div>
                                     <div className="flex items-baseline gap-2">
                                         <h3 className="text-lg font-bold text-white">{plan.label}</h3>
-                                        <span className="text-[#ffd427] font-bold">${plan.price.toFixed(2)}/mes</span>
+                                        <span className="text-[#ffd427] font-bold">{plan.price === 0 ? 'Gratis' : `$${plan.price.toFixed(2)}/mes`}</span>
                                     </div>
-                                    <p className="text-slate-400 text-sm mt-0.5">Paga 1 año: <span className="text-green-400 font-semibold">-40%</span> → ${(plan.price * 0.6).toFixed(2)}/mes</p>
+                                    {plan.price > 0 && (
+                                        <p className="text-slate-400 text-sm mt-0.5">Paga 1 año: <span className="text-green-400 font-semibold">-40%</span> → ${(plan.price * 0.6).toFixed(2)}/mes</p>
+                                    )}
                                     <p className="text-slate-400 text-sm">{plan.description}</p>
                                 </div>
                             </div>
@@ -330,19 +345,21 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                         <h2 className="text-2xl font-bold text-slate-800 mb-1">Solicitud de acceso empresarial</h2>
                         <p className="text-slate-500 text-sm mb-6">Complete el formulario para registrar su negocio. Nos pondremos en contacto a la brevedad.</p>
 
+                        {selectedPlan && plan && plan.price > 0 && (
                         <div className="mb-4 p-3 bg-slate-100 rounded-lg border border-slate-200">
                             <label className="block text-sm font-medium text-slate-700 mb-2">Facturación</label>
                             <div className="flex gap-4">
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input type="radio" name="ciclo" checked={cicloPago === 'mensual'} onChange={() => setCicloPago('mensual')} className="text-[#ffd427] focus:ring-[#ffd427]" />
-                                    <span className="text-sm text-slate-700">Mensual (${plan?.price.toFixed(2)}/mes)</span>
+                                    <span className="text-sm text-slate-700">Mensual (${plan.price.toFixed(2)}/mes)</span>
                                 </label>
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input type="radio" name="ciclo" checked={cicloPago === 'anual'} onChange={() => setCicloPago('anual')} className="text-[#ffd427] focus:ring-[#ffd427]" />
-                                    <span className="text-sm text-slate-700">Anual <span className="text-green-600 font-medium">-40%</span> (${(plan ? plan.price * 0.6 : 0).toFixed(2)}/mes · ${(plan ? plan.price * 0.6 * 12 : 0).toFixed(2)}/año)</span>
+                                    <span className="text-sm text-slate-700">Anual <span className="text-green-600 font-medium">-40%</span> (${(plan.price * 0.6).toFixed(2)}/mes · ${(plan.price * 0.6 * 12).toFixed(2)}/año)</span>
                                 </label>
                             </div>
                         </div>
+                        )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del representante</label>
@@ -430,6 +447,8 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             >
                                 Enviar por WhatsApp <MessageCircle size={18} />
                             </button>
+                            {selectedPlan && plan && plan.price > 0 && (
+                            <>
                             <button
                                 type="button"
                                 onClick={handlePagarEnApp}
@@ -449,6 +468,8 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 >
                                     {payPlayLoading ? 'Abriendo...' : 'Pagar con Google Play'}
                                 </button>
+                            )}
+                            </>
                             )}
                         </div>
                         <p className="mt-3 text-center text-xs text-slate-500">

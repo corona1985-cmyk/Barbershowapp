@@ -108,10 +108,26 @@ const App: React.FC = () => {
         && currentPos.subscriptionExpiresAt != null
         && !DataService.isSubscriptionActive(currentPos);
 
+    // Ocultar splash de entrada cuando la app ha cargado
+    useEffect(() => {
+        if (!isLoadingSession) {
+            const splash = document.getElementById('app-splash');
+            if (splash) {
+                splash.classList.add('hide');
+                setTimeout(() => { splash.remove(); }, 450);
+            }
+        }
+    }, [isLoadingSession]);
+
     // Inicializar Google Play Billing en Android al arranque (verificación de compras).
     useEffect(() => {
         if (isPlayBillingAvailable()) initPlayBilling();
     }, []);
+
+    // Plan Gratuito: no tiene acceso al Dashboard; redirigir a Agenda
+    useEffect(() => {
+        if (accountTier === 'gratuito' && currentView === 'dashboard') setCurrentView('appointments');
+    }, [accountTier, currentView]);
 
     useEffect(() => {
         const user = localStorage.getItem('currentUser');

@@ -965,6 +965,18 @@ export const DataService = {
     return snapshotToArray<Appointment>(snap.val()).map((a) => ({ ...a, id: Number(a.id) }));
   },
 
+  /** Cuenta citas no canceladas del mes en curso para una sede (plan gratuito: límite 10/mes). */
+  getAppointmentsCountCurrentMonth: async (posId: number): Promise<number> => {
+    const list = await DataService.getAppointmentsForPos(posId);
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const prefix = `${year}-${month}-`;
+    return list.filter(
+      (a) => a.fecha.startsWith(prefix) && a.estado !== 'cancelada'
+    ).length;
+  },
+
   /** Añade una venta (escritura por ítem; evita leer/escribir todo el nodo). */
   addSale: async (sale: Sale): Promise<void> => {
     requireRole(['admin', 'superadmin', 'barbero']);

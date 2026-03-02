@@ -478,6 +478,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                                                     onChange={(e) => handleUpdateSedePlan(sede, e.target.value as DisplayPlanName)}
                                                     className="bg-slate-900 border border-slate-600 text-white rounded px-2 py-1 text-xs font-bold cursor-pointer"
                                                 >
+                                                    <option value="Gratuito">Gratuito</option>
                                                     <option value="Normal">Normal</option>
                                                     <option value="Pro">Pro</option>
                                                     <option value="Full">Full</option>

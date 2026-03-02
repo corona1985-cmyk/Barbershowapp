@@ -79,9 +79,14 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
         loadData();
     }, []);
 
-    // En plan Solo no hay pestaña Barberos; si estaba en barbers, volver a general
+    // En plan Solo o Gratuito no hay pestaña Barberos; si estaba en barbers, volver a general
     useEffect(() => {
-        if (accountTier === 'solo' && activeTab === 'barbers') setActiveTab('general');
+        if ((accountTier === 'solo' || accountTier === 'gratuito') && activeTab === 'barbers') setActiveTab('general');
+    }, [accountTier, activeTab]);
+
+    // Plan Gratuito: en Configuración solo tiene acceso a la pestaña QR
+    useEffect(() => {
+        if (accountTier === 'gratuito' && activeTab !== 'qr') setActiveTab('qr');
     }, [accountTier, activeTab]);
 
     const handleSaveSettings = async () => {
@@ -270,61 +275,72 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                 <SettingsIcon className="mr-2" /> {isBarber ? 'Mis Servicios' : 'Administración de Sede'}
             </h2>
 
-            {/* Tabs: barbero solo ve Servicios */}
+            {/* Tabs: plan Gratuito solo ve QR; barbero ve Servicios + QR + Impuestos; resto ve todas */}
             <div className="flex space-x-1 bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit overflow-x-auto">
-                {!isBarber && (
+                {accountTier === 'gratuito' ? (
+                    <button 
+                        onClick={() => setActiveTab('qr')}
+                        className="px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap bg-[#ffd427] text-slate-900"
+                    >
+                        <QrCode size={16} className="mr-2" /> Código QR
+                    </button>
+                ) : (
                     <>
+                        {!isBarber && (
+                            <>
+                                <button 
+                                    onClick={() => setActiveTab('general')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'general' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                                >
+                                    <SettingsIcon size={16} className="mr-2" /> General
+                                </button>
+                                <button 
+                                    onClick={() => setActiveTab('users')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'users' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                                >
+                                    <UserCog size={16} className="mr-2" /> Usuarios
+                                </button>
+                                {(accountTier !== 'solo' && accountTier !== 'gratuito') && (
+                                    <button 
+                                        onClick={() => setActiveTab('barbers')}
+                                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'barbers' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                        <UserCheck size={16} className="mr-2" /> Barberos
+                                    </button>
+                                )}
+                            </>
+                        )}
                         <button 
-                            onClick={() => setActiveTab('general')}
-                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'general' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                            onClick={() => setActiveTab('services')}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'services' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
                         >
-                            <SettingsIcon size={16} className="mr-2" /> General
+                            <Scissors size={16} className="mr-2" /> {isBarber ? 'Mis Servicios' : 'Servicios'}
                         </button>
-                        <button 
-                            onClick={() => setActiveTab('users')}
-                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'users' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
-                        >
-                            <UserCog size={16} className="mr-2" /> Usuarios
-                        </button>
-                        {accountTier !== 'solo' && (
+                        {isBarber && (
+                            <>
+                                <button 
+                                    onClick={() => setActiveTab('qr')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'qr' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                                >
+                                    <QrCode size={16} className="mr-2" /> Código QR
+                                </button>
+                                <button 
+                                    onClick={() => setActiveTab('taxes')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'taxes' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                                >
+                                    <Percent size={16} className="mr-2" /> Impuestos
+                                </button>
+                            </>
+                        )}
+                        {!isBarber && (
                             <button 
-                                onClick={() => setActiveTab('barbers')}
-                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'barbers' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                                onClick={() => setActiveTab('privacy')}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'privacy' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
                             >
-                                <UserCheck size={16} className="mr-2" /> Barberos
+                                <Shield size={16} className="mr-2" /> Privacidad
                             </button>
                         )}
                     </>
-                )}
-                <button 
-                    onClick={() => setActiveTab('services')}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'services' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                    <Scissors size={16} className="mr-2" /> {isBarber ? 'Mis Servicios' : 'Servicios'}
-                </button>
-                {isBarber && (
-                    <>
-                        <button 
-                            onClick={() => setActiveTab('qr')}
-                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'qr' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
-                        >
-                            <QrCode size={16} className="mr-2" /> Código QR
-                        </button>
-                        <button 
-                            onClick={() => setActiveTab('taxes')}
-                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'taxes' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
-                        >
-                            <Percent size={16} className="mr-2" /> Impuestos
-                        </button>
-                    </>
-                )}
-                {!isBarber && (
-                    <button 
-                        onClick={() => setActiveTab('privacy')}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'privacy' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
-                    >
-                        <Shield size={16} className="mr-2" /> Privacidad
-                    </button>
                 )}
             </div>
 
@@ -479,7 +495,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                 )}
 
                 {/* QR DE LA BARBERÍA (barbero): mismo QR que General pero en su propia pestaña */}
-                {activeTab === 'qr' && isBarber && (
+                {(activeTab === 'qr' && (isBarber || accountTier === 'gratuito')) && (
                     <div className="max-w-lg">
                         <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4 flex items-center">
                             <QrCode size={20} className="mr-2" /> Código QR de la barbería

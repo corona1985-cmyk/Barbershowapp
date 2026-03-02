@@ -26,6 +26,9 @@ type NavGroup = 'principal' | 'operaciones' | 'administracion';
 /** Ítems que se ocultan en plan Solo (menú simplificado) */
 const HIDDEN_IN_TIER_SOLO: ViewState[] = ['calendar', 'whatsapp_console', 'inventory', 'finance', 'user_admin'];
 
+/** Plan Gratuito: solo ver citas (y contador 10/mes) y Configuración > QR. Sin Dashboard. */
+const SHOWN_IN_TIER_GRATUITO: ViewState[] = ['client_profile', 'appointments', 'settings'];
+
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, userRole, isOpen, onClose, clientHasSelectedBarberia = true, accountTier = 'barberia', preferredPosId = null, currentPosId = null, onRemoveFavorite }) => {
     
     // State for collapsible groups
@@ -130,6 +133,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                         // En plan Solo ocultar: Calendario, WhatsApp, Inventario, Finanzas, Admin Usuarios
                         if (accountTier === 'solo') {
                             filteredItems = filteredItems.filter(item => !HIDDEN_IN_TIER_SOLO.includes(item.id as ViewState));
+                        }
+                        // Plan Gratuito: solo Dashboard, Mi perfil, Agenda Citas, Configuración
+                        if (accountTier === 'gratuito') {
+                            filteredItems = filteredItems.filter(item => SHOWN_IN_TIER_GRATUITO.includes(item.id as ViewState));
                         }
                         // Consola WhatsApp solo en plan Multi-Sede
                         if (accountTier !== 'multisede') {

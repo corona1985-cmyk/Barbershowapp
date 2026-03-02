@@ -1,117 +1,111 @@
-# BarberShow en Android
+# BarberShow – Build para Android
 
-La app web está empaquetada para Android con **Capacitor**. El proyecto Android está en la carpeta `android/`.
+Guía para generar y ejecutar la app en Android con Capacitor.
 
 ## Requisitos
 
-- **Node.js 18+** (para construir la web)
-- **Android Studio** (Arctic Fox o más reciente recomendado)
-- **JDK 17** (Android Studio suele traerlo)
-- Opcional: dispositivo físico con depuración USB o emulador
+- **Node.js** v18+
+- **Android Studio** (Arctic Fox o superior) con:
+  - Android SDK (API 35 recomendado; el proyecto usa `compileSdkVersion` y `targetSdkVersion` 35)
+  - JDK 17
+- **Variables de entorno** (opcional): `.env` o `.env.local` si usas API keys en la app
 
-## Flujo rápido: construir y abrir en Android Studio
+## Pasos rápidos
+
+### 1. Instalar dependencias
 
 ```bash
-# 1. Instalar dependencias (si no lo has hecho)
 npm install
+```
 
-# 2. Construir, sincronizar y abrir Android Studio (todo en uno)
+### 2. Build web y sincronizar con Android
+
+```bash
 npm run android
 ```
 
-En Android Studio: elige un emulador o conecta un dispositivo y pulsa **Run** (▶).
+Este comando hace:
 
-## Si no ves tus cambios en Android Studio
+1. `npm run build` (Vite → `dist/`)
+2. `npx cap sync android` (copia `dist/` al proyecto Android y actualiza plugins)
+3. `npx cap open android` (abre Android Studio)
 
-**Android Studio no usa tu código web en vivo.** La app que corre en el emulador/dispositivo es una **copia** de lo que hay en `dist/`. Cada vez que cambies algo en el proyecto (React, TS, CSS, etc.):
+### 3. En Android Studio
 
-1. En la **raíz del proyecto** (donde está `package.json`), ejecuta:
-   ```bash
-   npm run android:sync
-   ```
-   Eso hace **build** y copia el resultado al proyecto Android.
+- Espera a que Gradle termine de sincronizar.
+- Conecta un dispositivo o inicia un emulador.
+- Pulsa **Run** (▶) para instalar y ejecutar la app.
 
-2. En **Android Studio**, vuelve a lanzar la app: **Run** (▶).  
-   Si sigue saliendo la versión antigua: **Build → Clean Project**, luego **Run** de nuevo.
-
-**Resumen:** Cambios en el código → `npm run android:sync` → Run en Android Studio.
-
-## QR de barbería en Android
-
-En la app Android, la pantalla **Configuración → Código QR** usa la misma lógica que la web. Dentro del WebView de Capacitor la “URL actual” no es la de tu app en internet, así que **los QR deben usar la URL pública del despliegue**.
-
-Antes de construir la app para Android, crea en la raíz del proyecto un `.env` o `.env.production` con:
-
-```bash
-VITE_APP_PUBLIC_URL=https://gen-lang-client-0624135070.web.app
-```
-
-(sustituye por tu URL real o por tu dominio si usas uno). Luego haz el build y sync como siempre:
-
-```bash
-npm run android:sync
-```
-
-Así, cuando un barbero abra la app en el móvil y genere o imprima el QR, el código apuntará a esa URL y al escanear se abrirá la app web correcta.
-
-## Comandos disponibles
+## Comandos útiles
 
 | Comando | Descripción |
-|--------|--------------|
-| `npm run android` | Build + sync + abre Android Studio |
-| `npm run build` | Solo construye la web en `dist/` |
-| `npm run android:sync` | Build + copia `dist/` al proyecto Android (Capacitor sync) |
-| `npm run android:open` | Abre el proyecto `android/` en Android Studio |
+|--------|-------------|
+| `npm run android` | Build web + sync + abrir Android Studio |
+| `npm run android:sync` | Solo build web + sync (sin abrir IDE) |
+| `npm run android:open` | Solo abrir el proyecto en Android Studio |
 
-## Generar APK para instalar o publicar
+## Permisos en la app
 
-1. Abre el proyecto en Android Studio (`npm run android:open`).
-2. **Build → Build Bundle(s) / APK(s) → Build APK(s)** para un APK de debug o de release (según la variante que tengas seleccionada).
-3. Para **release** (Play Store o distribución):
-   - **Build → Generate Signed Bundle / APK** → elige **Android App Bundle** (.aab) para Play Store o **APK** para instalar a mano.
-   - Necesitas un keystore (crear uno si es la primera vez).
+- **INTERNET**: necesario para Firebase y APIs.
+- **CAMERA**: para el escáner QR (registro / ref_pos). El hardware de cámara se declara como no obligatorio (`required="false"`) para que la app se pueda instalar en dispositivos sin cámara.
 
-## Probar en dispositivo real
+## Desarrollo en dispositivo real (live reload)
 
-1. Activa **Opciones de desarrollador** y **Depuración USB** en el móvil.
-2. Conéctalo por USB.
-3. En Android Studio, selecciona el dispositivo en la barra superior y pulsa **Run**.
+1. En `capacitor.config.ts`, descomenta y ajusta:
 
-## Probar la web en el móvil (sin compilar Android)
-
-Para probar la misma URL que verá la app (útil para depurar):
-
-1. En `capacitor.config.ts` descomenta y pon tu IP local:
    ```ts
    server: {
-     url: 'http://192.168.1.XXX:3000',
+     url: 'http://TU_IP_LOCAL:3000',
      cleartext: true
-   },
+   }
    ```
-2. En la raíz del proyecto: `npm run dev`.
-3. Ejecuta `npm run android:sync` y `npm run android:open`; al lanzar la app en el dispositivo, cargará desde tu PC.
 
-Cuando termines de depurar, **vuelve a comentar** el bloque `server` en `capacitor.config.ts` y haz de nuevo `npm run android:sync`.
+2. Ejecuta en la PC:
 
-## Estructura
+   ```bash
+   npm run dev
+   ```
 
-- **`capacitor.config.ts`**: nombre de la app, `webDir` (`dist`), opciones Android.
-- **`android/`**: proyecto Android (Android Studio); no edites a mano los archivos generados por Capacitor.
-- **`dist/`**: salida del build web; Capacitor copia este contenido al APK.
+3. Sincroniza y abre Android:
 
-## Identidad de la app
+   ```bash
+   npm run android:sync
+   npm run android:open
+   ```
 
-- **Package / Application ID:** `com.barbershow.app`
-- **Nombre visible:** BarberShow (en `android/app/src/main/res/values/strings.xml`).
+4. En Android Studio, ejecuta la app. La WebView cargará desde tu IP y verás los cambios al recargar.
 
-Para cambiar el package en el futuro: además de `capacitor.config.ts` (`appId`), hay que actualizar `applicationId` y `namespace` en `android/app/build.gradle` y el package en `MainActivity.java` y en la estructura de carpetas bajo `android/app/src/main/java/`.
+No olvides volver a comentar `server.url` y `cleartext` para builds de producción.
 
-## Google Play Billing (suscripciones en Android)
+## Generar APK o AAB (release)
 
-En la app Android, los barberos pueden **pagar planes con Google Play** (botón "Pagar con Google Play" en la pantalla de bienvenida / selector de planes).
+1. En Android Studio: **Build → Generate Signed Bundle / APK**.
+2. Elige **Android App Bundle** (.aab) para subir a Google Play o **APK** para instalación directa.
+3. Crea o selecciona un keystore y completa el formulario.
+4. El build de release se genera en `android/app/build/outputs/`.
 
-- **Plugin:** `@squareetlabs/capacitor-subscriptions` (Google Billing 7). Se inicializa al arranque en `App.tsx` y solo tiene efecto cuando la app corre como **nativa en Android** (no en web).
-- **Product IDs** en Play Console deben coincidir con los definidos en `services/playBilling.ts`: `plan_solo_monthly`, `plan_solo_yearly`, `plan_barberia_monthly`, `plan_barberia_yearly`, `plan_multisede_monthly`, `plan_multisede_yearly`.
-- Backend: hace falta implementar la Cloud Function **`activatePlanFromPlay`** (y opcionalmente `verifyGooglePlayReceipt`) para verificar el pago con Google y crear la sede. Ver **`PLAY_BILLING.md`** en la raíz del proyecto.
+Para compilar por línea de comandos (después de configurar la firma en `android/app/build.gradle`):
 
-Después de cambiar algo en el código o añadir plugins, ejecuta **`npm run android:sync`** (o `npm run android`) para que el proyecto Android incluya los cambios.
+```bash
+cd android
+./gradlew assembleRelease
+# APK en: app/build/outputs/apk/release/
+```
+
+## Versión de la app
+
+La versión se define en `android/app/build.gradle`:
+
+- `versionCode`: entero que debe aumentar en cada subida a Play Store.
+- `versionName`: string visible para el usuario (ej. `"1.0.5"`).
+
+## Firebase y Google Play
+
+- Si usas **Google Sign-In** o **Firebase Cloud Messaging**, coloca `google-services.json` en `android/app/`.
+- Las suscripciones con **Google Play Billing** usan el plugin `@squareetlabs/capacitor-subscriptions`; los product IDs se definen en `services/playBilling.ts`.
+
+## Solución de problemas
+
+- **"SDK location not found"**: Crea `android/local.properties` con `sdk.dir=C\:\\Users\\TU_USUARIO\\AppData\\Local\\Android\\Sdk` (o la ruta de tu SDK).
+- **WebView en blanco**: Asegúrate de haber ejecutado `npm run build` y luego `npx cap sync android` antes de ejecutar en el dispositivo/emulador.
+- **Cámara no abre**: Comprueba que el permiso CAMERA esté en `AndroidManifest.xml` y que en Ajustes del dispositivo la app tenga permiso de cámara.

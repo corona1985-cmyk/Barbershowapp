@@ -153,6 +153,14 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     };
 
     const isPlanSolo = accountTier === 'solo';
+    const isPlanGratuito = accountTier === 'gratuito';
+    const FREE_PLAN_MONTHLY_LIMIT = 10;
+    const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-`;
+    const monthlyCount = useMemo(
+        () => appointments.filter((a) => a.fecha.startsWith(currentYearMonth) && a.estado !== 'cancelada').length,
+        [appointments, currentYearMonth]
+    );
+    const atFreePlanLimit = isPlanGratuito && monthlyCount >= FREE_PLAN_MONTHLY_LIMIT;
     const defaultBarberId = barbers.filter(b => b.active).length > 0 ? barbers.filter(b => b.active)[0].id : barbers[0]?.id;
     /** Solo clientes activos para agendar (no suspendidos). */
     const activeClients = useMemo(() => clients.filter((c) => c.status === 'active'), [clients]);
@@ -168,10 +176,14 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     }, [services, newApt.barberoId, isPlanSolo, defaultBarberId, userRole]);
 
     const handleSave = async () => {
+        if (atFreePlanLimit) {
+            alert(`Plan gratuito: solo puedes agendar ${FREE_PLAN_MONTHLY_LIMIT} citas al mes. Este mes ya tienes ${monthlyCount}. Actualiza tu plan para más citas.`);
+            return;
+        }
         const barberoId = isPlanSolo ? (newApt.barberoId ?? defaultBarberId) : newApt.barberoId;
         if (!barberoId) { alert('Seleccione un barbero.'); return; }
         if (!newApt.hora) { alert('Seleccione una hora.'); return; }
-        if (!newApt.servicios?.length) { alert('Seleccione al menos un servicio.'); return; }
+        if (!isPlanGratuito && !newApt.servicios?.length) { alert('Seleccione al menos un servicio.'); return; }
         if (newApt.fecha && isDateTimeInPast(newApt.fecha, newApt.hora)) {
             alert('No se puede agendar una cita en una fecha u hora que ya pasó.');
             return;
@@ -232,8 +244,9 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             alert('El cliente debe tener un número de teléfono para confirmar la cita. Edite el cliente o use "Buscar por teléfono".');
             return;
         }
-        const total = newApt.servicios!.reduce((acc, s) => acc + s.price, 0);
-        const duration = newApt.servicios!.reduce((acc, s) => acc + s.duration, 0);
+        const serviciosList = newApt.servicios ?? [];
+        const total = serviciosList.reduce((acc, s) => acc + s.price, 0);
+        const duration = serviciosList.length > 0 ? serviciosList.reduce((acc, s) => acc + s.duration, 0) : 30;
         const existingSameBarberDate = appointments.filter(
             (a) => a.fecha === newApt.fecha && a.barberoId === barberoId && a.estado !== 'cancelada'
         );
@@ -260,7 +273,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             barberoId: barberoId,
             fecha: newApt.fecha!,
             hora: newApt.hora!,
-            servicios: newApt.servicios!,
+            servicios: serviciosList,
             notas: newApt.notas || '',
             duracionTotal: duration,
             total: total,
@@ -457,6 +470,10 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
 
     const handleSlotClick = (time: string, taken: boolean, past?: boolean) => {
         if (taken || past) return;
+        if (atFreePlanLimit) {
+            alert(`Plan gratuito: solo puedes agendar ${FREE_PLAN_MONTHLY_LIMIT} citas al mes. Este mes ya tienes ${monthlyCount}. Actualiza tu plan para más citas.`);
+            return;
+        }
         const current = newApt.servicios || [];
         const soloDelBarbero = current.filter((s) => s.barberId == null || s.barberId === selectedBarberForView);
         setNewApt({
@@ -529,8 +546,13 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                         </div>
                     )}
                 </div>
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center flex-wrap gap-2">
                     <h2 className="text-2xl font-bold text-slate-800">Reservar Cita</h2>
+                    {isPlanGratuito && (
+                        <span className="text-sm font-medium text-slate-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
+                            Citas este mes: <strong>{monthlyCount} / {FREE_PLAN_MONTHLY_LIMIT}</strong>
+                        </span>
+                    )}
                 </div>
 
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -593,23 +615,25 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                     {currentBarber?.active ? (
                         <>
                         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-                            {slots.map((slot, idx) => (
+                            {slots.map((slot, idx) => {
+                                const disabled = slot.taken || slot.past || atFreePlanLimit;
+                                return (
                                 <button
                                     key={idx}
-                                    disabled={slot.taken || slot.past}
+                                    disabled={disabled}
                                     onClick={() => handleSlotClick(slot.time, slot.taken, slot.past)}
                                     className={`py-3 px-2 rounded-lg text-sm font-medium transition-all transform shadow-sm ${
-                                        slot.taken || slot.past
+                                        disabled
                                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-transparent'
                                         : 'hover:scale-105 bg-yellow-50 text-yellow-900 border border-yellow-200 hover:bg-[#ffd427] hover:border-[#ffd427] hover:shadow-md cursor-pointer'
                                     }`}
                                 >
                                     {slot.time}
                                     <span className="block text-xs mt-1 font-normal opacity-75">
-                                        {slot.taken ? 'Ocupado' : slot.past ? 'Pasado' : 'Libre'}
+                                        {slot.taken ? 'Ocupado' : slot.past ? 'Pasado' : atFreePlanLimit ? 'Límite' : 'Libre'}
                                     </span>
                                 </button>
-                            ))}
+                            );})}
                         </div>
                         
                         <div className="mt-8 pt-6 border-t border-slate-100">
@@ -664,8 +688,11 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                             </label>
                                         ))}
                                     </div>
-                                    {(!newApt.servicios || newApt.servicios.length === 0) && (
+                                    {(!newApt.servicios || newApt.servicios.length === 0) && !isPlanGratuito && (
                                         <p className="text-xs text-red-500 mt-1">* Selecciona al menos un servicio</p>
+                                    )}
+                                    {isPlanGratuito && (
+                                        <p className="text-xs text-slate-500 mt-1">Plan gratuito: los servicios son opcionales.</p>
                                     )}
                                 </div>
                                 {/* Cliente: mostrar nombre y, si no está en la barbería, pedir teléfono */}
@@ -732,7 +759,14 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                 </div>
             )}
             <div className="flex justify-between items-center flex-wrap gap-3">
-                <h2 className="text-2xl font-bold text-slate-800">Agenda de Citas</h2>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <h2 className="text-2xl font-bold text-slate-800">Agenda de Citas</h2>
+                    {isPlanGratuito && (
+                        <span className="text-sm font-medium text-slate-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
+                            Citas este mes: <strong>{monthlyCount} / {FREE_PLAN_MONTHLY_LIMIT}</strong>
+                        </span>
+                    )}
+                </div>
                 <div className="flex space-x-2">
                     <button
                         type="button"
@@ -762,7 +796,9 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                     </button>
                     <button 
                         onClick={() => { setNewApt(prev => ({ ...prev, servicios: [] })); setShowModal(true); }}
-                        className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2 rounded-lg font-bold flex items-center space-x-2 transition-colors shadow-sm"
+                        disabled={atFreePlanLimit}
+                        title={atFreePlanLimit ? `Límite del plan gratuito (${FREE_PLAN_MONTHLY_LIMIT} citas/mes). Actualiza tu plan para más.` : undefined}
+                        className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2 rounded-lg font-bold flex items-center space-x-2 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                         <Calendar size={18} />
                         <span className="hidden sm:inline">Nueva Cita</span>
@@ -837,7 +873,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                     </div>
                                     <div className="flex items-center text-slate-600 text-sm">
                                         <Scissors size={16} className="mr-2 text-slate-400" />
-                                        <span>{apt.servicios.map(s => s.name).join(', ')}</span>
+                                        <span>{apt.servicios?.length ? apt.servicios.map(s => s.name).join(', ') : 'Sin servicios'}</span>
                                     </div>
                                     <div className="text-sm text-slate-500">
                                         Barbero: <span className="text-slate-700 font-medium">{barber?.name}</span>

@@ -29,6 +29,7 @@ Sistema POS y gestión para barberías: múltiples sedes, citas, ventas, inventa
 ## Build y despliegue
 
 - **Build:** `npm run build` (salida en `dist/`)
+- **Android:** `npm run android` (build web + sync Capacitor + abrir Android Studio). Ver [ANDROID.md](./ANDROID.md) para firma, permisos y publicación.
 - **Firebase:**  
   - Reglas de Realtime Database: `database.rules.json` (desplegadas con `firebase deploy --only database`).  
   - Functions: `npm run firebase:deploy` (o `firebase deploy --only functions` desde la raíz).

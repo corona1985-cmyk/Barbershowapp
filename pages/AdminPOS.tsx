@@ -26,7 +26,7 @@ const AdminPOS: React.FC = () => {
             return;
         }
         const tier = currentPos.tier ?? 'solo';
-        const plan = tier === 'solo' ? 'basic' : 'pro';
+        const plan = (tier === 'solo' || tier === 'gratuito') ? 'basic' : 'pro';
         const ownerId = (currentPos.ownerId ?? '').trim() || undefined;
         const toSave = { ...currentPos, tier, plan, ownerId: ownerId ?? '' } as PointOfSale;
         if (currentPos.id) {
@@ -49,7 +49,7 @@ const AdminPOS: React.FC = () => {
         if (pos) {
             setCurrentPos(pos);
         } else {
-            setCurrentPos({ name: '', address: '', ownerId: '', isActive: true, tier: 'solo' });
+            setCurrentPos({ name: '', address: '', ownerId: '', isActive: true, tier: 'gratuito' });
         }
         setShowModal(true);
     };
@@ -100,7 +100,7 @@ const AdminPOS: React.FC = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-center">
-                                        <span className={`px-2 py-1 rounded text-xs font-medium ${pos.tier === 'multisede' ? 'bg-indigo-100 text-indigo-800' : pos.tier === 'barberia' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
+                                        <span className={`px-2 py-1 rounded text-xs font-medium ${pos.tier === 'gratuito' ? 'bg-green-100 text-green-800' : pos.tier === 'multisede' ? 'bg-indigo-100 text-indigo-800' : pos.tier === 'barberia' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
                                             {getDisplayPlanName(pos.tier)}
                                         </span>
                                     </td>
@@ -173,9 +173,10 @@ const AdminPOS: React.FC = () => {
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Plan</label>
                                 <select
                                     className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#ffd427]"
-                                    value={currentPos.tier ?? 'solo'}
+                                    value={currentPos.tier ?? 'gratuito'}
                                     onChange={e => setCurrentPos({ ...currentPos, tier: e.target.value as AccountTier })}
                                 >
+                                    <option value="gratuito">Gratuito – Solo ver y gestionar citas. Máximo 10 citas al mes. Menú: Dashboard, Agenda Citas, Configuración.</option>
                                     <option value="solo">Normal – Una persona, un local. Menú simplificado (Dashboard, Citas, Clientes, Ventas, Configuración, Reportes, Registros de cortes).</option>
                                     <option value="barberia">Pro – Varios barberos, una sede. Incluye agenda por barbero, reportes por barbero, inventario, finanzas, WhatsApp, admin usuarios.</option>
                                     <option value="multisede">Full – Varias ubicaciones o cadena. Incluye todo (selector de sede, reportes por sede, administración centralizada).</option>

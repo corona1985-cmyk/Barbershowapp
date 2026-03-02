@@ -4,11 +4,11 @@ export type UserRole = 'superadmin' | 'admin' | 'dueno' | 'barbero' | 'empleado'
 /** Plan de la sede: basic = funciones estándar, pro = incluye notificaciones de citas para barbero */
 export type PosPlan = 'basic' | 'pro';
 
-/** Tipo de negocio / tier de cuenta: determina menú y límites (solo → barbería → multi-sede) */
-export type AccountTier = 'solo' | 'barberia' | 'multisede';
+/** Tipo de negocio / tier de cuenta: determina menú y límites (gratuito → solo → barbería → multi-sede) */
+export type AccountTier = 'gratuito' | 'solo' | 'barberia' | 'multisede';
 
-/** Nombre comercial único del plan mostrado al usuario: un solo nombre por cuenta (Normal incluye lo básico; Pro incluye Normal + más; Full incluye todo). */
-export type DisplayPlanName = 'Normal' | 'Pro' | 'Full';
+/** Nombre comercial único del plan mostrado al usuario: Gratuito (solo ver citas, 10/mes), Normal, Pro, Full. */
+export type DisplayPlanName = 'Gratuito' | 'Normal' | 'Pro' | 'Full';
 
 export interface PointOfSale {
     id: number;
