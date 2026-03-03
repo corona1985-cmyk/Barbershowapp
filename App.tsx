@@ -147,11 +147,12 @@ const App: React.FC = () => {
         (async () => {
             try {
                 if (!user) {
+                    setShowLoginScreen(false);
+                    setShowBarberiasGuest(false);
                     const params = new URLSearchParams(window.location.search);
                     const refPosId = params.get('ref_pos');
                     if (refPosId) {
                         const id = Number(refPosId);
-                        setIsLoadingSession(false);
                         setGuestBookingPos({ id, name: 'Cargando...' });
                         DataService.getPointsOfSale()
                             .then((posList) => {
@@ -167,7 +168,8 @@ const App: React.FC = () => {
                                 console.error('Error cargando barbería del QR:', e);
                                 setGuestBookingPos(null);
                             });
-                        return;
+                    } else {
+                        setGuestBookingPos(null);
                     }
                     setIsLoadingSession(false);
                     return;
@@ -177,11 +179,17 @@ const App: React.FC = () => {
                     userData = JSON.parse(user);
                 } catch {
                     localStorage.removeItem('currentUser');
+                    setShowLoginScreen(false);
+                    setShowBarberiasGuest(false);
+                    setGuestBookingPos(null);
                     setIsLoadingSession(false);
                     return;
                 }
                 if (!userData || typeof userData !== 'object' || !userData.role) {
                     localStorage.removeItem('currentUser');
+                    setShowLoginScreen(false);
+                    setShowBarberiasGuest(false);
+                    setGuestBookingPos(null);
                     setIsLoadingSession(false);
                     return;
                 }
