@@ -108,10 +108,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
             `}>
                 <div className="p-6 flex flex-col items-center relative border-b border-slate-800">
                     <button 
+                        type="button"
                         onClick={onClose}
-                        className="absolute top-4 right-4 text-slate-400 hover:text-white md:hidden p-1 rounded-md hover:bg-slate-800"
+                        className="absolute top-4 right-4 text-slate-400 hover:text-white md:hidden flex items-center justify-center min-h-[44px] min-w-[44px] rounded-xl hover:bg-slate-800 active:bg-slate-700"
+                        aria-label="Cerrar menú"
                     >
-                        <X size={20} />
+                        <X size={22} />
                     </button>
 
                     <div className="w-12 h-12 bg-[#ffd427] rounded-xl flex items-center justify-center mb-3 shadow-lg shadow-yellow-500/20 transform rotate-3">
@@ -147,11 +149,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                         return (
                             <div key={group.id} className="mb-2">
                                 <button 
+                                    type="button"
                                     onClick={() => toggleGroup(group.id)}
-                                    className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider hover:text-slate-300 transition-colors"
+                                    className="w-full flex items-center justify-between px-3 min-h-[44px] py-2 text-xs font-bold text-slate-500 uppercase tracking-wider hover:text-slate-300 transition-colors touch-target-inline"
                                 >
                                     <div className="flex items-center space-x-2">
-                                        {/* {group.icon} */}
                                         <span>{group.label}</span>
                                     </div>
                                     {expandedGroups[group.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -161,11 +163,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                                     {filteredItems.map(item => (
                                         <button
                                             key={item.id}
+                                            type="button"
                                             onClick={() => handleItemClick(item.id as ViewState)}
-                                            className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-sm transition-all duration-200 group ${
+                                            className={`w-full flex items-center space-x-3 px-4 min-h-[44px] py-2.5 rounded-xl text-sm transition-all duration-200 group touch-target-inline ${
                                                 currentView === item.id 
                                                 ? 'bg-[#ffd427] text-slate-900 shadow-md shadow-yellow-900/20 font-bold' 
-                                                : 'text-slate-400 hover:bg-slate-800 hover:text-[#ffd427]'
+                                                : 'text-slate-400 hover:bg-slate-800 hover:text-[#ffd427] active:bg-slate-700'
                                             }`}
                                         >
                                             <span className={`${currentView === item.id ? 'text-slate-900' : 'text-slate-500 group-hover:text-[#ffd427]'}`}>
@@ -185,15 +188,16 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                         <button
                             type="button"
                             onClick={() => { onRemoveFavorite(); onClose(); }}
-                            className="w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-[#ffd427] transition-all duration-200 text-sm"
+                            className="w-full flex items-center justify-center space-x-2 px-4 min-h-[44px] py-2 rounded-xl text-slate-400 hover:bg-slate-700 hover:text-[#ffd427] transition-all duration-200 text-sm touch-target-inline"
                         >
                             <StarOff size={16} />
                             <span>Quitar de favoritos</span>
                         </button>
                     )}
                     <button 
+                        type="button"
                         onClick={onLogout}
-                        className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 border border-slate-700 rounded-lg text-slate-400 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all duration-200 text-sm font-medium"
+                        className="w-full flex items-center justify-center space-x-2 px-4 min-h-[44px] py-2.5 border border-slate-700 rounded-xl text-slate-400 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all duration-200 text-sm font-medium touch-target-inline"
                     >
                         <LogOut size={18} />
                         <span>Cerrar Sesión</span>

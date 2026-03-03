@@ -877,19 +877,21 @@ export const Finance: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-96">
-                <h3 className="text-lg font-bold text-slate-800 mb-6">Últimos 7 días (ingresos por ventas vs egresos)</h3>
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} dx={-10} />
-                        <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', padding: '12px' }} />
-                        <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                        <Bar dataKey="ingresos" fill="#ffd427" radius={[4, 4, 0, 0]} name="Ingresos" />
-                        <Bar dataKey="egresos" fill="#ef4444" radius={[4, 4, 0, 0]} name="Egresos" />
-                    </BarChart>
-                </ResponsiveContainer>
+            <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm min-h-[320px]">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 sm:mb-6">Últimos 7 días (ingresos por ventas vs egresos)</h3>
+                <div className="w-full min-h-[280px] h-[300px] sm:h-[320px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dx={-10} />
+                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', padding: '12px' }} />
+                            <Legend wrapperStyle={{ paddingTop: '12px' }} />
+                            <Bar dataKey="ingresos" fill="#ffd427" radius={[4, 4, 0, 0]} name="Ingresos" />
+                            <Bar dataKey="egresos" fill="#ef4444" radius={[4, 4, 0, 0]} name="Egresos" />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
             </div>
 
             {recordsThisMonth.length > 0 && (

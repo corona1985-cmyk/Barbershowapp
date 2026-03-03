@@ -14,6 +14,7 @@ body {
     height: 100%;
     overflow-x: hidden;
     margin: 0;
+    padding: 0;
 }
 
 #root {
@@ -21,6 +22,11 @@ body {
     min-height: 100%;
     overflow-x: hidden;
     overflow-y: visible;
+}
+
+/* Móvil: área de scroll con safe-area para notch y home indicator */
+.scroll-area-mobile {
+    padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 /* Contenedor principal de vistas: no desbordar en móvil */
@@ -63,4 +69,13 @@ body {
     .safe-area-top {
         padding-top: env(safe-area-inset-top);
     }
+}
+
+/* Touch targets mínimos 44px (accesibilidad móvil) */
+.touch-target {
+    min-height: 44px;
+    min-width: 44px;
+}
+.touch-target-inline {
+    min-height: 44px;
 }

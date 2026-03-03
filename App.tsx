@@ -581,13 +581,13 @@ const App: React.FC = () => {
     // 4. INVITADO: Ver barberías (cliente buscando barbería)
     if (!isAuthenticated && showBarberiasGuest) {
         return (
-            <div className="min-h-screen bg-slate-100">
-                <header className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between shadow-lg">
-                    <button type="button" onClick={() => setShowBarberiasGuest(false)} className="flex items-center gap-1 text-slate-300 hover:text-white text-sm">
+            <div className="min-h-screen min-h-[100dvh] bg-slate-100 safe-area-top safe-area-bottom">
+                <header className="bg-slate-900 text-white px-3 sm:px-4 py-3 flex items-center justify-between shadow-lg safe-area-top">
+                    <button type="button" onClick={() => setShowBarberiasGuest(false)} className="flex items-center gap-1.5 min-h-[44px] text-slate-300 hover:text-white text-sm rounded-lg active:bg-white/10 px-2 -ml-2">
                         <ArrowLeft size={18} /> Volver
                     </button>
                     <span className="font-bold text-[#ffd427]">BarberShow</span>
-                    <button type="button" onClick={() => { setShowBarberiasGuest(false); setShowLoginScreen(true); }} className="text-sm text-[#ffd427] hover:text-amber-300 font-medium">
+                    <button type="button" onClick={() => { setShowBarberiasGuest(false); setShowLoginScreen(true); }} className="min-h-[44px] flex items-center text-sm text-[#ffd427] hover:text-amber-300 font-medium px-2 rounded-lg active:bg-white/10">
                         Iniciar sesión
                     </button>
                 </header>
@@ -628,14 +628,14 @@ const App: React.FC = () => {
             );
         }
         return (
-            <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4 overflow-y-auto">
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 sm:p-8 relative overflow-hidden border-t-8 border-[#ffd427] my-4">
+            <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-3 sm:p-4 overflow-y-auto safe-area-top safe-area-bottom">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 md:p-8 relative overflow-hidden border-t-8 border-[#ffd427] my-2 sm:my-4">
                     <button
                         type="button"
                         onClick={() => setShowLoginScreen(false)}
-                        className="absolute top-4 left-4 flex items-center gap-1 text-slate-500 hover:text-slate-700 text-sm"
+                        className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center justify-center gap-1.5 min-h-[44px] pl-2 pr-3 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 active:bg-slate-200 text-sm"
                     >
-                        <ArrowLeft size={16} /> Volver
+                        <ArrowLeft size={18} /> Volver
                     </button>
                     {connectionError && (
                         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
@@ -695,10 +695,10 @@ const App: React.FC = () => {
                                         <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
                                         <input type="password" required className="w-full px-4 py-2 border rounded-lg focus:ring-[#ffd427]" value={regPassword} onChange={e => setRegPassword(e.target.value)} />
                                     </div>
-                                    <button type="submit" className="w-full bg-[#ffd427] text-slate-900 py-3 rounded-lg font-bold hover:bg-[#e6be23] transition-colors shadow-lg mt-4">
+                                    <button type="submit" className="w-full min-h-[48px] bg-[#ffd427] text-slate-900 py-3 rounded-xl font-bold hover:bg-[#e6be23] transition-colors shadow-lg mt-4 active:scale-[0.98]">
                                         Registrarse
                                     </button>
-                                    <button type="button" onClick={() => setIsRegistering(false)} className="w-full text-slate-500 py-2 text-sm flex items-center justify-center hover:text-slate-700">
+                                    <button type="button" onClick={() => setIsRegistering(false)} className="w-full min-h-[44px] text-slate-500 py-2 text-sm flex items-center justify-center hover:text-slate-700 active:bg-slate-100 rounded-lg">
                                         <ArrowLeft size={14} className="mr-1" /> Volver al Login
                                     </button>
                                  </>
@@ -707,15 +707,17 @@ const App: React.FC = () => {
                     ) : (
                         <div className="space-y-4">
                             {/* Tabs */}
-                            <div className="flex bg-slate-100 p-1 rounded-lg mb-4">
+                            <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
                                 <button 
-                                    className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${loginTab === 'general' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                                    type="button"
+                                    className={`flex-1 min-h-[44px] py-2.5 text-sm font-bold rounded-lg transition-colors ${loginTab === 'general' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
                                     onClick={() => { setLoginTab('general'); setLoginError(''); }}
                                 >
                                     Acceso General
                                 </button>
                                 <button 
-                                    className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${loginTab === 'master' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}
+                                    type="button"
+                                    className={`flex-1 min-h-[44px] py-2.5 text-sm font-bold rounded-lg transition-colors ${loginTab === 'master' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}
                                     onClick={() => { setLoginTab('master'); setLoginError(''); }}
                                 >
                                     Master Admin
@@ -732,7 +734,7 @@ const App: React.FC = () => {
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Usuario {loginTab === 'master' && '(Master)'}</label>
                                     <input 
                                         type="text" 
-                                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
+                                        className="w-full px-4 py-3 sm:py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
                                         value={username}
                                         onChange={e => setUsername(e.target.value)}
                                         placeholder={loginTab === 'general' ? "Ej: barbero, cliente" : "master"}
@@ -743,7 +745,7 @@ const App: React.FC = () => {
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
                                     <input 
                                         type="password" 
-                                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
+                                        className="w-full px-4 py-3 sm:py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
                                         value={password}
                                         onChange={e => setPassword(e.target.value)}
                                         placeholder={loginTab === 'general' ? "pass: 123" : "root"}
@@ -751,13 +753,13 @@ const App: React.FC = () => {
                                     />
                                 </div>
                                 
-                                <button type="submit" disabled={loginLoading} className={`w-full py-3 rounded-lg font-bold transition-colors shadow-lg shadow-yellow-500/30 mt-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed ${loginTab === 'master' ? 'bg-slate-900 text-white hover:bg-slate-700' : 'bg-[#ffd427] text-slate-900 hover:bg-[#e6be23]'}`}>
+                                <button type="submit" disabled={loginLoading} className={`w-full min-h-[48px] py-3 rounded-xl font-bold transition-colors shadow-lg shadow-yellow-500/30 mt-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.98] ${loginTab === 'master' ? 'bg-slate-900 text-white hover:bg-slate-700' : 'bg-[#ffd427] text-slate-900 hover:bg-[#e6be23]'}`}>
                                     {loginLoading ? (<><Loader2 size={20} className="animate-spin" /> Iniciando sesión...</>) : (loginTab === 'master' ? 'Acceder al Sistema Maestro' : 'Iniciar Sesión')}
                                 </button>
 
                                 {loginTab === 'general' && (
                                     <div className="pt-4 border-t border-slate-100 mt-4">
-                                        <button type="button" onClick={() => setIsRegistering(true)} className="w-full flex items-center justify-center text-slate-600 font-medium hover:underline hover:text-[#e6be23]">
+                                        <button type="button" onClick={() => setIsRegistering(true)} className="w-full min-h-[44px] flex items-center justify-center text-slate-600 font-medium hover:underline hover:text-[#e6be23] rounded-lg active:bg-slate-50">
                                             <UserPlus size={18} className="mr-2" /> ¿No tienes cuenta? Regístrate
                                         </button>
                                     </div>
@@ -793,7 +795,7 @@ const App: React.FC = () => {
 
     // 5. MAIN APP RENDER (General Users)
     return (
-        <div className="flex h-screen min-h-0 bg-slate-100 font-sans overflow-hidden">
+        <div className="flex h-screen min-h-0 max-h-[100dvh] bg-slate-100 font-sans overflow-hidden">
             <Sidebar 
                 currentView={currentView} 
                 onChangeView={handleChangeView} 
@@ -809,12 +811,13 @@ const App: React.FC = () => {
             />
             {/* Área principal: flex para que el scroll sea solo en el contenido */}
             <main className="flex-1 flex flex-col min-w-0 min-h-0 md:ml-64 overflow-hidden transition-all duration-300">
-                <header className="flex-shrink-0 flex flex-wrap justify-between items-center p-4 md:p-6 lg:p-8 pb-2 md:pb-4 no-print gap-3 bg-slate-100 safe-area-top">
+                <header className="flex-shrink-0 flex flex-wrap justify-between items-center p-3 sm:p-4 md:p-6 lg:p-8 pb-2 md:pb-4 no-print gap-2 sm:gap-3 bg-slate-100 safe-area-top">
                     <div className="flex items-center space-x-2 sm:space-x-3 md:space-x-4 min-w-0">
-                        {/* Hamburger Button for Mobile */}
+                        {/* Hamburger Button for Mobile - touch target 44px */}
                         <button 
-                            className="md:hidden text-slate-700 p-2 bg-white rounded-lg shadow-sm"
+                            className="md:hidden flex items-center justify-center min-h-[44px] min-w-[44px] text-slate-700 p-2 bg-white rounded-xl shadow-sm active:bg-slate-100"
                             onClick={() => setIsSidebarOpen(true)}
+                            aria-label="Abrir menú"
                         >
                             <Menu size={24} />
                         </button>
@@ -894,9 +897,11 @@ const App: React.FC = () => {
                         
                         {/* Extra Logout Button in Header */}
                         <button 
+                            type="button"
                             onClick={handleLogout} 
-                            className="bg-white p-2 rounded-full text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors shadow-sm border border-slate-200"
+                            className="flex items-center justify-center min-h-[44px] min-w-[44px] bg-white p-2 rounded-full text-slate-500 hover:text-red-600 hover:bg-red-50 active:bg-red-100 transition-colors shadow-sm border border-slate-200"
                             title="Cerrar Sesión"
+                            aria-label="Cerrar sesión"
                         >
                             <LogOut size={20} />
                         </button>
@@ -904,7 +909,7 @@ const App: React.FC = () => {
                 </header>
                 
                 {/* Zona con scroll: única área que hace scroll */}
-                <div className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto scroll-touch px-4 md:px-6 lg:px-8 pb-6">
+                <div className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto scroll-touch scroll-area-mobile px-3 sm:px-4 md:px-6 lg:px-8 pb-6">
                     {/* Mobile Tenant Selector (Superadmin o Multi-Sede con varias sedes) */}
                     {userRole === 'superadmin' && (
                         <div className="md:hidden mb-4">
@@ -957,9 +962,9 @@ const App: React.FC = () => {
                                 Al continuar navegando, aceptas nuestra política de privacidad.
                             </p>
                         </div>
-                        <div className="flex space-x-3">
-                            <button onClick={() => setCurrentView('settings')} className="text-slate-300 hover:text-white text-sm underline">Ver Política</button>
-                            <button onClick={acceptCookies} className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-6 py-2 rounded-full text-sm font-bold transition-colors">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                            <button type="button" onClick={() => setCurrentView('settings')} className="min-h-[44px] px-4 flex items-center text-slate-300 hover:text-white text-sm underline rounded-lg active:bg-white/10">Ver Política</button>
+                            <button type="button" onClick={acceptCookies} className="min-h-[44px] bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-6 py-2.5 rounded-full text-sm font-bold transition-colors active:scale-[0.98]">
                                 Aceptar
                             </button>
                         </div>

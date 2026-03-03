@@ -270,13 +270,14 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
     }, [isBarber]);
 
     return (
-        <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-slate-800 flex items-center">
-                <SettingsIcon className="mr-2" /> {isBarber ? 'Mis Servicios' : 'Administración de Sede'}
+        <div className="space-y-6 min-w-0">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center min-w-0 break-words gap-2">
+                <SettingsIcon className="flex-shrink-0" /> <span>{isBarber ? 'Mis Servicios' : 'Administración de Sede'}</span>
             </h2>
 
-            {/* Tabs: plan Gratuito solo ve QR; barbero ve Servicios + QR + Impuestos; resto ve todas */}
-            <div className="flex space-x-1 bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-fit overflow-x-auto">
+            {/* Tabs: scroll horizontal en móvil para que no se corten */}
+            <div className="w-full max-w-full overflow-x-auto overflow-y-hidden scrollbar-hide -mx-1 px-1">
+                <div className="flex space-x-1 bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-max">
                 {accountTier === 'gratuito' ? (
                     <button 
                         onClick={() => setActiveTab('qr')}
@@ -342,6 +343,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                         )}
                     </>
                 )}
+                </div>
             </div>
 
             {/* Content */}

@@ -284,7 +284,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                 {/* Panel izquierdo oscuro — plan que quiere */}
                 <div className="lg:w-[45%] xl:w-[40%] bg-slate-900 text-white p-6 lg:p-10 flex flex-col justify-between">
                     <div>
-                        <button type="button" onClick={goBack} className="flex items-center gap-1 text-slate-400 hover:text-white text-sm mb-8">
+                        <button type="button" onClick={goBack} className="flex items-center gap-1.5 min-h-[44px] text-slate-400 hover:text-white text-sm mb-8 rounded-lg w-fit px-2 -ml-2 active:bg-white/10">
                             <ArrowLeft size={16} /> Volver
                         </button>
                         <div className="flex items-center gap-3 mb-6">
@@ -428,7 +428,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             </label>
                         </div>
                         <div className="flex flex-wrap items-center justify-center gap-3">
-                            <button type="button" onClick={goBack} className="px-4 py-2.5 text-slate-600 hover:text-slate-800 font-medium text-sm">
+                            <button type="button" onClick={goBack} className="min-h-[44px] px-4 py-2.5 rounded-lg text-slate-600 hover:text-slate-800 font-medium text-sm active:bg-slate-200/50">
                                 Cancelar
                             </button>
                             <button
@@ -487,7 +487,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
     }
 
     return (
-        <div className="min-h-screen min-h-[100dvh] relative flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom overflow-hidden">
+        <div className="min-h-screen min-h-[100dvh] relative flex flex-col items-center justify-center p-3 sm:p-4 safe-area-top safe-area-bottom overflow-y-auto overflow-x-hidden">
             {/* Imagen de fondo de barbería difuminada */}
             <div
                 className="absolute inset-0 bg-cover bg-center scale-110"
@@ -515,11 +515,11 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                 {step === 'who' && (
                     <>
                         <p className="text-white text-center text-lg font-semibold mb-5">¿Eres Barbero o Cliente?</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 max-w-lg mx-auto">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6 max-w-lg mx-auto">
                             <button
                                 type="button"
                                 onClick={() => { setUserType('barbero'); setStep('barber_plan'); }}
-                                className="flex flex-col items-center gap-3 py-5 px-5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/20 transition-colors group"
+                                className="flex flex-col items-center gap-3 min-h-[120px] py-5 px-5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 transition-colors group active:bg-white/20"
                             >
                                 <div className="w-11 h-11 rounded-lg bg-[#ffd427]/20 flex items-center justify-center group-hover:bg-[#ffd427]/30">
                                     <Scissors size={22} className="text-[#ffd427]" strokeWidth={2} />
@@ -530,7 +530,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             <button
                                 type="button"
                                 onClick={() => { setUserType('cliente'); setStep('client_registered'); }}
-                                className="flex flex-col items-center gap-3 py-5 px-5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/20 transition-colors group"
+                                className="flex flex-col items-center gap-3 min-h-[120px] py-5 px-5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 transition-colors group active:bg-white/20"
                             >
                                 <div className="w-11 h-11 rounded-lg bg-[#ffd427]/20 flex items-center justify-center group-hover:bg-[#ffd427]/30">
                                     <UserCircle size={22} className="text-[#ffd427]" strokeWidth={2} />
@@ -545,8 +545,8 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                 {/* Barbero: ¿Qué tipo de barbería? */}
                 {step === 'barber_plan' && (
                     <>
-                        <button type="button" onClick={goBack} className="flex items-center gap-1 text-slate-400 hover:text-white text-sm mb-3">
-                            <ArrowLeft size={14} /> Volver
+                        <button type="button" onClick={goBack} className="flex items-center gap-1.5 min-h-[44px] text-slate-400 hover:text-white text-sm mb-3 rounded-lg w-fit px-2 -ml-2 active:bg-white/10">
+                            <ArrowLeft size={16} /> Volver
                         </button>
                         <p className="text-white text-center text-base font-semibold mb-1">¿Qué tipo de barbería tienes?</p>
                         <p className="text-slate-400 text-center text-sm mb-1">Elige el plan que mejor describe tu negocio.</p>
@@ -557,7 +557,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                     key={opt.value}
                                     type="button"
                                     onClick={() => { setSelectedPlan(opt.value); setStep('barber_contact'); }}
-                                    className="w-full flex flex-col sm:flex-row lg:flex-col items-start gap-3 p-4 rounded-lg bg-white/10 hover:bg-white/15 border border-white/20 text-left transition-colors group h-full"
+                                    className="w-full flex flex-col sm:flex-row lg:flex-col items-start gap-3 p-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-left transition-colors group h-full min-h-[100px] active:bg-white/20"
                                 >
                                     <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#ffd427]/20 flex items-center justify-center group-hover:bg-[#ffd427]/30 [&>svg]:w-5 [&>svg]:h-5">
                                         {opt.icon}
@@ -587,15 +587,15 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                 {/* Barbero: ¿Ya registrado o nuevo? — mismo equilibrio que who */}
                 {step === 'barber_registered' && (
                     <div className="max-w-lg mx-auto">
-                        <button type="button" onClick={goBack} className="flex items-center gap-1 text-slate-400 hover:text-white text-sm mb-4">
-                            <ArrowLeft size={14} /> Volver
+                        <button type="button" onClick={goBack} className="flex items-center gap-1.5 min-h-[44px] text-slate-400 hover:text-white text-sm mb-4 rounded-lg w-fit px-2 -ml-2 active:bg-white/10">
+                            <ArrowLeft size={16} /> Volver
                         </button>
                         <p className="text-white text-center text-lg font-semibold mb-5">¿Ya estás registrado o eres nuevo?</p>
                         <div className="space-y-4 mb-6">
                             <button
                                 type="button"
                                 onClick={onGoToLogin}
-                                className="w-full flex items-center justify-center gap-2 py-4 rounded-lg bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base transition-colors"
+                                className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base transition-colors active:scale-[0.98]"
                             >
                                 <LogIn size={20} />
                                 Ya estoy registrado
@@ -603,7 +603,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             <button
                                 type="button"
                                 onClick={() => setStep('barber_contact')}
-                                className="w-full flex items-center justify-center gap-2 py-4 rounded-lg bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-base transition-colors"
+                                className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-base transition-colors active:bg-white/20"
                             >
                                 Soy nuevo – quiero que me den de alta
                             </button>
@@ -614,15 +614,15 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                 {/* Cliente: ¿Ya registrado o nuevo? — mismo equilibrio */}
                 {step === 'client_registered' && (
                     <div className="max-w-lg mx-auto">
-                        <button type="button" onClick={goBack} className="flex items-center gap-1 text-slate-400 hover:text-white text-sm mb-4">
-                            <ArrowLeft size={14} /> Volver
+                        <button type="button" onClick={goBack} className="flex items-center gap-1.5 min-h-[44px] text-slate-400 hover:text-white text-sm mb-4 rounded-lg w-fit px-2 -ml-2 active:bg-white/10">
+                            <ArrowLeft size={16} /> Volver
                         </button>
                         <p className="text-white text-center text-lg font-semibold mb-5">¿Ya estás registrado o eres nuevo?</p>
                         <div className="space-y-4 mb-6">
                             <button
                                 type="button"
                                 onClick={onGoToLogin}
-                                className="w-full flex items-center justify-center gap-2 py-4 rounded-lg bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base transition-colors"
+                                className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base transition-colors active:scale-[0.98]"
                             >
                                 <LogIn size={20} />
                                 Ya estoy registrado
@@ -630,7 +630,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             <button
                                 type="button"
                                 onClick={() => setStep('client_new')}
-                                className="w-full flex items-center justify-center gap-2 py-4 rounded-lg bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-base transition-colors"
+                                className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-base transition-colors active:bg-white/20"
                             >
                                 Soy nuevo
                             </button>
@@ -641,15 +641,15 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                 {/* Cliente nuevo: ver barberías — mismo equilibrio */}
                 {step === 'client_new' && (
                     <div className="max-w-lg mx-auto">
-                        <button type="button" onClick={goBack} className="flex items-center gap-1 text-slate-400 hover:text-white text-sm mb-4">
-                            <ArrowLeft size={14} /> Volver
+                        <button type="button" onClick={goBack} className="flex items-center gap-1.5 min-h-[44px] text-slate-400 hover:text-white text-sm mb-4 rounded-lg w-fit px-2 -ml-2 active:bg-white/10">
+                            <ArrowLeft size={16} /> Volver
                         </button>
                         <p className="text-white text-center text-lg font-semibold mb-5">¿No tienes barbería aún?</p>
                         {onGoToBarberias && (
                             <button
                                 type="button"
                                 onClick={onGoToBarberias}
-                                className="w-full flex items-center justify-center gap-2 py-4 rounded-lg bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base transition-colors mb-4"
+                                className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base transition-colors mb-4 active:scale-[0.98]"
                             >
                                 <Store size={20} /> Ver barberías – elegir una y agendar cita
                             </button>
@@ -664,7 +664,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                         <button
                             type="button"
                             onClick={onGoToLogin}
-                            className="w-full flex items-center justify-center gap-2 py-4 rounded-lg bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-base transition-colors"
+                            className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-base transition-colors active:bg-white/20"
                         >
                             <LogIn size={18} /> Iniciar sesión
                         </button>

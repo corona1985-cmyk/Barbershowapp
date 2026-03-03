@@ -229,18 +229,18 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
     }
 
     return (
-        <div className="w-full max-w-2xl mx-auto px-0 sm:px-2 min-w-0">
-            <button type="button" onClick={onBack} className="flex items-center gap-1 text-slate-600 hover:text-slate-800 mb-4 sm:mb-6 py-2 min-h-[44px]">
+            <div className="w-full max-w-2xl mx-auto px-0 sm:px-2 min-w-0">
+            <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-slate-600 hover:text-slate-800 mb-4 sm:mb-6 py-2 min-h-[44px] -ml-1 rounded-lg active:bg-slate-200/50 w-fit">
                 <ArrowLeft size={20} /> Volver
             </button>
             <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-                <div className="p-6 border-b border-slate-100 bg-[#ffd427]/10">
+                <div className="p-4 sm:p-6 border-b border-slate-100 bg-[#ffd427]/10">
                     <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                         <MapPin size={22} className="text-[#ffd427]" /> {posName}
                     </h1>
                     <p className="text-slate-600 text-sm mt-1">Agenda tu cita sin registrarte</p>
                 </div>
-                <div className="p-6 space-y-6">
+                <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
                     {error && <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>}
 
                     {/* Barbero (si hay más de uno) */}
@@ -253,7 +253,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                                         key={b.id}
                                         type="button"
                                         onClick={() => setSelectedBarberId(b.id)}
-                                        className={`px-3 py-2 rounded-lg text-sm font-medium ${selectedBarberId === b.id ? 'bg-[#ffd427] text-slate-900' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                                        className={`px-4 py-2.5 min-h-[44px] rounded-xl text-sm font-medium ${selectedBarberId === b.id ? 'bg-[#ffd427] text-slate-900' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 active:bg-slate-300'}`}
                                     >
                                         {b.name}
                                     </button>
@@ -284,7 +284,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                             min={todayStr}
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
-                            className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#ffd427]"
+                            className="w-full border border-slate-300 rounded-xl px-4 py-3 sm:py-2 min-h-[48px] focus:ring-2 focus:ring-[#ffd427]"
                         />
                     </div>
 
@@ -300,7 +300,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                                     type="button"
                                     disabled={slot.taken || slot.past}
                                     onClick={() => setSelectedTime(slot.time)}
-                                    className={`py-2 rounded-lg text-sm font-medium ${slot.taken || slot.past ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : selectedTime === slot.time ? 'bg-[#ffd427] text-slate-900' : 'bg-slate-100 text-slate-700 hover:bg-[#ffd427]/30'}`}
+                                    className={`min-h-[44px] py-2.5 rounded-xl text-sm font-medium ${slot.taken || slot.past ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : selectedTime === slot.time ? 'bg-[#ffd427] text-slate-900' : 'bg-slate-100 text-slate-700 hover:bg-[#ffd427]/30 active:bg-[#ffd427]/50'}`}
                                 >
                                     {slot.time}
                                 </button>
@@ -311,16 +311,16 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                     {/* Servicios */}
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-2">Servicios</label>
-                        <div className="space-y-2 border border-slate-200 rounded-lg p-3 max-h-40 overflow-y-auto">
+                        <div className="space-y-1 border border-slate-200 rounded-xl p-3 max-h-44 overflow-y-auto scroll-touch">
                             {servicesForBarber.map((s) => (
-                                <label key={s.id} className="flex items-center gap-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
+                                <label key={s.id} className="flex items-center gap-3 min-h-[48px] px-3 py-2 rounded-xl hover:bg-slate-50 active:bg-slate-100 cursor-pointer">
                                     <input
                                         type="checkbox"
-                                        className="rounded text-[#ffd427] focus:ring-[#ffd427]"
+                                        className="rounded text-[#ffd427] focus:ring-[#ffd427] w-5 h-5 shrink-0"
                                         checked={!!selectedServices.find((x) => x.id === s.id)}
                                         onChange={() => toggleService(s)}
                                     />
-                                    <span className="flex-1 text-slate-700">{s.name}</span>
+                                    <span className="flex-1 text-slate-700 text-sm sm:text-base">{s.name}</span>
                                     <span className="font-medium text-slate-600">${s.price}</span>
                                 </label>
                             ))}
@@ -336,7 +336,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                                 value={nombre}
                                 onChange={(e) => setNombre(e.target.value)}
                                 placeholder="Ej: Juan Pérez"
-                                className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#ffd427]"
+                                className="w-full border border-slate-300 rounded-xl px-4 py-3 sm:py-2 min-h-[48px] focus:ring-2 focus:ring-[#ffd427]"
                             />
                         </div>
                         <div>
@@ -346,7 +346,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                                 value={telefono}
                                 onChange={(e) => setTelefono(e.target.value)}
                                 placeholder="Ej: 555 123 4567"
-                                className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#ffd427]"
+                                className="w-full border border-slate-300 rounded-xl px-4 py-3 sm:py-2 min-h-[48px] focus:ring-2 focus:ring-[#ffd427]"
                             />
                         </div>
                     </div>
@@ -355,7 +355,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                         type="button"
                         onClick={handleConfirm}
                         disabled={loading || noBarbers}
-                        className="w-full py-3 bg-[#ffd427] text-slate-900 font-bold rounded-xl hover:bg-amber-400 disabled:opacity-50"
+                        className="min-h-[52px] w-full py-3 rounded-xl font-bold bg-[#ffd427] text-slate-900 hover:bg-[#e6be23] active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
                     >
                         {loading ? 'Agendando...' : 'Confirmar cita'}
                     </button>
