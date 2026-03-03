@@ -28,22 +28,32 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
     const [error, setError] = useState('');
     const [done, setDone] = useState(false);
     const [guestBarberGallery, setGuestBarberGallery] = useState<BarberGalleryPhoto[]>([]);
+    const [dataLoading, setDataLoading] = useState(true);
 
     useEffect(() => {
+        setDataLoading(true);
+        setError('');
         const prev = DataService.getActivePosId();
         DataService.setActivePosId(posId);
         Promise.all([
             DataService.getServices(),
             DataService.getBarbers(),
             DataService.getAppointments(),
-        ]).then(([s, b, a]) => {
-            setServices(s);
-            setBarbers(b.filter((x) => x.active));
-            setAppointments(a);
-            if (b.filter((x) => x.active).length > 0) setSelectedBarberId(b.filter((x) => x.active)[0].id);
-        }).catch(() => setError('No se pudo cargar la información.'));
+        ])
+            .then(([s, b, a]) => {
+                setServices(s);
+                const active = b.filter((x) => x.active);
+                setBarbers(active);
+                setAppointments(a);
+                if (active.length > 0) setSelectedBarberId(active[0].id);
+            })
+            .catch(() => setError('No se pudo cargar la información.'))
+            .finally(() => setDataLoading(false));
         return () => { DataService.setActivePosId(prev); };
     }, [posId]);
+
+    const activeBarbers = barbers.filter((b) => b.active);
+    const defaultBarberId = activeBarbers.length > 0 ? activeBarbers[0].id : 0;
 
     useEffect(() => {
         const bid = selectedBarberId || defaultBarberId;
@@ -56,8 +66,6 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     };
     const todayStr = getTodayLocal();
-    const activeBarbers = barbers.filter((b) => b.active);
-    const defaultBarberId = activeBarbers.length > 0 ? activeBarbers[0].id : 0;
 
     const timeToMinutes = (hora: string): number => {
         const [h, m] = hora.split(':').map(Number);
@@ -207,6 +215,15 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                 >
                     Volver a barberías
                 </button>
+            </div>
+        );
+    }
+
+    if (dataLoading) {
+        return (
+            <div className="w-full max-w-2xl mx-auto px-4 flex flex-col items-center justify-center min-h-[280px]">
+                <div className="w-14 h-14 border-4 border-[#ffd427] border-t-transparent rounded-full animate-spin mb-4" />
+                <p className="text-slate-600 font-medium">Cargando barbería...</p>
             </div>
         );
     }

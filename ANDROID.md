@@ -2,6 +2,14 @@
 
 Guía para generar y ejecutar la app en Android con Capacitor.
 
+## Implementación lista para Android
+
+- **Capacitor 6** con `@capacitor/android`, `@capacitor/splash-screen`, `@squareetlabs/capacitor-subscriptions`
+- **Icono y splash**: logo en `drawable/ic_launcher_foreground.jpg` y splash nativo que se oculta al cargar la app
+- **Permisos**: INTERNET, CAMERA (opcional)
+- **Red**: `network_security_config.xml` permite cleartext para desarrollo con `server.url`
+- **Scripts**: `android`, `android:sync`, `android:open`, `android:release`
+
 ## Requisitos
 
 - **Node.js** v18+
@@ -36,6 +44,22 @@ Este comando hace:
 - Conecta un dispositivo o inicia un emulador.
 - Pulsa **Run** (▶) para instalar y ejecutar la app.
 
+## Si los cambios no se ven en Android (plan gratuito, límite de citas, servicios opcionales)
+
+La app en Android carga el código web desde los archivos empaquetados en el APK. Si has actualizado el código pero **no ves** el contador de citas (X / 10), los servicios opcionales en plan gratuito o el límite de 10 citas/mes, la app está usando una **versión antigua** del bundle. Haz lo siguiente:
+
+1. **Reconstruir y sincronizar** (en la raíz del proyecto):
+   ```bash
+   npm run android:sync
+   ```
+   Esto hace `npm run build` y copia el nuevo `dist/` al proyecto Android.
+
+2. **En Android Studio**: **Build → Clean Project**, luego **Run** (▶) para instalar de nuevo en el dispositivo/emulador.
+
+3. **Comprobar versión**: En la pantalla de login (o bienvenida) debe aparecer **v1.0.6** debajo de "Sistema Multi-Sede". Si no aparece o ves una versión anterior, repite el paso 1 y vuelve a instalar la app (o desinstálala del dispositivo e instala de nuevo).
+
+4. **Plan gratuito**: Para que apliquen el límite de 10 citas y los servicios opcionales, la sede debe tener **plan Gratuito**. En **Admin POS** o **Master Dashboard** asigna el plan "Gratuito" a la sede con la que inicias sesión.
+
 ## Comandos útiles
 
 | Comando | Descripción |
@@ -43,6 +67,7 @@ Este comando hace:
 | `npm run android` | Build web + sync + abrir Android Studio |
 | `npm run android:sync` | Solo build web + sync (sin abrir IDE) |
 | `npm run android:open` | Solo abrir el proyecto en Android Studio |
+| `npm run android:release` | Build web + sync + APK release (sin firma; para firma usar Android Studio) |
 
 ## Permisos en la app
 

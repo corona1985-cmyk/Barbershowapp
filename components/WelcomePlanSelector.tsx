@@ -508,6 +508,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                     </div>
                     <h1 className="text-2xl font-semibold text-white">BarberShow</h1>
                     <p className="text-slate-400 mt-1 text-sm">Sistema para barberías</p>
+                    <p className="text-slate-500 text-xs mt-0.5">v1.0.6</p>
                 </div>
 
                 {/* Paso 1: ¿Barbero o Cliente? — punto medio: ni muy chico ni muy grande */}

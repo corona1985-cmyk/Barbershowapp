@@ -227,8 +227,9 @@ export const DataService = {
     if (!valid) return null;
     const updated = { ...user, lastLogin: new Date().toISOString(), loginAttempts: 0 };
     delete (updated as Record<string, unknown>).password;
-    await set(ref(db, ROOT + '/users/' + user.username), { ...user, lastLogin: updated.lastLogin, loginAttempts: 0 });
-    await DataService.logAuditAction('login', username, 'User Logged In', user.posId ?? undefined);
+    // Escribir lastLogin y audit en segundo plano para no bloquear la respuesta al usuario
+    set(ref(db, ROOT + '/users/' + user.username), { ...user, lastLogin: updated.lastLogin, loginAttempts: 0 }).catch(() => {});
+    DataService.logAuditAction('login', username, 'User Logged In', user.posId ?? undefined).catch(() => {});
     return updated as SystemUser;
   },
 

@@ -1,27 +1,32 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
-import Dashboard from './pages/Dashboard';
-import Sales from './pages/Sales';
-import Shop from './pages/Shop';
-import Appointments from './pages/Appointments';
-import Reports from './pages/Reports';
-import SalesRecords from './pages/SalesRecords';
-import Settings from './pages/Settings';
-import AdminPOS from './pages/AdminPOS';
-import CalendarView from './pages/CalendarView';
-import WhatsAppConsole from './pages/WhatsAppConsole';
-import UserAdmin from './pages/UserAdmin';
-import ClientDiscovery from './pages/ClientDiscovery';
-import ClientProfile from './pages/ClientProfile';
-import MasterDashboard from './pages/MasterDashboard';
-import { Clients, Inventory, Finance } from './pages/InventoryClientsFinance';
 import { ViewState, UserRole, PointOfSale, SystemUser, AppointmentForSale, AccountTier } from './types';
-import { Scissors, Cookie, MapPin, Globe, LogOut, Menu, UserPlus, CheckCircle, ArrowLeft, Shield } from 'lucide-react';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Sales = lazy(() => import('./pages/Sales'));
+const Shop = lazy(() => import('./pages/Shop'));
+const Appointments = lazy(() => import('./pages/Appointments'));
+const Reports = lazy(() => import('./pages/Reports'));
+const SalesRecords = lazy(() => import('./pages/SalesRecords'));
+const Settings = lazy(() => import('./pages/Settings'));
+const AdminPOS = lazy(() => import('./pages/AdminPOS'));
+const CalendarView = lazy(() => import('./pages/CalendarView'));
+const WhatsAppConsole = lazy(() => import('./pages/WhatsAppConsole'));
+const UserAdmin = lazy(() => import('./pages/UserAdmin'));
+const ClientDiscovery = lazy(() => import('./pages/ClientDiscovery'));
+const ClientProfile = lazy(() => import('./pages/ClientProfile'));
+const MasterDashboard = lazy(() => import('./pages/MasterDashboard'));
+const Clients = lazy(() => import('./pages/InventoryClientsFinance').then(m => ({ default: m.Clients })));
+const Inventory = lazy(() => import('./pages/InventoryClientsFinance').then(m => ({ default: m.Inventory })));
+const Finance = lazy(() => import('./pages/InventoryClientsFinance').then(m => ({ default: m.Finance })));
+import { Scissors, Cookie, MapPin, Globe, LogOut, Menu, UserPlus, CheckCircle, ArrowLeft, Shield, Loader2 } from 'lucide-react';
 import BarberNotificationBell from './components/BarberNotificationBell';
 import WelcomePlanSelector from './components/WelcomePlanSelector';
 import GuestBookingView from './components/GuestBookingView';
 import QRScannerView from './components/QRScannerView';
+import { Capacitor } from '@capacitor/core';
+import { SplashScreen } from '@capacitor/splash-screen';
 import { DataService } from './services/data';
 import { authenticateMasterWithPassword } from './services/firebase';
 import { initPlayBilling, isPlayBillingAvailable } from './services/playBilling';
@@ -48,6 +53,7 @@ const App: React.FC = () => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [loginError, setLoginError] = useState('');
+    const [loginLoading, setLoginLoading] = useState(false);
     
     // Registration State
     const [isRegistering, setIsRegistering] = useState(false);
@@ -108,13 +114,16 @@ const App: React.FC = () => {
         && currentPos.subscriptionExpiresAt != null
         && !DataService.isSubscriptionActive(currentPos);
 
-    // Ocultar splash de entrada cuando la app ha cargado
+    // Ocultar splash (web + nativo Android) cuando la app ha cargado
     useEffect(() => {
         if (!isLoadingSession) {
             const splash = document.getElementById('app-splash');
             if (splash) {
                 splash.classList.add('hide');
                 setTimeout(() => { splash.remove(); }, 450);
+            }
+            if (Capacitor.isNativePlatform()) {
+                SplashScreen.hide().catch(() => {});
             }
         }
     }, [isLoadingSession]);
@@ -141,21 +150,41 @@ const App: React.FC = () => {
                     const params = new URLSearchParams(window.location.search);
                     const refPosId = params.get('ref_pos');
                     if (refPosId) {
-                        try {
-                            const posList = await DataService.getPointsOfSale();
-                            const found = posList.find(p => p.id === Number(refPosId));
-                            if (found) {
-                                setReferralPos(found);
-                                setGuestBookingPos({ id: found.id, name: found.name }); // QR → ir directo a agendar en esta barbería
-                            }
-                        } catch (e) {
-                            console.error('Error cargando barbería del QR:', e);
-                        }
+                        const id = Number(refPosId);
+                        setIsLoadingSession(false);
+                        setGuestBookingPos({ id, name: 'Cargando...' });
+                        DataService.getPointsOfSale()
+                            .then((posList) => {
+                                const found = posList.find(p => p.id === id);
+                                if (found) {
+                                    setReferralPos(found);
+                                    setGuestBookingPos({ id: found.id, name: found.name });
+                                } else {
+                                    setGuestBookingPos(null);
+                                }
+                            })
+                            .catch((e) => {
+                                console.error('Error cargando barbería del QR:', e);
+                                setGuestBookingPos(null);
+                            });
+                        return;
                     }
                     setIsLoadingSession(false);
                     return;
                 }
-                const userData = JSON.parse(user);
+                let userData: { role?: string; name?: string; username?: string; posId?: number; photoUrl?: string } | null = null;
+                try {
+                    userData = JSON.parse(user);
+                } catch {
+                    localStorage.removeItem('currentUser');
+                    setIsLoadingSession(false);
+                    return;
+                }
+                if (!userData || typeof userData !== 'object' || !userData.role) {
+                    localStorage.removeItem('currentUser');
+                    setIsLoadingSession(false);
+                    return;
+                }
                 const role = userData.role === 'empleado' ? 'barbero' : userData.role;
                 setIsAuthenticated(true);
                 setUserRole(role);
@@ -238,16 +267,18 @@ const App: React.FC = () => {
             setLoginError('La contraseña es requerida.');
             return;
         }
+        setLoginLoading(true);
         let user: SystemUser | null = null;
         try {
             if (loginTab === 'master') {
                 const result = await authenticateMasterWithPassword(trimmedUsername, password);
                 user = result.user as SystemUser;
-                await DataService.logAuditAction('master_login', 'master', 'Platform Owner Access');
+                DataService.logAuditAction('master_login', 'master', 'Platform Owner Access').catch(() => {});
             } else {
                 try {
                     user = await DataService.authenticate(trimmedUsername, password);
                 } catch (e) {
+                    setLoginLoading(false);
                     if (e instanceof Error && e.message === 'NO_PASSWORD_SET') {
                         setLoginError('Este usuario no tiene contraseña. El administrador debe asignarla en Admin Usuarios.');
                     } else {
@@ -256,12 +287,14 @@ const App: React.FC = () => {
                     return;
                 }
                 if (!user) {
+                    setLoginLoading(false);
                     setLoginError('Contraseña incorrecta.');
                     return;
                 }
             }
 
             if (!user) {
+                setLoginLoading(false);
                 setLoginError('Usuario no encontrado o credenciales inválidas.');
                 return;
             }
@@ -282,11 +315,13 @@ const App: React.FC = () => {
                 setCurrentView('admin_pos');
             } else {
                 if (role === 'cliente') {
-                    const preferred = await DataService.getClientPreferredPos(user.username);
-                    setPreferredPosId(preferred);
                     const params = new URLSearchParams(window.location.search);
                     const refPosId = params.get('ref_pos');
-                    const posList = await DataService.getPointsOfSale();
+                    const [preferred, posList] = await Promise.all([
+                        DataService.getClientPreferredPos(user.username),
+                        DataService.getPointsOfSale(),
+                    ]);
+                    setPreferredPosId(preferred);
                     if (refPosId) {
                         const found = posList.find(p => p.id === Number(refPosId));
                         if (found) {
@@ -334,6 +369,8 @@ const App: React.FC = () => {
         } catch (err) {
             console.error('Error en login:', err);
             setLoginError('Error de conexión. Revisa tu internet o las reglas de Firebase Realtime Database e intenta de nuevo.');
+        } finally {
+            setLoginLoading(false);
         }
     };
 
@@ -457,9 +494,19 @@ const App: React.FC = () => {
 
     // --- RENDER ---
 
+    const ViewFallback = () => (
+        <div className="flex items-center justify-center min-h-[200px]">
+            <div className="w-12 h-12 border-4 border-[#ffd427] border-t-transparent rounded-full animate-spin" />
+        </div>
+    );
+
     // 1. MASTER DASHBOARD RENDER (No sidebar, full screen exclusive)
     if (isAuthenticated && userRole === 'platform_owner') {
-        return <MasterDashboard onLogout={handleLogout} />;
+        return (
+            <Suspense fallback={<ViewFallback />}>
+                <MasterDashboard onLogout={handleLogout} />
+            </Suspense>
+        );
     }
 
     // 2. SUSCRIPCIÓN VENCIDA (admin/dueno/barbero con sede vencida)
@@ -539,6 +586,7 @@ const App: React.FC = () => {
                 <main className="p-4 md:p-8 max-w-6xl mx-auto">
                     <p className="text-slate-600 text-center mb-2">Elige una barbería para agendar tu cita (sin cuenta) o registrarte.</p>
                     <p className="text-slate-400 text-center text-sm mb-6">Próximamente: ver barberías más cercanas a tu ubicación.</p>
+                    <Suspense fallback={<ViewFallback />}>
                     <ClientDiscovery
                         guestMode
                         onSwitchPos={(id) => {
@@ -555,6 +603,7 @@ const App: React.FC = () => {
                         }}
                         onBookAppointment={(id, name) => setGuestBookingPos({ id, name })}
                     />
+                    </Suspense>
                 </main>
             </div>
         );
@@ -592,6 +641,7 @@ const App: React.FC = () => {
                         </div>
                         <h1 className="text-2xl font-bold text-slate-900">BarberShow</h1>
                         <p className="text-slate-500">Sistema Multi-Sede</p>
+                        <p className="text-slate-400 text-xs mt-1">v1.0.6</p>
                     </div>
 
                     {isRegistering ? (
@@ -693,8 +743,8 @@ const App: React.FC = () => {
                                     />
                                 </div>
                                 
-                                <button type="submit" className={`w-full py-3 rounded-lg font-bold transition-colors shadow-lg shadow-yellow-500/30 mt-4 ${loginTab === 'master' ? 'bg-slate-900 text-white hover:bg-slate-700' : 'bg-[#ffd427] text-slate-900 hover:bg-[#e6be23]'}`}>
-                                    {loginTab === 'master' ? 'Acceder al Sistema Maestro' : 'Iniciar Sesión'}
+                                <button type="submit" disabled={loginLoading} className={`w-full py-3 rounded-lg font-bold transition-colors shadow-lg shadow-yellow-500/30 mt-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed ${loginTab === 'master' ? 'bg-slate-900 text-white hover:bg-slate-700' : 'bg-[#ffd427] text-slate-900 hover:bg-[#e6be23]'}`}>
+                                    {loginLoading ? (<><Loader2 size={20} className="animate-spin" /> Iniciando sesión...</>) : (loginTab === 'master' ? 'Acceder al Sistema Maestro' : 'Iniciar Sesión')}
                                 </button>
 
                                 {loginTab === 'general' && (
@@ -881,7 +931,9 @@ const App: React.FC = () => {
                         </div>
                     )}
                     <div className="responsive-container">
-                        {renderView()}
+                        <Suspense fallback={<ViewFallback />}>
+                            {renderView()}
+                        </Suspense>
                     </div>
                 </div>
             </main>
