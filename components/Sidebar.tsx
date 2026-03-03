@@ -26,8 +26,8 @@ type NavGroup = 'principal' | 'operaciones' | 'administracion';
 /** Ítems que se ocultan en plan Solo (menú simplificado) */
 const HIDDEN_IN_TIER_SOLO: ViewState[] = ['calendar', 'whatsapp_console', 'inventory', 'finance', 'user_admin'];
 
-/** Plan Gratuito: solo ver citas (y contador 10/mes) y Configuración > QR. Sin Dashboard. */
-const SHOWN_IN_TIER_GRATUITO: ViewState[] = ['client_profile', 'appointments', 'settings'];
+/** Plan Gratuito: ver citas, Mi perfil, Configuración, y permitir buscar más barberías / escanear QR. */
+const SHOWN_IN_TIER_GRATUITO: ViewState[] = ['client_profile', 'appointments', 'settings', 'client_discovery', 'qr_scanner'];
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, userRole, isOpen, onClose, clientHasSelectedBarberia = true, accountTier = 'barberia', preferredPosId = null, currentPosId = null, onRemoveFavorite }) => {
     
