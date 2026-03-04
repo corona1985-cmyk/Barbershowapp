@@ -81,7 +81,7 @@ La app en Android carga el código web desde los archivos empaquetados en el APK
 
 2. **En Android Studio**: **Build → Clean Project**, luego **Run** (▶) para instalar de nuevo en el dispositivo/emulador.
 
-3. **Comprobar versión**: En la pantalla de login (o bienvenida) debe aparecer **v1.0.6** debajo de "Sistema Multi-Sede". Si no aparece o ves una versión anterior, repite el paso 1 y vuelve a instalar la app (o desinstálala del dispositivo e instala de nuevo).
+3. **Comprobar versión**: En la pantalla de login (o bienvenida) debe aparecer **v1.0.7** debajo de "Sistema Multi-Sede". Si no aparece o ves una versión anterior, repite el paso 1 y vuelve a instalar la app (o desinstálala del dispositivo e instala de nuevo).
 
 4. **Plan gratuito**: Para que apliquen el límite de 100 citas y los servicios opcionales, la sede debe tener **plan Gratuito**. En **Admin POS** o **Master Dashboard** asigna el plan "Gratuito" a la sede con la que inicias sesión.
 

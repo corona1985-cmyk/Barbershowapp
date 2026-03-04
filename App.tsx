@@ -25,6 +25,7 @@ import BarberNotificationBell from './components/BarberNotificationBell';
 import WelcomePlanSelector from './components/WelcomePlanSelector';
 import GuestBookingView from './components/GuestBookingView';
 import AdMobBanner from './components/AdMobBanner';
+import AdSenseBanner from './components/AdSenseBanner';
 import QRScannerView from './components/QRScannerView';
 import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
@@ -650,7 +651,7 @@ const App: React.FC = () => {
                         </div>
                         <h1 className="text-2xl font-bold text-slate-900">BarberShow</h1>
                         <p className="text-slate-500">Sistema Multi-Sede</p>
-                        <p className="text-slate-400 text-xs mt-1">v1.0.6</p>
+                        <p className="text-slate-400 text-xs mt-1">v1.0.7</p>
                     </div>
 
                     {isRegistering ? (
@@ -795,6 +796,7 @@ const App: React.FC = () => {
     }
 
     // 5. MAIN APP RENDER (General Users)
+    const showWebAds = accountTier === 'gratuito' || accountTier === 'solo' || userRole === 'cliente';
     return (
         <div className="flex h-screen min-h-0 max-h-[100dvh] bg-slate-100 font-sans overflow-hidden">
             <AdMobBanner accountTier={accountTier} />
@@ -950,6 +952,7 @@ const App: React.FC = () => {
                             {renderView()}
                         </Suspense>
                     </div>
+                    <AdSenseBanner show={showWebAds} />
                 </div>
             </main>
 
