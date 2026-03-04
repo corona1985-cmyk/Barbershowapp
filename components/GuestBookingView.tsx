@@ -135,7 +135,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
             setError('Nombre y teléfono son obligatorios.');
             return;
         }
-        if (selectedServices.length === 0) {
+        if (servicesForBarber.length > 0 && selectedServices.length === 0) {
             setError('Elige al menos un servicio.');
             return;
         }
@@ -147,7 +147,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
             setError('No hay barberos disponibles en esta barbería.');
             return;
         }
-        const duracionTotal = selectedServices.reduce((acc, s) => acc + s.duration, 0);
+        const duracionTotal = selectedServices.length > 0 ? selectedServices.reduce((acc, s) => acc + s.duration, 0) : 30;
         const newStart = timeToMinutes(selectedTime);
         const existingSameBarber = appointments.filter(
             (a) => a.fecha === selectedDate && a.barberoId === barberId && a.estado !== 'cancelada'
@@ -175,7 +175,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                 puntos: 0,
                 status: 'active',
             });
-            const total = selectedServices.reduce((acc, s) => acc + s.price, 0);
+            const total = selectedServices.length > 0 ? selectedServices.reduce((acc, s) => acc + s.price, 0) : 0;
             await DataService.addAppointment({
                 posId,
                 clienteId: client.id,
@@ -311,20 +311,26 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                     {/* Servicios */}
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-2">Servicios</label>
-                        <div className="space-y-1 border border-slate-200 rounded-xl p-3 max-h-44 overflow-y-auto scroll-touch">
-                            {servicesForBarber.map((s) => (
-                                <label key={s.id} className="flex items-center gap-3 min-h-[48px] px-3 py-2 rounded-xl hover:bg-slate-50 active:bg-slate-100 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        className="rounded text-[#ffd427] focus:ring-[#ffd427] w-5 h-5 shrink-0"
-                                        checked={!!selectedServices.find((x) => x.id === s.id)}
-                                        onChange={() => toggleService(s)}
-                                    />
-                                    <span className="flex-1 text-slate-700 text-sm sm:text-base">{s.name}</span>
-                                    <span className="font-medium text-slate-600">${s.price}</span>
-                                </label>
-                            ))}
-                        </div>
+                        {servicesForBarber.length > 0 ? (
+                            <div className="space-y-1 border border-slate-200 rounded-xl p-3 max-h-44 overflow-y-auto scroll-touch bg-white">
+                                {servicesForBarber.map((s) => (
+                                    <label key={s.id} className="flex items-center gap-3 min-h-[48px] px-3 py-2 rounded-xl hover:bg-slate-50 active:bg-slate-100 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            className="rounded text-[#ffd427] focus:ring-[#ffd427] w-5 h-5 shrink-0"
+                                            checked={!!selectedServices.find((x) => x.id === s.id)}
+                                            onChange={() => toggleService(s)}
+                                        />
+                                        <span className="flex-1 text-slate-700 text-sm sm:text-base">{s.name}</span>
+                                        <span className="font-medium text-slate-600">${s.price}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 text-slate-600 text-sm">
+                                No hay servicios configurados. Puedes confirmar la cita solo con fecha y hora.
+                            </div>
+                        )}
                     </div>
 
                     {/* Nombre y teléfono */}

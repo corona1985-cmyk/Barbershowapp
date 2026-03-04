@@ -24,6 +24,7 @@ import { Scissors, Cookie, MapPin, Globe, LogOut, Menu, UserPlus, CheckCircle, A
 import BarberNotificationBell from './components/BarberNotificationBell';
 import WelcomePlanSelector from './components/WelcomePlanSelector';
 import GuestBookingView from './components/GuestBookingView';
+import AdMobBanner from './components/AdMobBanner';
 import QRScannerView from './components/QRScannerView';
 import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
@@ -796,6 +797,7 @@ const App: React.FC = () => {
     // 5. MAIN APP RENDER (General Users)
     return (
         <div className="flex h-screen min-h-0 max-h-[100dvh] bg-slate-100 font-sans overflow-hidden">
+            <AdMobBanner accountTier={accountTier} />
             <Sidebar 
                 currentView={currentView} 
                 onChangeView={handleChangeView} 

@@ -4,6 +4,7 @@ import { AppSettings, SystemUser, Service, UserRole, Barber, BarberWorkingHours,
 import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as SettingsIcon, UserCheck, Power, QrCode, Download, Printer, Percent, Clock, CalendarOff, ImagePlus } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { handlePrintQR as handlePrintQRNative } from '../utils/print';
+import { DEFAULT_PUBLIC_APP_URL } from '../config/app';
 
 type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'barbers' | 'taxes' | 'qr';
 
@@ -209,15 +210,13 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
         setShowBarberModal(true);
     };
 
-    // URL base para los QR: en producción/native usar siempre la URL pública del despliegue.
-    // En Android/iOS (Capacitor) window.location es tipo capacitor://localhost → los QR salían rotos.
+    // URL base para los QR: en app nativa o si está definida VITE_APP_PUBLIC_URL se usa la URL pública.
     const rawPublicUrl = typeof import.meta !== 'undefined' && import.meta.env?.VITE_APP_PUBLIC_URL;
     const isNativeApp = Capacitor.isNativePlatform();
-    const defaultPublicUrl = 'https://gen-lang-client-0624135070.web.app';
     const baseUrl = rawPublicUrl
         ? String(rawPublicUrl).replace(/\/+$/, '')
         : isNativeApp
-            ? defaultPublicUrl
+            ? DEFAULT_PUBLIC_APP_URL
             : (window.location.origin + (window.location.pathname || '').replace(/\/+$/, '') || window.location.origin);
     const getRegistrationUrl = () => `${baseUrl}?ref_pos=${activePosId}`;
     const getRegistrationUrlForPos = (posId: number) => `${baseUrl}?ref_pos=${posId}`;

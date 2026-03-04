@@ -2,7 +2,7 @@ import type { AccountTier, DisplayPlanName, PointOfSale, PosPlan } from '../type
 
 /**
  * Obtiene el nombre comercial único del plan a partir del tier (y opcionalmente plan) de la sede.
- * Gratuito (solo citas, 10/mes), Normal (solo), Pro (barbería), Full (multisede).
+ * Gratuito (solo citas, 100/mes), Normal (solo), Pro (barbería), Full (multisede).
  */
 export function getDisplayPlanName(tier?: AccountTier | null, _plan?: PosPlan | null): DisplayPlanName {
   if (tier === 'multisede') return 'Full';

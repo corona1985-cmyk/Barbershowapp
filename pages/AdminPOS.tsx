@@ -176,7 +176,7 @@ const AdminPOS: React.FC = () => {
                                     value={currentPos.tier ?? 'gratuito'}
                                     onChange={e => setCurrentPos({ ...currentPos, tier: e.target.value as AccountTier })}
                                 >
-                                    <option value="gratuito">Gratuito – Solo ver y gestionar citas. Máximo 10 citas al mes. Menú: Dashboard, Agenda Citas, Configuración.</option>
+                                    <option value="gratuito">Gratuito – Solo ver y gestionar citas. Máximo 100 citas al mes. Menú: Dashboard, Agenda Citas, Configuración.</option>
                                     <option value="solo">Normal – Una persona, un local. Menú simplificado (Dashboard, Citas, Clientes, Ventas, Configuración, Reportes, Registros de cortes).</option>
                                     <option value="barberia">Pro – Varios barberos, una sede. Incluye agenda por barbero, reportes por barbero, inventario, finanzas, WhatsApp, admin usuarios.</option>
                                     <option value="multisede">Full – Varias ubicaciones o cadena. Incluye todo (selector de sede, reportes por sede, administración centralizada).</option>

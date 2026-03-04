@@ -18,6 +18,31 @@ Guía para generar y ejecutar la app en Android con Capacitor.
   - JDK 17
 - **Variables de entorno** (opcional): `.env` o `.env.local` si usas API keys en la app
 
+## Error: "android platform has not been added yet"
+
+Si ves este mensaje:
+
+1. **Ejecuta siempre desde la raíz del proyecto** (donde está `package.json` y `capacitor.config.ts`):
+   ```bash
+   cd C:\Users\yendr\Documents\GitHub\Barbershowapp
+   ```
+2. **Genera primero el build web** (Capacitor copia la carpeta `dist` a Android):
+   ```bash
+   npm run build
+   ```
+3. **Sincroniza la plataforma Android**:
+   ```bash
+   npx cap sync android
+   ```
+4. Para abrir Android Studio: `npx cap open android`.
+
+Si el error sigue y la carpeta `android` existe pero está dañada o desactualizada, puedes volver a añadir la plataforma (**backupea** `android/app/src/main/AndroidManifest.xml`, `android/app/build.gradle`, `android/variables.gradle` y `android/app/src/main/res/values/strings.xml` antes):
+   ```bash
+   rmdir /s /q android
+   npx cap add android
+   ```
+   Luego restaura los archivos que modificaste (AdMob, permisos, etc.).
+
 ## Pasos rápidos
 
 ### 1. Instalar dependencias
@@ -46,7 +71,7 @@ Este comando hace:
 
 ## Si los cambios no se ven en Android (plan gratuito, límite de citas, servicios opcionales)
 
-La app en Android carga el código web desde los archivos empaquetados en el APK. Si has actualizado el código pero **no ves** el contador de citas (X / 10), los servicios opcionales en plan gratuito o el límite de 10 citas/mes, la app está usando una **versión antigua** del bundle. Haz lo siguiente:
+La app en Android carga el código web desde los archivos empaquetados en el APK. Si has actualizado el código pero **no ves** el contador de citas (X / 100), los servicios opcionales en plan gratuito o el límite de 100 citas/mes, la app está usando una **versión antigua** del bundle. Haz lo siguiente:
 
 1. **Reconstruir y sincronizar** (en la raíz del proyecto):
    ```bash
@@ -58,7 +83,7 @@ La app en Android carga el código web desde los archivos empaquetados en el APK
 
 3. **Comprobar versión**: En la pantalla de login (o bienvenida) debe aparecer **v1.0.6** debajo de "Sistema Multi-Sede". Si no aparece o ves una versión anterior, repite el paso 1 y vuelve a instalar la app (o desinstálala del dispositivo e instala de nuevo).
 
-4. **Plan gratuito**: Para que apliquen el límite de 10 citas y los servicios opcionales, la sede debe tener **plan Gratuito**. En **Admin POS** o **Master Dashboard** asigna el plan "Gratuito" a la sede con la que inicias sesión.
+4. **Plan gratuito**: Para que apliquen el límite de 100 citas y los servicios opcionales, la sede debe tener **plan Gratuito**. En **Admin POS** o **Master Dashboard** asigna el plan "Gratuito" a la sede con la que inicias sesión.
 
 ## Comandos útiles
 

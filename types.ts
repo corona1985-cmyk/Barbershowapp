@@ -7,7 +7,7 @@ export type PosPlan = 'basic' | 'pro';
 /** Tipo de negocio / tier de cuenta: determina menú y límites (gratuito → solo → barbería → multi-sede) */
 export type AccountTier = 'gratuito' | 'solo' | 'barberia' | 'multisede';
 
-/** Nombre comercial único del plan mostrado al usuario: Gratuito (solo ver citas, 10/mes), Normal, Pro, Full. */
+/** Nombre comercial único del plan mostrado al usuario: Gratuito (solo ver citas, 100/mes), Normal, Pro, Full. */
 export type DisplayPlanName = 'Gratuito' | 'Normal' | 'Pro' | 'Full';
 
 export interface PointOfSale {

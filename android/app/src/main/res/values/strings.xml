@@ -4,4 +4,6 @@
     <string name="title_activity_main">BarberShow</string>
     <string name="package_name">com.barbershow.app</string>
     <string name="custom_url_scheme">com.barbershow.app</string>
+    <!-- AdMob Application ID (reemplaza por tu ID de la consola AdMob) -->
+    <string name="admob_app_id">ca-app-pub-6169287781659857~4172657911</string>
 </resources>
