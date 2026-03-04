@@ -101,7 +101,7 @@ const AdminPOS: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         <span className={`px-2 py-1 rounded text-xs font-medium ${pos.tier === 'gratuito' ? 'bg-green-100 text-green-800' : pos.tier === 'multisede' ? 'bg-indigo-100 text-indigo-800' : pos.tier === 'barberia' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
-                                            {getDisplayPlanName(pos.tier)}
+                                            {getDisplayPlanName(pos.tier)}{pos.tier !== 'gratuito' ? ' · Sin Anuncios' : ''}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-center">
@@ -177,9 +177,9 @@ const AdminPOS: React.FC = () => {
                                     onChange={e => setCurrentPos({ ...currentPos, tier: e.target.value as AccountTier })}
                                 >
                                     <option value="gratuito">Gratuito – Solo ver y gestionar citas. Máximo 100 citas al mes. Menú: Dashboard, Agenda Citas, Configuración.</option>
-                                    <option value="solo">Normal – Una persona, un local. Menú simplificado (Dashboard, Citas, Clientes, Ventas, Configuración, Reportes, Registros de cortes).</option>
-                                    <option value="barberia">Pro – Varios barberos, una sede. Incluye agenda por barbero, reportes por barbero, inventario, finanzas, WhatsApp, admin usuarios.</option>
-                                    <option value="multisede">Full – Varias ubicaciones o cadena. Incluye todo (selector de sede, reportes por sede, administración centralizada).</option>
+                                    <option value="solo">Normal – Una persona, un local. Sin Anuncios. Menú simplificado (Dashboard, Citas, Clientes, Ventas, Configuración, Reportes, Registros de cortes).</option>
+                                    <option value="barberia">Pro – Varios barberos, una sede. Sin Anuncios. Incluye agenda por barbero, reportes por barbero, inventario, finanzas, WhatsApp, admin usuarios.</option>
+                                    <option value="multisede">Full – Varias ubicaciones o cadena. Sin Anuncios. Incluye todo (selector de sede, reportes por sede, administración centralizada).</option>
                                 </select>
                                 <p className="text-xs text-slate-500 mt-1">Un solo nombre de plan: Normal, Pro o Full. El plan define el menú y las opciones disponibles.</p>
                             </div>

@@ -312,6 +312,9 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                         <h3 className="text-lg font-bold text-white">{plan.label}</h3>
                                         <span className="text-[#ffd427] font-bold">{plan.price === 0 ? 'Gratis' : `$${plan.price.toFixed(2)}/mes`}</span>
                                     </div>
+                                    {plan.value !== 'gratuito' && (
+                                        <p className="text-sm text-emerald-500 font-medium mt-0.5">Sin Anuncios</p>
+                                    )}
                                     {plan.price > 0 && (
                                         <p className="text-slate-400 text-sm mt-0.5">Paga 1 año: <span className="text-green-400 font-semibold">-40%</span> → ${(plan.price * 0.6).toFixed(2)}/mes</p>
                                     )}
@@ -567,6 +570,9 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                             <span className="font-semibold text-white block text-sm">{opt.label}</span>
                                             <span className="text-[#ffd427] font-bold text-sm whitespace-nowrap">${opt.price.toFixed(2)}/mes</span>
                                         </div>
+                                        {opt.value !== 'gratuito' && (
+                                            <p className="text-xs text-emerald-400 mt-0.5 font-medium">Sin Anuncios</p>
+                                        )}
                                         <p className="text-xs text-slate-400 mt-0.5">Paga 1 año: <span className="text-green-400 font-semibold">-40%</span> → ${(opt.price * 0.6).toFixed(2)}/mes</p>
                                         <span className="text-xs text-slate-400 block mt-0.5">{opt.description}</span>
                                         <ul className="mt-2 space-y-1 text-slate-400 text-xs">
