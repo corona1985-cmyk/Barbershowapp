@@ -154,7 +154,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
 
     const isPlanSolo = accountTier === 'solo';
     const isPlanGratuito = accountTier === 'gratuito';
-    const FREE_PLAN_MONTHLY_LIMIT = 10;
+    const FREE_PLAN_MONTHLY_LIMIT = 100;
     const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-`;
     const monthlyCount = useMemo(
         () => appointments.filter((a) => a.fecha.startsWith(currentYearMonth) && a.estado !== 'cancelada').length,

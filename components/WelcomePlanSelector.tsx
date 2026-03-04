@@ -24,16 +24,16 @@ const CONTACT = {
 type Step = 'who' | 'barber_plan' | 'barber_registered' | 'barber_contact' | 'client_registered' | 'client_new';
 type UserType = 'barbero' | 'cliente';
 
-/** Planes con precios (USD/mes). Gratuito = solo ver citas, 10/mes. */
+/** Planes con precios (USD/mes). Gratuito = solo ver citas, 100/mes. */
 const TIER_OPTIONS: { value: AccountTier; label: string; description: string; price: number; benefits: string[]; icon: React.ReactNode }[] = [
     {
         value: 'gratuito',
         label: 'Plan Gratuito',
-        description: 'Solo ver y gestionar citas. Hasta 10 citas al mes.',
+        description: 'Solo ver y gestionar citas. Hasta 100 citas al mes.',
         price: 0,
         benefits: [
             'Solo agenda de citas: ver citas agendadas',
-            'Contador de citas mensuales (máximo 10 por mes)',
+            'Contador de citas mensuales (máximo 100 por mes)',
             'Sin ventas POS, ni clientes, ni reportes ni inventario',
             'Ideal para probar la app o negocios muy pequeños',
         ],
