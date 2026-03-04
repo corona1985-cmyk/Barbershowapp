@@ -796,7 +796,7 @@ const App: React.FC = () => {
     }
 
     // 5. MAIN APP RENDER (General Users)
-    const showWebAds = accountTier === 'gratuito' || accountTier === 'solo' || userRole === 'cliente';
+    const showWebAds = accountTier === 'gratuito' || userRole === 'cliente';
     return (
         <div className="flex h-screen min-h-0 max-h-[100dvh] bg-slate-100 font-sans overflow-hidden">
             <AdMobBanner accountTier={accountTier} />

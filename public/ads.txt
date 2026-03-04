@@ -1,0 +1,3 @@
+# ads.txt para Google AdSense - barbershow.net
+# Obtén la línea exacta en AdSense: Cuenta > Bloqueo de anuncios > ads.txt
+google.com, pub-6169287781659857, DIRECT, f08c47fec0942fa0
