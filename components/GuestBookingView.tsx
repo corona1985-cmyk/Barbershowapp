@@ -240,7 +240,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                     </h1>
                     <p className="text-slate-600 text-sm mt-1">Agenda tu cita sin registrarte</p>
                 </div>
-                <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
+                <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 min-w-0 overflow-hidden">
                     {error && <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>}
 
                     {/* Barbero (si hay más de uno) */}
@@ -277,14 +277,14 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                     )}
 
                     {/* Fecha */}
-                    <div>
+                    <div className="min-w-0">
                         <label className="block text-sm font-medium text-slate-700 mb-2">Fecha</label>
                         <input
                             type="date"
                             min={todayStr}
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
-                            className="w-full border border-slate-300 rounded-xl px-4 py-3 sm:py-2 min-h-[48px] focus:ring-2 focus:ring-[#ffd427]"
+                            className="w-full min-w-0 max-w-full border border-slate-300 rounded-xl px-4 py-3 sm:py-2 min-h-[48px] focus:ring-2 focus:ring-[#ffd427] box-border text-slate-800 [color-scheme:light]"
                         />
                     </div>
 

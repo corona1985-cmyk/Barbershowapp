@@ -79,3 +79,9 @@ body {
 .touch-target-inline {
     min-height: 44px;
 }
+
+/* Campo fecha: que no se salga del contenedor en móvil */
+input[type="date"] {
+    max-width: 100%;
+    min-width: 0;
+}
