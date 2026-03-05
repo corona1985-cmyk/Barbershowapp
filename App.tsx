@@ -152,12 +152,12 @@ const App: React.FC = () => {
         if (isPlayBillingAvailable()) initPlayBilling();
     }, []);
 
-    // Plan Gratuito: no tiene acceso al Dashboard; redirigir a Agenda
+    // Plan Gratuito: no tiene acceso al Dashboard; redirigir a Agenda (superadmin puede ver todo)
     useEffect(() => {
-        if (accountTier === 'gratuito' && currentView === 'dashboard') {
+        if (accountTier === 'gratuito' && currentView === 'dashboard' && userRole !== 'superadmin') {
             setCurrentView('appointments');
         }
-    }, [accountTier, currentView]);
+    }, [accountTier, currentView, userRole]);
 
     useEffect(() => {
         const user = localStorage.getItem('currentUser');
@@ -794,12 +794,6 @@ const App: React.FC = () => {
                                     </div>
                                 )}
 
-                                {loginTab === 'general' && (
-                                    <div className="text-xs text-center text-slate-400 mt-4 space-y-1">
-                                        <p><strong>SuperAdmin:</strong> superadmin / admin</p>
-                                        <p><strong>Sede 1:</strong> barbero / 123</p>
-                                    </div>
-                                )}
                             </form>
                         </div>
                     )}

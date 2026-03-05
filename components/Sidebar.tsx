@@ -136,8 +136,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                         if (accountTier === 'solo') {
                             filteredItems = filteredItems.filter(item => !HIDDEN_IN_TIER_SOLO.includes(item.id as ViewState));
                         }
-                        // Plan Gratuito: solo Dashboard, Mi perfil, Agenda Citas, Configuración
-                        if (accountTier === 'gratuito') {
+                        // Plan Gratuito: solo Dashboard, Mi perfil, Agenda Citas, Configuración (superadmin ve todo)
+                        if (accountTier === 'gratuito' && effectiveRole !== 'superadmin') {
                             filteredItems = filteredItems.filter(item => SHOWN_IN_TIER_GRATUITO.includes(item.id as ViewState));
                         }
                         // Consola WhatsApp solo en plan Multi-Sede
