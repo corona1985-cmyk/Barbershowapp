@@ -150,7 +150,7 @@ export const DataService = {
     if (cached) return cached;
     const snap = await get(ref(db, ROOT + '/pointsOfSale'));
     const arr = snapshotToArray<PointOfSale>(snap.val());
-    const out = arr.map((p) => ({ ...p, id: Number(p.id), plan: p.plan || 'basic' }));
+    const out = arr.map((p) => ({ ...p, id: Number(p.id), plan: p.plan || 'basic', tier: p.tier ?? 'barberia' }));
     cacheSet(key, out);
     return out;
   },

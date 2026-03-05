@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { DataService } from '../services/data';
 import { ViewState, Appointment, Client, PointOfSale } from '../types';
 import { Users, Calendar, ShoppingBag, AlertTriangle, TrendingUp, Clock, Loader2, MessageCircle } from 'lucide-react';
@@ -18,8 +18,11 @@ interface DashboardProps {
     onChangeView: (view: ViewState) => void;
 }
 
+const LOAD_TIMEOUT_MS = 22000;
+
 const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
     const [stats, setStats] = useState({
         clients: 0,
         appointmentsToday: 0,
@@ -30,60 +33,91 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
     const [nextAppointment, setNextAppointment] = useState<{ apt: Appointment; client: Client } | null>(null);
     const [pointsOfSale, setPointsOfSale] = useState<PointOfSale[]>([]);
 
-    useEffect(() => {
-        (async () => {
-            setLoading(true);
-            try {
-                const barberId = DataService.getCurrentBarberId();
-                const productsLoader = barberId != null ? DataService.getProducts(barberId) : DataService.getProducts();
-                const [clients, appointments, sales, products, posList] = await Promise.all([
-                    DataService.getClients(),
-                    DataService.getAppointments(),
-                    DataService.getSales(),
-                    productsLoader,
-                    DataService.getPointsOfSale(),
-                ]);
-                setPointsOfSale(posList);
-                const todayStr = new Date().toISOString().split('T')[0];
-                const todayAppointments = appointments
-                    .filter(a => a.fecha === todayStr && a.estado !== 'cancelada' && a.estado !== 'completada')
-                    .sort((a, b) => a.hora.localeCompare(b.hora));
-                const now = new Date();
-                const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-                const listForUser = barberId != null ? todayAppointments.filter(a => a.barberoId === barberId) : todayAppointments;
-                const next = listForUser.find(a => a.hora >= currentTime) || listForUser[0] || null;
-                if (next) {
-                    const client = clients.find(c => c.id === next.clienteId);
-                    if (client) setNextAppointment({ apt: next, client });
-                    else setNextAppointment(null);
-                } else setNextAppointment(null);
+    const loadData = useCallback(async () => {
+        setLoadError(false);
+        setLoading(true);
+        try {
+            const barberId = DataService.getCurrentBarberId();
+            const productsLoader = barberId != null ? DataService.getProducts(barberId) : DataService.getProducts();
+            const loadPromise = Promise.all([
+                DataService.getClients(),
+                DataService.getAppointments(),
+                DataService.getSales(),
+                productsLoader,
+                DataService.getPointsOfSale(),
+            ]);
+            const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('Tiempo de espera agotado.')), LOAD_TIMEOUT_MS)
+            );
+            const [clients, appointments, sales, products, posList] = await Promise.race([loadPromise, timeoutPromise]);
+            const clientsSafe = Array.isArray(clients) ? clients : [];
+            const appointmentsSafe = Array.isArray(appointments) ? appointments : [];
+            const salesSafe = Array.isArray(sales) ? sales : [];
+            const productsSafe = Array.isArray(products) ? products : [];
+            const posListSafe = Array.isArray(posList) ? posList : [];
+            setPointsOfSale(posListSafe);
+            const todayStr = new Date().toISOString().split('T')[0];
+            const todayAppointments = appointmentsSafe
+                .filter(a => a.fecha === todayStr && a.estado !== 'cancelada' && a.estado !== 'completada')
+                .sort((a, b) => a.hora.localeCompare(b.hora));
+            const now = new Date();
+            const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            const listForUser = barberId != null ? todayAppointments.filter(a => a.barberoId === barberId) : todayAppointments;
+            const next = listForUser.find(a => a.hora >= currentTime) || listForUser[0] || null;
+            if (next) {
+                const client = clientsSafe.find(c => c.id === next.clienteId);
+                if (client) setNextAppointment({ apt: next, client });
+                else setNextAppointment(null);
+            } else setNextAppointment(null);
 
-                const todaySales = sales.filter(s => s.fecha === todayStr).reduce((sum, s) => sum + s.total, 0);
-                const lowStock = products.filter(p => p.stock < 5).length;
-                setStats({
-                    clients: clients.length,
-                    appointmentsToday: todayAppointments.length,
-                    salesToday: todaySales,
-                    lowStock
-                });
-                const recentSales = sales.slice(-3).map(s => ({
-                    type: 'sale',
-                    text: `Venta #${s.numeroVenta}`,
-                    time: s.hora,
-                    amount: s.total
-                }));
-                setActivities(recentSales.reverse());
-            } finally {
-                setLoading(false);
-            }
-        })();
+            const todaySales = salesSafe.filter(s => s.fecha === todayStr).reduce((sum, s) => sum + s.total, 0);
+            const lowStock = productsSafe.filter(p => p.stock < 5).length;
+            setStats({
+                clients: clientsSafe.length,
+                appointmentsToday: todayAppointments.length,
+                salesToday: todaySales,
+                lowStock
+            });
+            const recentSales = salesSafe.slice(-3).map(s => ({
+                type: 'sale',
+                text: `Venta #${s.numeroVenta}`,
+                time: s.hora,
+                amount: s.total
+            }));
+            setActivities(recentSales.reverse());
+        } catch (err) {
+            console.error('Error cargando panel:', err);
+            setLoadError(true);
+        } finally {
+            setLoading(false);
+        }
     }, []);
+
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
 
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center py-24 text-slate-500">
                 <Loader2 className="animate-spin mb-4" size={48} />
                 <p className="font-medium">Cargando panel...</p>
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="flex flex-col items-center justify-center py-24 text-slate-600 max-w-md mx-auto text-center px-4">
+                <p className="font-medium mb-2">No se pudo cargar el panel.</p>
+                <p className="text-sm text-slate-500 mb-6">Revisa tu conexión e intenta de nuevo.</p>
+                <button
+                    type="button"
+                    onClick={() => loadData()}
+                    className="bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold px-6 py-3 rounded-xl"
+                >
+                    Reintentar
+                </button>
             </div>
         );
     }

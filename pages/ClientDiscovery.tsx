@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { DataService } from '../services/data';
 import { PointOfSale } from '../types';
-import { Globe, MapPin, ExternalLink, Search, Star, StarOff } from 'lucide-react';
+import { Globe, MapPin, ExternalLink, Search, Star, StarOff, Loader2 } from 'lucide-react';
+
+const LOAD_TIMEOUT_MS = 18000;
 
 interface ClientDiscoveryProps {
     onSwitchPos: (id: number) => void;
@@ -17,15 +19,60 @@ interface ClientDiscoveryProps {
 const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({ onSwitchPos, guestMode, onBookAppointment, preferredPosId = null, onRemoveFavorite }) => {
     const [posList, setPosList] = useState<PointOfSale[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
+
+    const loadBarberias = useCallback(async () => {
+        setLoadError(false);
+        setLoading(true);
+        try {
+            const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('Tiempo de espera agotado.')), LOAD_TIMEOUT_MS)
+            );
+            const list = await Promise.race([DataService.getPointsOfSale(), timeoutPromise]);
+            setPosList(Array.isArray(list) ? list.filter(p => p.isActive !== false) : []);
+        } catch (err) {
+            console.error('Error cargando barberías:', err);
+            setLoadError(true);
+            setPosList([]);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
-        DataService.getPointsOfSale().then(list => setPosList(list.filter(p => p.isActive)));
-    }, []);
+        loadBarberias();
+    }, [loadBarberias]);
 
     const filtered = posList.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
     const sorted = preferredPosId != null && !guestMode
         ? [...filtered].sort((a, b) => (a.id === preferredPosId ? -1 : b.id === preferredPosId ? 1 : 0))
         : filtered;
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center py-24 text-slate-500">
+                <Loader2 className="animate-spin mb-4" size={48} />
+                <p className="font-medium">Cargando barberías...</p>
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="flex flex-col items-center justify-center py-24 text-slate-600 max-w-md mx-auto text-center px-4">
+                <p className="font-medium mb-2">No se pudieron cargar las barberías.</p>
+                <p className="text-sm text-slate-500 mb-6">Revisa tu conexión e intenta de nuevo.</p>
+                <button
+                    type="button"
+                    onClick={() => loadBarberias()}
+                    className="bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold px-6 py-3 rounded-xl"
+                >
+                    Reintentar
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">

@@ -22,11 +22,10 @@ interface AdSenseBannerProps {
 const AdSenseBanner: React.FC<AdSenseBannerProps> = ({ show }) => {
   const insRef = useRef<HTMLModElement>(null);
   const pushedRef = useRef(false);
-
   const isWeb = Capacitor.getPlatform() === 'web';
-  if (!show || !isWeb) return null;
 
   useEffect(() => {
+    if (!show || !isWeb) return;
     const el = insRef.current;
     if (!el || pushedRef.current) return;
     pushedRef.current = true;
@@ -35,7 +34,9 @@ const AdSenseBanner: React.FC<AdSenseBannerProps> = ({ show }) => {
     } catch {
       // AdSense push is fire-and-forget
     }
-  }, []);
+  }, [show, isWeb]);
+
+  if (!show || !isWeb) return null;
 
   return (
     <div className="w-full flex justify-center bg-slate-100/80 py-2 min-h-[90px] no-print">

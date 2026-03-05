@@ -33,6 +33,12 @@ import { DataService } from './services/data';
 import { authenticateMasterWithPassword } from './services/firebase';
 import { initPlayBilling, isPlayBillingAvailable } from './services/playBilling';
 
+const ViewFallback = () => (
+    <div className="flex items-center justify-center min-h-[200px]">
+        <div className="w-12 h-12 border-4 border-[#ffd427] border-t-transparent rounded-full animate-spin" />
+    </div>
+);
+
 const App: React.FC = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [currentView, setCurrentView] = useState<ViewState>('dashboard');
@@ -85,28 +91,39 @@ const App: React.FC = () => {
     /** Sede actual (para comprobar vencimiento de suscripción). */
     const [currentPos, setCurrentPos] = useState<PointOfSale | null>(null);
 
-    const handleSwitchPos = async (posId: number) => {
+    const handleSwitchPos = async (posId: number): Promise<AccountTier> => {
         DataService.setActivePosId(posId);
         setCurrentPosId(posId);
         try {
             const posList = await DataService.getPointsOfSale();
             const pos = posList.find(p => p.id === posId) ?? null;
-            setCurrentPos(pos);
-            setCurrentPosName(pos ? pos.name : 'Desconocido');
-            setIsPlanPro(pos?.plan === 'pro');
-            setAccountTier(pos?.tier ?? 'barberia');
-            if (pos?.tier === 'multisede' && pos.ownerId) {
-                const sameOwner = posList.filter(p => p.ownerId === pos.ownerId);
-                setPosListForOwner(sameOwner);
-            } else {
+            try {
+                setCurrentPos(pos);
+                setCurrentPosName(pos ? pos.name : 'Desconocido');
+                setIsPlanPro(pos?.plan === 'pro');
+                setAccountTier(pos?.tier ?? 'barberia');
+                if (pos?.tier === 'multisede' && pos.ownerId) {
+                    const sameOwner = posList.filter(p => p.ownerId === pos.ownerId);
+                    setPosListForOwner(sameOwner);
+                } else {
+                    setPosListForOwner([]);
+                }
+            } catch (stateErr) {
+                console.error('handleSwitchPos state update error:', stateErr);
+                setCurrentPos(null);
+                setCurrentPosName('Desconocido');
+                setIsPlanPro(false);
+                setAccountTier('barberia');
                 setPosListForOwner([]);
             }
-        } catch {
+            return (pos?.tier ?? 'barberia');
+        } catch (err) {
             setCurrentPos(null);
             setCurrentPosName('Desconocido');
             setIsPlanPro(false);
             setAccountTier('barberia');
             setPosListForOwner([]);
+            return 'barberia';
         }
     };
 
@@ -137,7 +154,9 @@ const App: React.FC = () => {
 
     // Plan Gratuito: no tiene acceso al Dashboard; redirigir a Agenda
     useEffect(() => {
-        if (accountTier === 'gratuito' && currentView === 'dashboard') setCurrentView('appointments');
+        if (accountTier === 'gratuito' && currentView === 'dashboard') {
+            setCurrentView('appointments');
+        }
     }, [accountTier, currentView]);
 
     useEffect(() => {
@@ -145,6 +164,18 @@ const App: React.FC = () => {
         const cookies = localStorage.getItem('acceptedCookies');
         if (cookies) setAcceptedCookies(true);
         setConnectionError(null);
+
+        const SESSION_LOAD_TIMEOUT_MS = 12000;
+        let completed = false;
+        const timeoutId = setTimeout(() => {
+            if (completed) return;
+            console.warn('[Session] Load timeout: forcing loading off');
+            completed = true;
+            setIsLoadingSession(false);
+            const splash = document.getElementById('app-splash');
+            if (splash) { splash.classList.add('hide'); splash.remove(); }
+            if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) SplashScreen.hide().catch(() => {});
+        }, SESSION_LOAD_TIMEOUT_MS);
 
         (async () => {
             try {
@@ -254,15 +285,17 @@ const App: React.FC = () => {
                         }
                     } else {
                         const assignedPosId = userData.posId;
-                        if (assignedPosId) await handleSwitchPos(assignedPosId);
-                        else setAccountTier('barberia');
-                        setCurrentView('dashboard');
+                        const tier = assignedPosId ? await handleSwitchPos(assignedPosId) : 'barberia';
+                        if (!assignedPosId) setAccountTier('barberia');
+                        setCurrentView(tier === 'gratuito' ? 'appointments' : 'dashboard');
                     }
                 }
             } catch (err) {
                 console.error('Error al restaurar sesión:', err);
                 setConnectionError('No se pudo conectar con la base de datos. Revisa tu conexión a internet y las reglas de Firebase.');
             } finally {
+                completed = true;
+                clearTimeout(timeoutId);
                 setIsLoadingSession(false);
             }
         })();
@@ -368,8 +401,8 @@ const App: React.FC = () => {
                         setCurrentView('client_discovery');
                     }
                 } else if (user.posId != null) {
-                    await handleSwitchPos(user.posId);
-                    setCurrentView('dashboard');
+                    const tier = await handleSwitchPos(user.posId);
+                    setCurrentView(tier === 'gratuito' ? 'appointments' : 'dashboard');
                 } else {
                     setLoginError('Usuario no tiene una Sede asignada. Contacte al administrador.');
                     setIsAuthenticated(false);
@@ -503,12 +536,6 @@ const App: React.FC = () => {
     };
 
     // --- RENDER ---
-
-    const ViewFallback = () => (
-        <div className="flex items-center justify-center min-h-[200px]">
-            <div className="w-12 h-12 border-4 border-[#ffd427] border-t-transparent rounded-full animate-spin" />
-        </div>
-    );
 
     // 1. MASTER DASHBOARD RENDER (No sidebar, full screen exclusive)
     if (isAuthenticated && userRole === 'platform_owner') {

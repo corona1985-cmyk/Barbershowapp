@@ -13,19 +13,27 @@ class ErrorBoundary extends React.Component<
   componentDidCatch(error: Error) {
     console.error('Error en la aplicación:', error);
   }
-  render() {
+    render() {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-8 text-center">
             <h1 className="text-xl font-bold text-slate-800 mb-2">Algo salió mal</h1>
-            <p className="text-slate-600 mb-6">La aplicación tuvo un error. Recarga la página para intentar de nuevo.</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="w-full py-3 bg-[#ffd427] text-slate-900 font-bold rounded-lg hover:bg-[#e6be23]"
-            >
-              Recargar página
-            </button>
+            <p className="text-slate-600 mb-6">La aplicación tuvo un error. Puedes volver al inicio o recargar la página.</p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => { this.setState({ hasError: false }); window.location.href = window.location.pathname; }}
+                className="w-full py-3 bg-[#ffd427] text-slate-900 font-bold rounded-lg hover:bg-[#e6be23]"
+              >
+                Volver al inicio
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full py-3 bg-slate-200 text-slate-800 font-medium rounded-lg hover:bg-slate-300"
+              >
+                Recargar página
+              </button>
+            </div>
           </div>
         </div>
       );

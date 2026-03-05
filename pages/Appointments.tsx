@@ -124,6 +124,17 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         return () => document.removeEventListener('visibilitychange', onVisibility);
     }, [loadData]);
 
+    const role = (userRole || '').toLowerCase();
+    const isClientView = role === 'cliente';
+    useEffect(() => {
+        if (isClientView) DataService.getBarbers().then(setBarbers);
+    }, [isClientView, selectedDate]);
+    useEffect(() => {
+        if (isClientView && selectedBarberForView) {
+            DataService.getBarberGallery(selectedBarberForView).then(setClientBarberGallery).catch(() => setClientBarberGallery([]));
+        } else setClientBarberGallery([]);
+    }, [isClientView, selectedBarberForView]);
+
     const filteredAppointments = appointments.filter(a => a.fecha === selectedDate);
     const sortedAppointments = useMemo(() => {
         const order: Appointment['estado'][] = ['confirmada', 'pendiente', 'completada', 'cancelada'];
@@ -485,18 +496,6 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         });
         setShowModal(true);
     };
-
-    // Solo clientes ven "Reservar Cita" (elegir barbero/fecha/hora). Superadmin, admin y barbero ven "Agenda de Citas" para agendar.
-    const role = (userRole || '').toLowerCase();
-    const isClientView = role === 'cliente';
-    useEffect(() => {
-        if (isClientView) DataService.getBarbers().then(setBarbers);
-    }, [isClientView, selectedDate]);
-    useEffect(() => {
-        if (isClientView && selectedBarberForView) {
-            DataService.getBarberGallery(selectedBarberForView).then(setClientBarberGallery).catch(() => setClientBarberGallery([]));
-        } else setClientBarberGallery([]);
-    }, [isClientView, selectedBarberForView]);
 
     if (loading) {
         return (

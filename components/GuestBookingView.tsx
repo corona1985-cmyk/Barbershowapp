@@ -52,14 +52,15 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
         return () => { DataService.setActivePosId(prev); };
     }, [posId]);
 
-    const activeBarbers = barbers.filter((b) => b.active);
+    const activeBarbers = useMemo(() => barbers.filter((b) => b.active), [barbers]);
     const defaultBarberId = activeBarbers.length > 0 ? activeBarbers[0].id : 0;
 
     useEffect(() => {
-        const bid = selectedBarberId || defaultBarberId;
+        const defaultId = barbers.filter((b) => b.active)[0]?.id ?? 0;
+        const bid = selectedBarberId || defaultId;
         if (bid) DataService.getBarberGallery(bid).then(setGuestBarberGallery).catch(() => setGuestBarberGallery([]));
         else setGuestBarberGallery([]);
-    }, [selectedBarberId, defaultBarberId]);
+    }, [selectedBarberId, barbers]);
 
     const getTodayLocal = (): string => {
         const d = new Date();
