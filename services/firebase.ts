@@ -36,13 +36,18 @@ export async function authenticateMasterWithPassword(username: string, password:
   return result.data;
 }
 
-/** Crea sesión de pago para un plan (Stripe/MP). La Cloud Function createPlanCheckout debe existir y devolver { url: string }. */
+/** Proveedor de pago para el checkout del plan. La Cloud Function puede crear sesión en Stripe, Mercado Pago o PayPal. */
+export type PlanCheckoutProvider = 'stripe' | 'mercadopago' | 'paypal';
+
+/** Crea sesión de pago para un plan (Stripe, Mercado Pago o PayPal). La Cloud Function createPlanCheckout debe existir y devolver { url: string }. */
 export async function createPlanCheckout(params: {
   plan: string;
   ciclo: 'mensual' | 'anual';
   email: string;
   nombreNegocio?: string;
   nombreRepresentante?: string;
+  /** Opcional: elegir proveedor de pago. Si no se envía, el backend usa su default (ej. Stripe). */
+  provider?: PlanCheckoutProvider;
 }): Promise<{ url: string }> {
   const functions = getFunctions(app);
   const fn = httpsCallable<typeof params, { url: string }>(functions, 'createPlanCheckout');

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AccountTier } from '../types';
-import { Scissors, User, Users, MapPin, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle } from 'lucide-react';
+import { Scissors, User, Users, MapPin, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle, CreditCard } from 'lucide-react';
 import { DataService } from '../services/data';
-import { createPlanCheckout, activatePlanFromPlay } from '../services/firebase';
+import { createPlanCheckout, activatePlanFromPlay, type PlanCheckoutProvider } from '../services/firebase';
 import {
     isPlayBillingAvailable,
     initPlayBilling,
@@ -103,6 +103,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
     /** Formulario solicitud de acceso (estilo ICC Tech) */
     const [formNombre, setFormNombre] = useState('');
     const [formNegocio, setFormNegocio] = useState('');
+    const [formDireccion, setFormDireccion] = useState('');
     const [formEmail, setFormEmail] = useState('');
     const [formTelefono, setFormTelefono] = useState('');
     const [formMotivo, setFormMotivo] = useState('');
@@ -180,6 +181,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
             '',
             `Nombre: ${formNombre}`,
             `Negocio/Barbería: ${formNegocio}`,
+            `Dirección: ${formDireccion || '(No indicada)'}`,
             `Correo: ${formEmail}`,
             `Teléfono: ${formTelefono}`,
             '',
@@ -213,7 +215,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
         window.open(url, '_blank', 'noopener,noreferrer');
     };
 
-    const handlePagarEnApp = async () => {
+    const handlePagarEnApp = async (provider?: PlanCheckoutProvider) => {
         if (!formAceptoTerminos) {
             alert('Debes aceptar los Términos de Servicio y la Política de Privacidad.');
             return;
@@ -231,11 +233,12 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                 email: formEmail.trim(),
                 nombreNegocio: formNegocio.trim() || undefined,
                 nombreRepresentante: formNombre.trim() || undefined,
+                ...(provider && { provider }),
             });
             if (url) window.location.href = url;
         } catch (e) {
             console.error(e);
-            alert('El pago en la app aún no está configurado. Por ahora usa "Enviar por WhatsApp" o "Enviar por correo". En el proyecto ver el archivo PLANES_EN_APP.md para activar el pago con Stripe o Mercado Pago.');
+            alert('El pago en la app aún no está configurado. Por ahora usa "Enviar por WhatsApp" o "Enviar por correo". En el proyecto ver el archivo PLANES_EN_APP.md para activar el pago con Stripe, Mercado Pago o PayPal.');
         } finally {
             setPayLoading(false);
         }
@@ -385,6 +388,16 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 />
                             </div>
                         </div>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Dirección de la barbería</label>
+                            <input
+                                type="text"
+                                value={formDireccion}
+                                onChange={(e) => setFormDireccion(e.target.value)}
+                                placeholder="Ej: Calle Principal 123, Ciudad"
+                                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#ffd427] focus:border-[#ffd427] text-slate-800"
+                            />
+                        </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Correo electrónico</label>
@@ -454,12 +467,21 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             <>
                             <button
                                 type="button"
-                                onClick={handlePagarEnApp}
+                                onClick={() => handlePagarEnApp('stripe')}
                                 disabled={payLoading}
-                                title="Pagar con tarjeta y activar plan en la app"
+                                title="Pagar con tarjeta bancaria (Visa, Mastercard, etc.) y activar plan"
                                 className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors text-sm disabled:opacity-70"
                             >
-                                {payLoading ? 'Redirigiendo...' : 'Pagar en la app'}
+                                {payLoading ? 'Redirigiendo...' : 'Pagar con tarjeta'} <CreditCard size={18} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handlePagarEnApp('paypal')}
+                                disabled={payLoading}
+                                title="Pagar con PayPal y activar plan"
+                                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#003087] hover:bg-[#00457C] text-white font-semibold rounded-lg transition-colors text-sm disabled:opacity-70"
+                            >
+                                {payLoading ? 'Redirigiendo...' : 'Pagar con PayPal'}
                             </button>
                             {isPlayBillingAvailable() && (
                                 <button
@@ -476,7 +498,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             )}
                         </div>
                         <p className="mt-3 text-center text-xs text-slate-500">
-                            Enviar solicitud a {CONTACT.solicitudEmail} o WhatsApp 829 599 2941 · O pagar en la app (tarjeta o Google Play)
+                            Enviar solicitud a {CONTACT.solicitudEmail} o WhatsApp 829 599 2941 · O pagar en la app: tarjeta bancaria, PayPal o Google Play
                         </p>
                         <p className="mt-6 text-center">
                             <button type="button" onClick={onGoToLogin} className="text-slate-500 hover:text-[#ffd427] text-sm font-medium">

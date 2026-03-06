@@ -97,6 +97,20 @@ Esto hace:
   ```
   (o la URL de tu dominio si usas uno). Sin esta variable, los QR usan la URL desde la que se abre la app (por ejemplo localhost), y al escanear no funcionan. Después de añadirla, haz de nuevo `npm run build` y `npm run deploy:hosting`.
 
+## 7. Verificación AdMob (app-ads.txt)
+
+Para que Google AdMob pueda verificar **Barbershow (Android)** y mostrar anuncios sin el aviso "No hemos podido verificar":
+
+1. **Archivo en el proyecto:** El archivo `public/app-ads.txt` contiene la línea que AdMob indica. Se copia a la raíz del sitio al hacer `npm run build` (queda en `dist/app-ads.txt`).
+
+2. **Que se sirva en la web:** En `firebase.json` hay reglas de rewrite para que `/app-ads.txt` y `/ads.txt` se sirvan como archivos y no redirijan a `index.html`. Tras desplegar Hosting, la URL debe ser accesible, por ejemplo:
+   - `https://gen-lang-client-0624135070.web.app/app-ads.txt`
+   - o `https://barbershow.net/app-ads.txt` si tienes dominio personalizado.
+
+3. **Dominio en Google Play:** En Play Console, la **URL del sitio web del desarrollador** de la app debe ser **el mismo dominio** donde está desplegada la web (por ejemplo `https://barbershow.net`). Así AdMob puede encontrar el archivo.
+
+4. **Comprobar y esperar:** Abre en el navegador la URL de tu sitio + `/app-ads.txt` y verifica que se vea la línea `google.com, pub-6169287781659857, DIRECT, f08c47fec0942fa0`. La verificación en AdMob puede tardar un tiempo en actualizarse.
+
 ## Resumen de comandos
 
 | Comando              | Acción                          |

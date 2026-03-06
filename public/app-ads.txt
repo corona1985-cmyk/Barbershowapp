@@ -1,4 +1,1 @@
-# app-ads.txt para verificación de AdMob (Barbershow Android)
-# Debe estar en la raíz del sitio del desarrollador: https://barbershow.net/app-ads.txt
-# Especificación IAB Tech Lab: https://iabtechlab.com/ads-txt/
 google.com, pub-6169287781659857, DIRECT, f08c47fec0942fa0
