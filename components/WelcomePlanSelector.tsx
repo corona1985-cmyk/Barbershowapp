@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AccountTier } from '../types';
-import { Scissors, User, Users, MapPin, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle, CreditCard } from 'lucide-react';
+import { Scissors, User, Users, MapPin, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle } from 'lucide-react';
 import { DataService } from '../services/data';
 import { createPlanCheckout, activatePlanFromPlay, type PlanCheckoutProvider } from '../services/firebase';
 import {
@@ -463,42 +463,9 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             >
                                 Enviar por WhatsApp <MessageCircle size={18} />
                             </button>
-                            {selectedPlan && plan && plan.price > 0 && (
-                            <>
-                            <button
-                                type="button"
-                                onClick={() => handlePagarEnApp('stripe')}
-                                disabled={payLoading}
-                                title="Pagar con tarjeta bancaria (Visa, Mastercard, etc.) y activar plan"
-                                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors text-sm disabled:opacity-70"
-                            >
-                                {payLoading ? 'Redirigiendo...' : 'Pagar con tarjeta'} <CreditCard size={18} />
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => handlePagarEnApp('paypal')}
-                                disabled={payLoading}
-                                title="Pagar con PayPal y activar plan"
-                                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#003087] hover:bg-[#00457C] text-white font-semibold rounded-lg transition-colors text-sm disabled:opacity-70"
-                            >
-                                {payLoading ? 'Redirigiendo...' : 'Pagar con PayPal'}
-                            </button>
-                            {isPlayBillingAvailable() && (
-                                <button
-                                    type="button"
-                                    onClick={handlePagarConGooglePlay}
-                                    disabled={payPlayLoading}
-                                    title="Pagar con Google Play y activar plan"
-                                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg transition-colors text-sm disabled:opacity-70"
-                                >
-                                    {payPlayLoading ? 'Abriendo...' : 'Pagar con Google Play'}
-                                </button>
-                            )}
-                            </>
-                            )}
                         </div>
                         <p className="mt-3 text-center text-xs text-slate-500">
-                            Enviar solicitud a {CONTACT.solicitudEmail} o WhatsApp 829 599 2941 · O pagar en la app: tarjeta bancaria, PayPal o Google Play
+                            Enviar solicitud a {CONTACT.solicitudEmail} o WhatsApp 829 599 2941
                         </p>
                         <p className="mt-6 text-center">
                             <button type="button" onClick={onGoToLogin} className="text-slate-500 hover:text-[#ffd427] text-sm font-medium">
