@@ -31,6 +31,14 @@ export function isPlayBillingAvailable(): boolean {
 }
 
 /**
+ * Indica si el pago in-app está disponible (Android con Google Wallet o iOS con Apple Pay).
+ * En web siempre false; solo dispositivos móviles nativos.
+ */
+export function isNativePaymentAvailable(): boolean {
+  return Capacitor.isNativePlatform();
+}
+
+/**
  * Obtiene el product ID de Google Play para un plan y ciclo.
  */
 export function getPlayProductId(plan: AccountTier, cycle: 'mensual' | 'anual'): string {
@@ -56,38 +64,36 @@ export function initPlayBilling(verificationUrl?: string): void {
 }
 
 /**
- * Abre el flujo nativo de compra de Google Play para el plan y ciclo indicados.
- * En Android el resultado llega de forma asíncrona; usa addPlayPurchaseListener para reaccionar.
+ * Abre el flujo nativo de compra: Google Play (Android) o App Store / Apple Pay (iOS).
+ * El resultado llega de forma asíncrona; usa addPlayPurchaseListener para reaccionar.
  */
 export async function purchasePlan(plan: AccountTier, cycle: 'mensual' | 'anual'): Promise<{ success: boolean; message?: string }> {
-  if (!isPlayBillingAvailable()) {
-    return { success: false, message: 'Google Play Billing solo está disponible en la app Android.' };
+  if (!isNativePaymentAvailable()) {
+    return { success: false, message: 'El pago in-app solo está disponible en la app móvil (Apple Pay o Google Wallet).' };
   }
-  if (!initialized) initPlayBilling();
+  if (Capacitor.getPlatform() === 'android' && !initialized) initPlayBilling();
   const productId = getPlayProductId(plan, cycle);
   try {
     const result = await Subscriptions.purchaseProduct({ productIdentifier: productId });
     const code = result.responseCode as number;
-    // Android: 0 = "Successfully opened native popover"; el resultado real llega por listener.
     if (code === 0) return { success: true };
     return { success: false, message: result.responseMessage || 'No se pudo abrir la tienda.' };
   } catch (e) {
-    console.error('Play Billing purchase error', e);
+    console.error('In-app purchase error', e);
     return { success: false, message: e instanceof Error ? e.message : 'Error al iniciar la compra.' };
   }
 }
 
 /**
- * Suscribe al evento de compra completada en Android. El listener se ejecuta cuando el usuario
+ * Suscribe al evento de compra completada (Android o iOS). El listener se ejecuta cuando el usuario
  * termina el flujo de pago (éxito o cancelación). Úsalo para refrescar estado o llamar al backend.
  */
 export function addPlayPurchaseListener(callback: () => void): () => void {
-  if (!isPlayBillingAvailable()) return () => {};
-  let handle: { remove: () => Promise<void> } | null = null;
-  Subscriptions.addListener('ANDROID-PURCHASE-RESPONSE', () => {
-    callback();
-  }).then((h) => { handle = h; });
-  return () => { handle?.remove?.(); };
+  if (!isNativePaymentAvailable()) return () => {};
+  const handles: { remove: () => Promise<void> }[] = [];
+  Subscriptions.addListener('ANDROID-PURCHASE-RESPONSE', () => { callback(); }).then((h) => { if (h) handles.push(h); });
+  Subscriptions.addListener('IOS-PURCHASE-RESPONSE', () => { callback(); }).then((h) => { if (h) handles.push(h); });
+  return () => { handles.forEach((h) => h.remove?.()); };
 }
 
 /**
@@ -115,7 +121,7 @@ export interface PlayTransaction {
  * purchaseToken a la Cloud Function activatePlanFromPlay.
  */
 export async function getActivePlayTransactions(): Promise<PlayTransaction[]> {
-  if (!isPlayBillingAvailable()) return [];
+  if (!isNativePaymentAvailable()) return [];
   try {
     const res = await Subscriptions.getCurrentEntitlements();
     if (res.responseCode !== 0 || !Array.isArray(res.data)) return [];

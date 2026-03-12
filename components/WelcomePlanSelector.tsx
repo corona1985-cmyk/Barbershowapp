@@ -3,6 +3,7 @@ import { AccountTier } from '../types';
 import { Scissors, User, Users, MapPin, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle } from 'lucide-react';
 import { DataService } from '../services/data';
 import { createPlanCheckout, activatePlanFromPlay, type PlanCheckoutProvider } from '../services/firebase';
+import SelfServiceBarberSignup from './SelfServiceBarberSignup';
 import {
     isPlayBillingAvailable,
     initPlayBilling,
@@ -93,11 +94,14 @@ interface WelcomePlanSelectorProps {
     onGoToLogin: () => void;
     /** Cliente nuevo: ir al listado de barberías para elegir una y registrarse o agendar. */
     onGoToBarberias?: () => void;
+    /** Cuando el barbero completa el autoregistro (plan gratuito), hacer login con estas credenciales. */
+    onBarberSignupSuccess?: (username: string, password: string) => void;
 }
 
-const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, onGoToBarberias }) => {
+const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, onGoToBarberias, onBarberSignupSuccess }) => {
     const [step, setStep] = useState<Step>('who');
     const [userType, setUserType] = useState<UserType | null>(null);
+    const [showSelfSignup, setShowSelfSignup] = useState(false);
     const [selectedPlan, setSelectedPlan] = useState<AccountTier | null>(null);
     const [supportEmail, setSupportEmail] = useState(CONTACT.email);
     /** Formulario solicitud de acceso (estilo ICC Tech) */
@@ -479,7 +483,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
     }
 
     return (
-        <div className="min-h-screen min-h-[100dvh] relative flex flex-col items-center justify-center p-3 sm:p-4 safe-area-top safe-area-bottom overflow-y-auto overflow-x-hidden">
+        <div className="min-h-screen min-h-[100dvh] relative flex flex-col items-center justify-center p-3 sm:p-4 overflow-y-auto overflow-x-hidden">
             {/* Imagen de fondo de barbería difuminada */}
             <div
                 className="absolute inset-0 bg-cover bg-center scale-110"
@@ -503,21 +507,29 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                     <p className="text-slate-500 text-xs mt-0.5">v1.0.7</p>
                 </div>
 
+                {/* Wizard de autoregistro barbero (cuenta → barbería → pago) */}
+                {showSelfSignup && (
+                    <SelfServiceBarberSignup
+                        onSuccess={(u, p) => { onBarberSignupSuccess?.(u, p); setShowSelfSignup(false); }}
+                        onGoToLogin={() => { setShowSelfSignup(false); onGoToLogin(); }}
+                    />
+                )}
+
                 {/* Paso 1: ¿Barbero o Cliente? — punto medio: ni muy chico ni muy grande */}
-                {step === 'who' && (
+                {!showSelfSignup && step === 'who' && (
                     <>
                         <p className="text-white text-center text-lg font-semibold mb-5">¿Eres Barbero o Cliente?</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6 max-w-lg mx-auto">
                             <button
                                 type="button"
-                                onClick={() => { setUserType('barbero'); setStep('barber_plan'); }}
+                                onClick={() => { setUserType('barbero'); setShowSelfSignup(true); }}
                                 className="flex flex-col items-center gap-3 min-h-[120px] py-5 px-5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 transition-colors group active:bg-white/20"
                             >
                                 <div className="w-11 h-11 rounded-lg bg-[#ffd427]/20 flex items-center justify-center group-hover:bg-[#ffd427]/30">
                                     <Scissors size={22} className="text-[#ffd427]" strokeWidth={2} />
                                 </div>
                                 <span className="font-semibold text-white text-base">Barbero</span>
-                                <span className="text-slate-400 text-sm text-center leading-snug">Tengo o trabajo en una barbería</span>
+                                <span className="text-slate-400 text-sm text-center leading-snug">Crear mi barbería o acceder</span>
                             </button>
                             <button
                                 type="button"
@@ -667,7 +679,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                 )}
 
                 {/* Enlace a login en paso "who" — mismo equilibrio */}
-                {step === 'who' && (
+                {!showSelfSignup && step === 'who' && (
                     <div className="max-w-lg mx-auto pt-6 border-t border-white/10">
                         <button type="button" onClick={onGoToLogin} className="w-full flex items-center justify-center gap-2 py-3 text-slate-400 hover:text-[#ffd427] text-sm font-medium transition-colors">
                             <LogIn size={18} /> Ya tengo cuenta – Iniciar sesión

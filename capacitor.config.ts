@@ -12,6 +12,10 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: true,
   },
+  ios: {
+    // Permite desarrollo con live reload si usas url del server
+    // contentInset: 'automatic',
+  },
   plugins: {
     SplashScreen: {
       launchShowDuration: 0,

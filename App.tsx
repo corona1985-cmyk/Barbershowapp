@@ -301,12 +301,13 @@ const App: React.FC = () => {
         })();
     }, []);
 
-    const handleLogin = async (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent, credentials?: { username: string; password: string }) => {
         e.preventDefault();
         setLoginError('');
         setConnectionError(null);
-        const trimmedUsername = username.trim();
-        if (!password.trim()) {
+        const trimmedUsername = (credentials?.username ?? username).trim().toLowerCase();
+        const passwordToUse = credentials?.password ?? password;
+        if (!passwordToUse.trim()) {
             setLoginError('La contraseña es requerida.');
             return;
         }
@@ -314,12 +315,12 @@ const App: React.FC = () => {
         let user: SystemUser | null = null;
         try {
             if (loginTab === 'master') {
-                const result = await authenticateMasterWithPassword(trimmedUsername, password);
+                const result = await authenticateMasterWithPassword(trimmedUsername, passwordToUse);
                 user = result.user as SystemUser;
                 DataService.logAuditAction('master_login', 'master', 'Platform Owner Access').catch(() => {});
             } else {
                 try {
-                    user = await DataService.authenticate(trimmedUsername, password);
+                    user = await DataService.authenticate(trimmedUsername, passwordToUse);
                 } catch (e) {
                     setLoginLoading(false);
                     if (e instanceof Error && e.message === 'NO_PASSWORD_SET') {
@@ -336,11 +337,17 @@ const App: React.FC = () => {
                 }
             }
 
-            if (!user) {
-                setLoginLoading(false);
-                setLoginError('Usuario no encontrado o credenciales inválidas.');
-                return;
-            }
+                if (!user) {
+                    setLoginLoading(false);
+                    setLoginError('Usuario no encontrado o credenciales inválidas.');
+                    return;
+                }
+
+                if (user.status === 'pending_payment') {
+                    setLoginLoading(false);
+                    setLoginError('Cuenta pendiente de pago. Completa el pago para activar tu barbería o crea una nueva con plan gratuito.');
+                    return;
+                }
 
             const role = user.role === 'empleado' ? 'barbero' : user.role;
             const userData = { username: user.username, role, name: user.name, photoUrl: (user as any).photoUrl, posId: user.posId, barberId: (user as any).barberId, clientId: (user as any).clientId, loginTime: new Date().toISOString() };
@@ -596,7 +603,7 @@ const App: React.FC = () => {
     // 3. INVITADO: Agendar cita sin cuenta (desde QR o tras elegir barbería)
     if (!isAuthenticated && guestBookingPos) {
         return (
-            <div className="min-h-screen min-h-[100dvh] bg-slate-100 p-4 md:p-8 safe-area-top safe-area-bottom overflow-x-hidden">
+            <div className="min-h-screen min-h-[100dvh] bg-slate-100 p-4 md:p-8 overflow-x-hidden">
                 <GuestBookingView
                     posId={guestBookingPos.id}
                     posName={guestBookingPos.name}
@@ -610,8 +617,8 @@ const App: React.FC = () => {
     // 4. INVITADO: Ver barberías (cliente buscando barbería)
     if (!isAuthenticated && showBarberiasGuest) {
         return (
-            <div className="min-h-screen min-h-[100dvh] bg-slate-100 safe-area-top safe-area-bottom">
-                <header className="bg-slate-900 text-white px-3 sm:px-4 py-3 flex items-center justify-between shadow-lg safe-area-top">
+            <div className="min-h-screen min-h-[100dvh] bg-slate-100">
+                <header className="bg-slate-900 text-white px-3 sm:px-4 py-3 flex items-center justify-between shadow-lg">
                     <button type="button" onClick={() => setShowBarberiasGuest(false)} className="flex items-center gap-1.5 min-h-[44px] text-slate-300 hover:text-white text-sm rounded-lg active:bg-white/10 px-2 -ml-2">
                         <ArrowLeft size={18} /> Volver
                     </button>
@@ -653,11 +660,14 @@ const App: React.FC = () => {
                 <WelcomePlanSelector
                     onGoToLogin={() => { setShowLoginScreen(true); setIsRegistering(false); }}
                     onGoToBarberias={() => setShowBarberiasGuest(true)}
+                    onBarberSignupSuccess={(username, password) => {
+                        handleLogin({ preventDefault: () => {} } as React.FormEvent, { username, password });
+                    }}
                 />
             );
         }
         return (
-            <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-3 sm:p-4 overflow-y-auto safe-area-top safe-area-bottom">
+            <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 md:p-8 relative overflow-hidden border-t-8 border-[#ffd427] my-2 sm:my-4">
                     <button
                         type="button"
@@ -669,6 +679,12 @@ const App: React.FC = () => {
                     {connectionError && (
                         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
                             {connectionError}
+                        </div>
+                    )}
+                    {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('signup') === 'success' && (
+                        <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-sm flex items-center gap-2">
+                            <CheckCircle size={20} className="flex-shrink-0" />
+                            <span>Cuenta activada. Inicia sesión con tu usuario y contraseña.</span>
                         </div>
                     )}
                     {/* Header */}
@@ -836,7 +852,7 @@ const App: React.FC = () => {
             />
             {/* Área principal: flex para que el scroll sea solo en el contenido */}
             <main className="flex-1 flex flex-col min-w-0 min-h-0 md:ml-64 overflow-hidden transition-all duration-300">
-                <header className="flex-shrink-0 flex flex-wrap justify-between items-center p-3 sm:p-4 md:p-6 lg:p-8 pb-2 md:pb-4 no-print gap-2 sm:gap-3 bg-slate-100 safe-area-top">
+                <header className="flex-shrink-0 flex flex-wrap justify-between items-center p-3 sm:p-4 md:p-6 lg:p-8 pb-2 md:pb-4 no-print gap-2 sm:gap-3 bg-slate-100">
                     <div className="flex items-center space-x-2 sm:space-x-3 md:space-x-4 min-w-0">
                         {/* Hamburger Button for Mobile - touch target 44px */}
                         <button 

@@ -55,16 +55,66 @@ export async function createPlanCheckout(params: {
   return result.data;
 }
 
-/** Activa el plan en Firebase tras una compra en Google Play. La Cloud Function debe verificar el token con Google y crear la sede. */
+/** Activa el plan en Firebase tras una compra en Google Play o Apple. Si se pasa username, activa ese signup pendiente. */
 export async function activatePlanFromPlay(params: {
   purchaseToken: string;
   productId: string;
   email: string;
   nombreNegocio?: string;
   nombreRepresentante?: string;
+  /** Usuario creado en signup pendiente (móvil); si se envía, se activa ese usuario y su POS. */
+  username?: string;
 }): Promise<{ success: boolean; message?: string }> {
   const functions = getFunctions(app);
   const fn = httpsCallable<typeof params, { success: boolean; message?: string }>(functions, 'activatePlanFromPlay');
+  const result = await fn(params);
+  return result.data;
+}
+
+/** Payload para completar autoregistro gratuito (plan gratuito). */
+export interface CompleteSelfSignupFreeParams {
+  username: string;
+  password: string;
+  name: string;
+  phone: string;
+  email?: string;
+  barbershopName: string;
+  address: string;
+}
+
+/** Completa el autoregistro con plan gratuito: crea usuario admin + POS en una sola llamada. */
+export async function completeSelfSignupFree(params: CompleteSelfSignupFreeParams): Promise<{ success: true }> {
+  const functions = getFunctions(app);
+  const fn = httpsCallable<CompleteSelfSignupFreeParams, { success: true }>(functions, 'completeSelfSignupFree');
+  const result = await fn(params);
+  return result.data;
+}
+
+/** Payload para crear signup pendiente y obtener URL de pago. */
+export interface CreatePendingBarberSignupParams {
+  username: string;
+  password: string;
+  name: string;
+  phone: string;
+  email?: string;
+  barbershopName: string;
+  address: string;
+  plan: 'solo' | 'barberia' | 'multisede';
+  ciclo: 'mensual' | 'anual';
+}
+
+/** Crea usuario y POS en estado pendiente y devuelve URL de checkout (solo web/Stripe). En móvil no se usa. */
+export async function createPendingBarberSignup(params: CreatePendingBarberSignupParams): Promise<{ url: string }> {
+  const functions = getFunctions(app);
+  const fn = httpsCallable<CreatePendingBarberSignupParams, { url: string }>(functions, 'createPendingBarberSignup');
+  const result = await fn(params);
+  return result.data;
+}
+
+/** Crea usuario y POS en estado pendiente para pago en app (Apple Pay / Google Wallet). No redirige a Stripe. */
+export async function createPendingBarberSignupMobile(params: CreatePendingBarberSignupParams): Promise<{ success: true }> {
+  const functions = getFunctions(app);
+  const fn = httpsCallable<CreatePendingBarberSignupParams, { success: true }>(functions, 'createPendingBarberSignupMobile');
   const result = await fn(params);
   return result.data;
 }

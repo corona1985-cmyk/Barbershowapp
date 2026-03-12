@@ -74,7 +74,8 @@ export interface SystemUser {
     lastLogin?: string;
     ip?: string;
     loginAttempts?: number;
-    status?: 'active' | 'locked' | 'suspended';
+    /** active = acceso normal; locked/suspended = bloqueado; pending_payment = registro barbero sin pago completado (no puede iniciar sesión hasta pagar). */
+    status?: 'active' | 'locked' | 'suspended' | 'pending_payment';
 }
 
 export interface Client {

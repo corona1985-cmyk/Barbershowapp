@@ -1,6 +1,7 @@
 require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
 
-platform :ios, '13.0'
+# iOS 14+ requerido por GoogleUserMessagingPlatform 2.x (UMP) con el plugin AdMob
+platform :ios, '14.0'
 use_frameworks!
 
 # workaround to avoid Xcode caching of Pods that requires
@@ -18,6 +19,8 @@ end
 
 target 'App' do
   capacitor_pods
+  # Fija UMP SDK 2.x para que el plugin AdMob siga usando UMPConsentStatus (3.x lo renombró)
+  pod 'GoogleUserMessagingPlatform', '~> 2.6'
   # Add your Pods here
 end
 

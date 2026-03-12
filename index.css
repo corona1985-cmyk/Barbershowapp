@@ -14,7 +14,12 @@ body {
     height: 100%;
     overflow-x: hidden;
     margin: 0;
-    padding: 0;
+    /* Safe area para notch/Dynamic Island y home indicator en iPhone */
+    padding-top: env(safe-area-inset-top, 0);
+    padding-right: env(safe-area-inset-right, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    padding-left: env(safe-area-inset-left, 0);
+    box-sizing: border-box;
 }
 
 #root {
@@ -61,14 +66,12 @@ body {
     display: none;
 }
 
-/* Área segura para notches (móviles) */
-@supports (padding: env(safe-area-inset-bottom)) {
-    .safe-area-bottom {
-        padding-bottom: env(safe-area-inset-bottom);
-    }
-    .safe-area-top {
-        padding-top: env(safe-area-inset-top);
-    }
+/* Área segura para notches/Dynamic Island y home indicator (iPhone, etc.) */
+.safe-area-top {
+    padding-top: env(safe-area-inset-top, 0);
+}
+.safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 /* Touch targets mínimos 44px (accesibilidad móvil) */

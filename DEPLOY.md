@@ -111,6 +111,26 @@ Para que Google AdMob pueda verificar **Barbershow (Android)** y mostrar anuncio
 
 4. **Comprobar y esperar:** Abre en el navegador la URL de tu sitio + `/app-ads.txt` y verifica que se vea la línea `google.com, pub-6169287781659857, DIRECT, f08c47fec0942fa0`. La verificación en AdMob puede tardar un tiempo en actualizarse.
 
+## 8. Desplegar en dispositivos Apple (iOS)
+
+Para llevar BarberShow a iPhone/iPad:
+
+1. **Requisitos:** Mac con Xcode, [Apple Developer Program](https://developer.apple.com) (para publicar en App Store) y CocoaPods (`brew install cocoapods` si no lo tienes).
+2. **Instalar dependencias y sincronizar iOS:**
+   ```bash
+   npm install
+   npm run ios
+   ```
+   Esto hace build del proyecto, sincroniza la carpeta `ios/` con Capacitor y abre el proyecto en Xcode.
+3. **En Xcode:** Elige tu equipo de desarrollo (Signing & Capabilities), selecciona simulador o dispositivo físico y ejecuta (▶).
+4. **Publicar en App Store:** Archiva la app (Product → Archive), sube a App Store Connect y sigue el flujo de revisión. Detalles en [IOS_SETUP.md](IOS_SETUP.md).
+
+| Comando        | Acción                                  |
+|----------------|------------------------------------------|
+| `npm run ios`  | Build + sync iOS + abrir Xcode           |
+| `npm run ios:sync` | Solo build + sync (sin abrir Xcode) |
+| `npm run ios:open` | Solo abrir proyecto en Xcode        |
+
 ## Resumen de comandos
 
 | Comando              | Acción                          |
@@ -120,3 +140,5 @@ Para que Google AdMob pueda verificar **Barbershow (Android)** y mostrar anuncio
 | `npm run deploy:db`  | Solo reglas de Database         |
 | `npm run deploy:functions` | Solo Cloud Functions     |
 | `npm run firebase:login` | Iniciar sesión en Firebase  |
+| `npm run ios`        | Build + sync iOS + abrir Xcode  |
+| `npm run android`    | Build + sync Android + abrir Android Studio |
