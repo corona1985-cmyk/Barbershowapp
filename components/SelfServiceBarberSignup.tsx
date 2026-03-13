@@ -204,7 +204,11 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
       }
     } catch (err: unknown) {
       pendingMobileRef.current = null;
-      const msg = err && typeof (err as { message?: string }).message === 'string' ? (err as { message: string }).message : 'No se pudo iniciar el pago.';
+      const raw = err && typeof (err as { message?: string }).message === 'string' ? (err as { message: string }).message : '';
+      const code = err && typeof (err as { code?: string }).code === 'string' ? (err as { code: string }).code : '';
+      const msg = raw && raw !== code && !/^internal$|^functions\/internal$/i.test(raw)
+        ? raw
+        : 'No se pudo procesar el pago. Comprueba tu conexión e intenta de nuevo, o contacta a soporte si el problema continúa.';
       setError(msg);
     } finally {
       setLoading(false);
