@@ -15,13 +15,16 @@
     "deploy:web": "npm run build && npx firebase deploy --only hosting,database",
     "deploy:db": "npx firebase deploy --only database",
     "deploy:functions": "npx firebase deploy --only functions",
+    "build:mobile": "npm run build && npx cap sync",
     "android": "npm run build && npx cap sync android && npx cap open android",
     "android:sync": "npm run build && npx cap sync android",
     "android:open": "npx cap open android",
-    "android:release": "npm run build && npx cap sync android && cd android && .\\gradlew.bat assembleRelease",
+    "android:release": "npm run build && npx cap sync android && cd android && ./gradlew assembleRelease",
+    "android:release:win": "npm run build && npx cap sync android && cd android && .\\gradlew.bat assembleRelease",
     "ios": "npm run build && npx cap sync ios && npx cap open ios",
     "ios:sync": "npm run build && npx cap sync ios",
-    "ios:open": "npx cap open ios"
+    "ios:open": "npx cap open ios",
+    "ios:release": "npm run build && npx cap sync ios"
   },
   "dependencies": {
     "@capacitor-community/admob": "^6.2.0",

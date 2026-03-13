@@ -58,6 +58,7 @@ Esto hace:
 
 - **Solo Cloud Functions:**  
   `npm run deploy:functions`  
+  (necesario para que la **creación de cuenta gratuita** y otras funciones funcionen; si ves errores CORS desde localhost, despliega las functions con este comando)
   (después de cambiar `functions/src/`)
 
 ## 5. URLs después del deploy

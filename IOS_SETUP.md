@@ -8,6 +8,7 @@ Guía para preparar, ejecutar y publicar la app en iPhone/iPad y en la App Store
 - **Xcode** (desde App Store). Versión reciente recomendada.
 - **CocoaPods:** `brew install cocoapods` (o `sudo gem install cocoapods`).
 - **Cuenta Apple Developer** (gratuita para probar en dispositivo; de pago para publicar en App Store).
+- **Terminal en UTF-8** (evita errores con CocoaPods). Añade a `~/.zshrc`: `export LANG=en_US.UTF-8` y `export LC_ALL=en_US.UTF-8`.
 
 ## Primera vez: instalar y abrir en Xcode
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AccountTier } from '../types';
-import { Scissors, User, Users, MapPin, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle } from 'lucide-react';
+import { Scissors, User, Users, MapPin, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle, CreditCard, X } from 'lucide-react';
 import { DataService } from '../services/data';
 import { createPlanCheckout, activatePlanFromPlay, type PlanCheckoutProvider } from '../services/firebase';
 import SelfServiceBarberSignup from './SelfServiceBarberSignup';
@@ -116,6 +116,8 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
     const [cicloPago, setCicloPago] = useState<'mensual' | 'anual'>('mensual');
     const [payLoading, setPayLoading] = useState(false);
     const [payPlayLoading, setPayPlayLoading] = useState(false);
+    /** Modal para que visitantes sin cuenta vean todos los planes. */
+    const [showPlansModal, setShowPlansModal] = useState(false);
     /** Datos para activar el plan tras una compra en Google Play (solo Android). */
     const pendingPlayRef = useRef<{ email: string; nombreNegocio: string; nombreRepresentante: string; plan: AccountTier; cycle: 'mensual' | 'anual' } | null>(null);
 
@@ -482,6 +484,19 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
         );
     }
 
+    /* Cuando se muestra el signup, ocupar toda la ventana y evitar doble scroll */
+    if (showSelfSignup) {
+        return (
+            <div className="h-[100dvh] max-h-[100dvh] overflow-hidden flex flex-col">
+                <SelfServiceBarberSignup
+                    onSuccess={(u, p) => { onBarberSignupSuccess?.(u, p); setShowSelfSignup(false); }}
+                    onGoToLogin={() => { setShowSelfSignup(false); onGoToLogin(); }}
+                    onGoBack={() => setShowSelfSignup(false)}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen min-h-[100dvh] relative flex flex-col items-center justify-center p-3 sm:p-4 overflow-y-auto overflow-x-hidden">
             {/* Imagen de fondo de barbería difuminada */}
@@ -507,19 +522,12 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                     <p className="text-slate-500 text-xs mt-0.5">v1.0.7</p>
                 </div>
 
-                {/* Wizard de autoregistro barbero (cuenta → barbería → pago) */}
-                {showSelfSignup && (
-                    <SelfServiceBarberSignup
-                        onSuccess={(u, p) => { onBarberSignupSuccess?.(u, p); setShowSelfSignup(false); }}
-                        onGoToLogin={() => { setShowSelfSignup(false); onGoToLogin(); }}
-                    />
-                )}
 
                 {/* Paso 1: ¿Barbero o Cliente? — punto medio: ni muy chico ni muy grande */}
                 {!showSelfSignup && step === 'who' && (
                     <>
                         <p className="text-white text-center text-lg font-semibold mb-5">¿Eres Barbero o Cliente?</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6 max-w-lg mx-auto">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 max-w-lg mx-auto">
                             <button
                                 type="button"
                                 onClick={() => { setUserType('barbero'); setShowSelfSignup(true); }}
@@ -543,6 +551,15 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 <span className="text-slate-400 text-sm text-center leading-snug">Quiero reservar o comprar</span>
                             </button>
                         </div>
+                        <p className="text-center">
+                            <button
+                                type="button"
+                                onClick={() => setShowPlansModal(true)}
+                                className="text-slate-400 hover:text-[#ffd427] text-sm font-medium inline-flex items-center gap-1.5 transition-colors"
+                            >
+                                <CreditCard size={16} /> Ver planes y precios
+                            </button>
+                        </p>
                     </>
                 )}
 
@@ -684,6 +701,63 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                         <button type="button" onClick={onGoToLogin} className="w-full flex items-center justify-center gap-2 py-3 text-slate-400 hover:text-[#ffd427] text-sm font-medium transition-colors">
                             <LogIn size={18} /> Ya tengo cuenta – Iniciar sesión
                         </button>
+                    </div>
+                )}
+
+                {/* Modal: planes y precios para visitantes sin cuenta */}
+                {showPlansModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setShowPlansModal(false)}>
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+                                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                    <CreditCard size={22} className="text-[#ffd427]" /> Planes y precios
+                                </h2>
+                                <button type="button" onClick={() => setShowPlansModal(false)} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100">
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <div className="overflow-y-auto p-4 space-y-4">
+                                {TIER_OPTIONS.map((opt) => (
+                                    <div key={opt.value} className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-lg bg-[#ffd427]/20 flex items-center justify-center flex-shrink-0">
+                                                    {opt.icon}
+                                                </div>
+                                                <div>
+                                                    <div className="font-semibold text-slate-900">{opt.label}</div>
+                                                    <div className="text-sm text-slate-600 mt-0.5">{opt.description}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right flex-shrink-0">
+                                                <div className="font-bold text-[#ffd427]">
+                                                    {opt.price === 0 ? 'Gratis' : `$${opt.price.toFixed(2)}/mes`}
+                                                </div>
+                                                {opt.price > 0 && (
+                                                    <div className="text-xs text-slate-500">Anual −40%: ${(opt.price * 0.6 * 12).toFixed(2)}/año</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {opt.benefits && opt.benefits.length > 0 && (
+                                            <ul className="mt-3 space-y-1 text-xs text-slate-600 pl-1 border-t border-slate-100 pt-3">
+                                                {opt.benefits.map((b, i) => (
+                                                    <li key={i} className="flex gap-2">
+                                                        <span className="text-[#ffd427] flex-shrink-0">✓</span>
+                                                        <span>{b}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="p-4 border-t border-slate-200 bg-slate-50">
+                                <p className="text-sm text-slate-600 text-center mb-2">Elige <strong>Barbero</strong> para crear tu barbería con el plan que prefieras.</p>
+                                <button type="button" onClick={() => { setShowPlansModal(false); }} className="w-full py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium text-sm">
+                                    Cerrar
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>

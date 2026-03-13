@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { DataService } from './data';
 const firebaseConfig = {
   apiKey: "AIzaSyDDHc3BVRBU8CE2SRPhIzqK0aLQ_gcgAhA",
   authDomain: "gen-lang-client-0624135070.firebaseapp.com",
@@ -15,9 +16,12 @@ const firebaseConfig = {
 const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
 export const db = getDatabase(app);
 
+/** Región donde están desplegadas las Cloud Functions (debe coincidir con functions/src). */
+const FUNCTIONS_REGION = 'us-central1';
+
 /** Envía un mensaje de WhatsApp desde la app (requiere Cloud Function + Twilio configurados). */
 export async function sendWhatsAppFromApp(to: string, body: string): Promise<{ success: boolean; sid?: string }> {
-  const functions = getFunctions(app);
+  const functions = getFunctions(app, FUNCTIONS_REGION);
   const sendMessage = httpsCallable<{ to: string; body: string }, { success: boolean; sid?: string }>(functions, 'sendWhatsAppMessage');
   const result = await sendMessage({ to, body });
   return result.data;
@@ -30,7 +34,7 @@ export interface MasterAuthResult {
 
 /** Valida usuario y contraseña Master en Cloud Function. Usar para login Master en lugar de comprobar en frontend. */
 export async function authenticateMasterWithPassword(username: string, password: string): Promise<MasterAuthResult> {
-  const functions = getFunctions(app);
+  const functions = getFunctions(app, FUNCTIONS_REGION);
   const fn = httpsCallable<{ username: string; password: string }, MasterAuthResult>(functions, 'authenticateMasterWithPassword');
   const result = await fn({ username: username.trim(), password });
   return result.data;
@@ -49,7 +53,7 @@ export async function createPlanCheckout(params: {
   /** Opcional: elegir proveedor de pago. Si no se envía, el backend usa su default (ej. Stripe). */
   provider?: PlanCheckoutProvider;
 }): Promise<{ url: string }> {
-  const functions = getFunctions(app);
+  const functions = getFunctions(app, FUNCTIONS_REGION);
   const fn = httpsCallable<typeof params, { url: string }>(functions, 'createPlanCheckout');
   const result = await fn(params);
   return result.data;
@@ -65,7 +69,7 @@ export async function activatePlanFromPlay(params: {
   /** Usuario creado en signup pendiente (móvil); si se envía, se activa ese usuario y su POS. */
   username?: string;
 }): Promise<{ success: boolean; message?: string }> {
-  const functions = getFunctions(app);
+  const functions = getFunctions(app, FUNCTIONS_REGION);
   const fn = httpsCallable<typeof params, { success: boolean; message?: string }>(functions, 'activatePlanFromPlay');
   const result = await fn(params);
   return result.data;
@@ -82,12 +86,9 @@ export interface CompleteSelfSignupFreeParams {
   address: string;
 }
 
-/** Completa el autoregistro con plan gratuito: crea usuario admin + POS en una sola llamada. */
+/** Completa el autoregistro con plan gratuito: crea usuario y barbería en Realtime Database (sin Cloud Functions). */
 export async function completeSelfSignupFree(params: CompleteSelfSignupFreeParams): Promise<{ success: true }> {
-  const functions = getFunctions(app);
-  const fn = httpsCallable<CompleteSelfSignupFreeParams, { success: true }>(functions, 'completeSelfSignupFree');
-  const result = await fn(params);
-  return result.data;
+  return DataService.completeSelfSignupFree(params);
 }
 
 /** Payload para crear signup pendiente y obtener URL de pago. */
@@ -105,7 +106,7 @@ export interface CreatePendingBarberSignupParams {
 
 /** Crea usuario y POS en estado pendiente y devuelve URL de checkout (solo web/Stripe). En móvil no se usa. */
 export async function createPendingBarberSignup(params: CreatePendingBarberSignupParams): Promise<{ url: string }> {
-  const functions = getFunctions(app);
+  const functions = getFunctions(app, FUNCTIONS_REGION);
   const fn = httpsCallable<CreatePendingBarberSignupParams, { url: string }>(functions, 'createPendingBarberSignup');
   const result = await fn(params);
   return result.data;
@@ -113,7 +114,7 @@ export async function createPendingBarberSignup(params: CreatePendingBarberSignu
 
 /** Crea usuario y POS en estado pendiente para pago en app (Apple Pay / Google Wallet). No redirige a Stripe. */
 export async function createPendingBarberSignupMobile(params: CreatePendingBarberSignupParams): Promise<{ success: true }> {
-  const functions = getFunctions(app);
+  const functions = getFunctions(app, FUNCTIONS_REGION);
   const fn = httpsCallable<CreatePendingBarberSignupParams, { success: true }>(functions, 'createPendingBarberSignupMobile');
   const result = await fn(params);
   return result.data;

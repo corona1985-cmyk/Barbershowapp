@@ -169,72 +169,78 @@ type CompleteSelfSignupFreeData = {
 export const completeSelfSignupFree = onCall(
   { region: "us-central1" },
   async (request): Promise<{ success: true }> => {
-    const data = request.data as CompleteSelfSignupFreeData | undefined;
-    const username = String(data?.username ?? "").trim().toLowerCase();
-    const password = data?.password ?? "";
-    const name = String(data?.name ?? "").trim();
-    const phone = String(data?.phone ?? "").trim().replace(/\D/g, "");
-    const email = data?.email != null ? String(data.email).trim() : undefined;
-    const barbershopName = String(data?.barbershopName ?? "").trim();
-    const address = String(data?.address ?? "").trim();
+    try {
+      const data = request.data as CompleteSelfSignupFreeData | undefined;
+      const username = String(data?.username ?? "").trim().toLowerCase();
+      const password = data?.password ?? "";
+      const name = String(data?.name ?? "").trim();
+      const phone = String(data?.phone ?? "").trim().replace(/\D/g, "");
+      const email = data?.email != null ? String(data.email).trim() : undefined;
+      const barbershopName = String(data?.barbershopName ?? "").trim();
+      const address = String(data?.address ?? "").trim();
 
-    if (!username) {
-      throw new HttpsError("invalid-argument", "El nombre de usuario es obligatorio.");
-    }
-    if (!password || password.length < 6) {
-      throw new HttpsError("invalid-argument", "La contraseña es obligatoria (mín. 6 caracteres).");
-    }
-    if (!name) {
-      throw new HttpsError("invalid-argument", "El nombre completo es obligatorio.");
-    }
-    if (phone.length < MIN_PHONE_DIGITS) {
-      throw new HttpsError(
-        "invalid-argument",
-        `El teléfono es obligatorio y debe tener al menos ${MIN_PHONE_DIGITS} dígitos.`
-      );
-    }
-    if (!barbershopName) {
-      throw new HttpsError("invalid-argument", "El nombre de la barbería es obligatorio.");
-    }
-    if (!address) {
-      throw new HttpsError("invalid-argument", "La dirección es obligatoria.");
-    }
+      if (!username) {
+        throw new HttpsError("invalid-argument", "El nombre de usuario es obligatorio.");
+      }
+      if (!password || password.length < 6) {
+        throw new HttpsError("invalid-argument", "La contraseña es obligatoria (mín. 6 caracteres).");
+      }
+      if (!name) {
+        throw new HttpsError("invalid-argument", "El nombre completo es obligatorio.");
+      }
+      if (phone.length < MIN_PHONE_DIGITS) {
+        throw new HttpsError(
+          "invalid-argument",
+          `El teléfono es obligatorio y debe tener al menos ${MIN_PHONE_DIGITS} dígitos.`
+        );
+      }
+      if (!barbershopName) {
+        throw new HttpsError("invalid-argument", "El nombre de la barbería es obligatorio.");
+      }
+      if (!address) {
+        throw new HttpsError("invalid-argument", "La dirección es obligatoria.");
+      }
 
-    const usersRef = db.ref(ROOT + "/users");
-    const existingUser = await usersRef.child(username).get();
-    if (existingUser.exists()) {
-      throw new HttpsError("already-exists", "Ese nombre de usuario ya existe. Elige otro.");
+      const usersRef = db.ref(ROOT + "/users");
+      const existingUser = await usersRef.child(username).get();
+      if (existingUser.exists()) {
+        throw new HttpsError("already-exists", "Ese nombre de usuario ya existe. Elige otro.");
+      }
+
+      const posId = generateUniqueId();
+      const pointsOfSaleRef = db.ref(ROOT + "/pointsOfSale/" + posId);
+      const newPos = {
+        id: posId,
+        name: barbershopName,
+        address,
+        ownerId: username,
+        isActive: true,
+        tier: "gratuito",
+      };
+      await pointsOfSaleRef.set(newPos);
+
+      const settingsRef = db.ref(ROOT + "/settings/" + posId);
+      await settingsRef.set({ ...DEFAULT_SETTINGS, posId, storeName: barbershopName });
+
+      const hashedPassword = hashPasswordNode(password);
+      const newUser: Record<string, unknown> = {
+        username,
+        role: "admin",
+        name,
+        posId,
+        password: hashedPassword,
+        status: "active",
+        loginAttempts: 0,
+      };
+      if (email) newUser.email = email;
+      await usersRef.child(username).set(newUser);
+
+      return { success: true };
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new HttpsError("internal", "No se pudo crear la cuenta. Intenta de nuevo. " + msg);
     }
-
-    const posId = generateUniqueId();
-    const pointsOfSaleRef = db.ref(ROOT + "/pointsOfSale/" + posId);
-    const newPos = {
-      id: posId,
-      name: barbershopName,
-      address,
-      ownerId: username,
-      isActive: true,
-      tier: "gratuito",
-    };
-    await pointsOfSaleRef.set(newPos);
-
-    const settingsRef = db.ref(ROOT + "/settings/" + posId);
-    await settingsRef.set({ ...DEFAULT_SETTINGS, posId, storeName: barbershopName });
-
-    const hashedPassword = hashPasswordNode(password);
-    const newUser: Record<string, unknown> = {
-      username,
-      role: "admin",
-      name,
-      posId,
-      password: hashedPassword,
-      status: "active",
-      loginAttempts: 0,
-    };
-    if (email) newUser.email = email;
-    await usersRef.child(username).set(newUser);
-
-    return { success: true };
   }
 );
 

@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
 import { AppSettings, SystemUser, Service, UserRole, Barber, BarberWorkingHours, BarberBlockedSlot, BarberGalleryPhoto, AccountTier, PointOfSale } from '../types';
-import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as SettingsIcon, UserCheck, Power, QrCode, Download, Printer, Percent, Clock, CalendarOff, ImagePlus } from 'lucide-react';
+import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as SettingsIcon, UserCheck, Power, QrCode, Download, Printer, Percent, Clock, CalendarOff, ImagePlus, CreditCard } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { handlePrintQR as handlePrintQRNative } from '../utils/print';
 import { DEFAULT_PUBLIC_APP_URL } from '../config/app';
 
-type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'barbers' | 'taxes' | 'qr';
+type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'barbers' | 'taxes' | 'qr' | 'planes';
+
+const PLANES_INFO: { value: AccountTier; label: string; description: string; price: number }[] = [
+  { value: 'gratuito', label: 'Plan Gratuito', description: 'Solo ver y gestionar citas. Hasta 100 citas al mes.', price: 0 },
+  { value: 'solo', label: 'Plan Solo', description: 'Una persona, un local.', price: 14.95 },
+  { value: 'barberia', label: 'Plan Barbería', description: 'Varios barberos, una sede.', price: 19.95 },
+  { value: 'multisede', label: 'Plan Multi-Sede', description: 'Varias ubicaciones o cadena.', price: 29.95 },
+];
 
 interface SettingsProps {
     accountTier?: AccountTier;
@@ -333,12 +340,20 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                             </>
                         )}
                         {!isBarber && (
-                            <button 
-                                onClick={() => setActiveTab('privacy')}
-                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'privacy' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
-                            >
-                                <Shield size={16} className="mr-2" /> Privacidad
-                            </button>
+                            <>
+                                <button 
+                                    onClick={() => setActiveTab('planes')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'planes' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                                >
+                                    <CreditCard size={16} className="mr-2" /> Planes
+                                </button>
+                                <button 
+                                    onClick={() => setActiveTab('privacy')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'privacy' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
+                                >
+                                    <Shield size={16} className="mr-2" /> Privacidad
+                                </button>
+                            </>
                         )}
                     </>
                 )}
@@ -911,6 +926,34 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                          <div className="flex justify-end">
                              <button className="text-blue-600 text-sm font-medium hover:underline">Descargar PDF</button>
                          </div>
+                    </div>
+                )}
+
+                {/* PLANES: información de todos los planes */}
+                {activeTab === 'planes' && (
+                    <div className="space-y-6">
+                        <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">Planes disponibles</h3>
+                        <p className="text-sm text-slate-600">Tu plan actual: <strong className="text-[#ffd427]">{accountTier === 'gratuito' ? 'Plan Gratuito' : accountTier === 'solo' ? 'Plan Solo' : accountTier === 'barberia' ? 'Plan Barbería' : 'Plan Multi-Sede'}</strong></p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {PLANES_INFO.map((plan) => (
+                                <div
+                                    key={plan.value}
+                                    className={`rounded-xl border-2 p-4 ${accountTier === plan.value ? 'border-[#ffd427] bg-amber-50/50' : 'border-slate-200 bg-slate-50/50'}`}
+                                >
+                                    <div className="font-bold text-slate-800">{plan.label}</div>
+                                    <div className="mt-1 text-2xl font-bold text-[#ffd427]">
+                                        {plan.price === 0 ? 'Gratis' : `$${plan.price.toFixed(2)}/mes`}
+                                    </div>
+                                    {plan.price > 0 && (
+                                        <div className="text-xs text-slate-500">Anual −40%: ${(plan.price * 0.6 * 12).toFixed(2)}/año</div>
+                                    )}
+                                    <p className="mt-2 text-sm text-slate-600">{plan.description}</p>
+                                    {accountTier === plan.value && (
+                                        <span className="inline-block mt-2 text-xs font-medium text-slate-600 bg-[#ffd427]/30 px-2 py-0.5 rounded">Tu plan</span>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
 

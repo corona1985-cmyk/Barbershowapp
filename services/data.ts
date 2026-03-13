@@ -215,6 +215,67 @@ export const DataService = {
     return user;
   },
 
+  /** Completa el autoregistro con plan gratuito sin Cloud Functions: crea usuario admin + POS en Realtime Database. */
+  completeSelfSignupFree: async (params: {
+    username: string;
+    password: string;
+    name: string;
+    phone: string;
+    email?: string;
+    barbershopName: string;
+    address: string;
+  }): Promise<{ success: true }> => {
+    const MIN_PHONE_DIGITS = 8;
+    const username = String(params.username ?? '').trim().toLowerCase();
+    const password = params.password ?? '';
+    const name = String(params.name ?? '').trim();
+    const phone = String(params.phone ?? '').trim().replace(/\D/g, '');
+    const email = params.email != null ? String(params.email).trim() || undefined : undefined;
+    const barbershopName = String(params.barbershopName ?? '').trim();
+    const address = String(params.address ?? '').trim();
+
+    if (!username) throw new Error('El nombre de usuario es obligatorio.');
+    if (!password || password.length < 6) throw new Error('La contraseña es obligatoria (mín. 6 caracteres).');
+    if (!name) throw new Error('El nombre completo es obligatorio.');
+    if (phone.length < MIN_PHONE_DIGITS) throw new Error(`El teléfono debe tener al menos ${MIN_PHONE_DIGITS} dígitos.`);
+    if (!barbershopName) throw new Error('El nombre de la barbería es obligatorio.');
+    if (!address) throw new Error('La dirección es obligatoria.');
+
+    const existing = await DataService.findUserByUsername(username);
+    if (existing) throw new Error('Ese nombre de usuario ya existe. Elige otro.');
+
+    const posId = generateUniqueId();
+    const hashedPassword = await hashPassword(password);
+
+    const pointsOfSaleRef = ref(db, ROOT + '/pointsOfSale/' + posId);
+    await set(pointsOfSaleRef, {
+      id: posId,
+      name: barbershopName,
+      address,
+      ownerId: username,
+      isActive: true,
+      tier: 'gratuito',
+    });
+
+    const settingsRef = ref(db, ROOT + '/settings/' + posId);
+    await set(settingsRef, { ...DEFAULT_SETTINGS, posId, storeName: barbershopName });
+
+    const newUser: Record<string, unknown> = {
+      username,
+      role: 'admin',
+      name,
+      posId,
+      password: hashedPassword,
+      status: 'active',
+      loginAttempts: 0,
+    };
+    if (email) newUser.email = email;
+    const usersRef = ref(db, ROOT + '/users/' + username);
+    await set(usersRef, newUser);
+
+    return { success: true };
+  },
+
   /** Autentica con usuario y contraseña. Verifica hash; no devuelve la contraseña. Lanza Error('NO_PASSWORD_SET') si el usuario no tiene contraseña asignada. */
   authenticate: async (username: string, password: string): Promise<SystemUser | null> => {
     const user = await DataService.findUserByUsername(username);
