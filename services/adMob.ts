@@ -7,10 +7,15 @@ import { Capacitor } from '@capacitor/core';
 
 export const ADMOB_AVAILABLE = Capacitor.isNativePlatform();
 
-/** Reemplaza por tu Banner Ad Unit ID de AdMob (Android). En producción usa el ID real desde la consola AdMob. */
-const BANNER_AD_UNIT_ID_ANDROID = 'ca-app-pub-3940256099942544/6300978111';
-/** Reemplaza por tu Banner Ad Unit ID de AdMob (iOS) si publicas en App Store. */
-const BANNER_AD_UNIT_ID_IOS = 'ca-app-pub-3940256099942544/2934735716';
+/** IDs de prueba de Google (solo para desarrollo). */
+const TEST_BANNER_ANDROID = 'ca-app-pub-3940256099942544/6300978111';
+const TEST_BANNER_IOS = 'ca-app-pub-3940256099942544/2934735716';
+
+/** Banner real Barbershow (Android e iOS). Puedes sobrescribir por plataforma con VITE_ADMOB_BANNER_ANDROID / VITE_ADMOB_BANNER_IOS en .env */
+const PRODUCTION_BANNER = 'ca-app-pub-6169287781659857/2859576248';
+
+const BANNER_AD_UNIT_ID_ANDROID = import.meta.env.VITE_ADMOB_BANNER_ANDROID?.trim() || PRODUCTION_BANNER;
+const BANNER_AD_UNIT_ID_IOS = import.meta.env.VITE_ADMOB_BANNER_IOS?.trim() || PRODUCTION_BANNER;
 
 export interface AdMobInitResult {
   ok: boolean;
@@ -33,7 +38,10 @@ export async function initializeAdMob(): Promise<AdMobInitResult> {
 
   try {
     const { AdMob } = await import('@capacitor-community/admob');
-    await AdMob.initialize();
+    await AdMob.initialize({
+      initializeForTesting: false,
+      testingDevices: [],
+    });
     initialized = true;
     return { ok: true };
   } catch (e) {

@@ -18,6 +18,60 @@ Guía para generar y ejecutar la app en Android con Capacitor.
   - JDK 17
 - **Variables de entorno** (opcional): `.env` o `.env.local` si usas API keys en la app
 
+## Habilitar ejecución de la app (Android Studio recién instalado)
+
+Si acabas de instalar Android Studio y el botón **Run (▶)** está deshabilitado o no puedes ejecutar la app, sigue estos pasos:
+
+### 1. Abrir el proyecto correcto
+
+- Desde la raíz del proyecto (donde está `package.json`), ejecuta:
+  ```bash
+  npm run build
+  npx cap sync android
+  npx cap open android
+  ```
+- O en Android Studio: **File → Open** y selecciona la carpeta **`android`** (la que está dentro de BarberShow), no la raíz del repo.
+- Asegúrate de abrir la carpeta **`android`**; dentro debe verse el módulo **`app`** y archivos como `build.gradle`, `settings.gradle`.
+
+### 2. Instalar Android SDK y JDK
+
+- **SDK**: En Android Studio ve a **File → Settings** (o **Android Studio → Preferences** en Mac) → **Languages & Frameworks → Android SDK**.
+  - Pestaña **SDK Platforms**: marca **Android 14.0 (API 34)** o **API 35** si está disponible. Pulsa **Apply** para instalar.
+  - Pestaña **SDK Tools**: asegúrate de tener **Android SDK Build-Tools**, **Android SDK Platform-Tools** y **Android Emulator**. Pulsa **Apply** si falta algo.
+- **JDK**: El proyecto usa JDK 17. En **File → Settings → Build, Execution, Deployment → Build Tools → Gradle**, en **Gradle JDK** elige **17** (Android Studio suele traer un JDK embebido; si no, descarga JDK 17 y selecciónalo).
+
+### 3. Dejar que Gradle sincronice
+
+- Al abrir el proyecto, Android Studio debería sincronizar Gradle automáticamente (barra de progreso abajo). Si pide **Sync Now**, acéptalo.
+- Si falla la sincronización, prueba **File → Sync Project with Gradle Files**.
+- La primera vez puede tardar varios minutos (descarga dependencias).
+
+### 4. Tener un dispositivo o emulador para ejecutar
+
+El botón **Run** solo se habilita si hay un **dispositivo** o **emulador** seleccionado.
+
+**Opción A – Emulador (AVD):**
+
+- **Tools → Device Manager** (o el icono de teléfono con un triángulo en la barra superior).
+- Pulsa **Create Device**.
+- Elige un modelo (por ejemplo **Pixel 6**) → **Next**.
+- Elige una imagen del sistema (por ejemplo **API 34** o **35**). Si dice "Download", descárgala y luego **Next** → **Finish**.
+- En Device Manager, pulsa el botón **Play (▶)** del emulador para iniciarlo. Cuando esté encendido, aparecerá en la lista de dispositivos arriba.
+
+**Opción B – Dispositivo físico:**
+
+- En el teléfono: **Ajustes → Opciones de desarrollador** (si no está: **Acerca del teléfono** y toca 7 veces **Número de compilación**).
+- Activa **Depuración USB** y conecta el móvil por USB.
+- Acepta "¿Permitir depuración USB?" en el teléfono. En la barra superior de Android Studio debe aparecer el dispositivo.
+
+### 5. Ejecutar la app
+
+- En la barra superior, en el desplegable de dispositivos, elige tu **emulador** o **dispositivo**.
+- Pulsa el botón verde **Run (▶)** (o **Run → Run 'app'**).
+- La primera compilación puede tardar unos minutos. Al terminar, la app se instalará y se abrirá en el dispositivo o emulador.
+
+Si **Run** sigue deshabilitado, comprueba que hay un dispositivo/emulador seleccionado en el desplegable (no "No devices") y que la sincronización de Gradle ha terminado sin errores.
+
 ## Error: "android platform has not been added yet"
 
 Si ves este mensaje:

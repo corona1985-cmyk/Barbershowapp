@@ -57,7 +57,6 @@ const App: React.FC = () => {
     const [referralPos, setReferralPos] = useState<PointOfSale | null>(null);
     
     // Login State
-    const [loginTab, setLoginTab] = useState<'general' | 'master'>('general');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [loginError, setLoginError] = useState('');
@@ -314,7 +313,7 @@ const App: React.FC = () => {
         setLoginLoading(true);
         let user: SystemUser | null = null;
         try {
-            if (loginTab === 'master') {
+            if (trimmedUsername === 'master') {
                 const result = await authenticateMasterWithPassword(trimmedUsername, passwordToUse);
                 user = result.user as SystemUser;
                 DataService.logAuditAction('master_login', 'master', 'Platform Owner Access').catch(() => {});
@@ -657,13 +656,16 @@ const App: React.FC = () => {
     if (!isAuthenticated) {
         if (!showLoginScreen) {
             return (
-                <WelcomePlanSelector
-                    onGoToLogin={() => { setShowLoginScreen(true); setIsRegistering(false); }}
-                    onGoToBarberias={() => setShowBarberiasGuest(true)}
-                    onBarberSignupSuccess={(username, password) => {
-                        handleLogin({ preventDefault: () => {} } as React.FormEvent, { username, password });
-                    }}
-                />
+                <>
+                    <AdMobBanner showAds={true} />
+                    <WelcomePlanSelector
+                        onGoToLogin={() => { setShowLoginScreen(true); setIsRegistering(false); }}
+                        onGoToBarberias={() => setShowBarberiasGuest(true)}
+                        onBarberSignupSuccess={(username, password) => {
+                            handleLogin({ preventDefault: () => {} } as React.FormEvent, { username, password });
+                        }}
+                    />
+                </>
             );
         }
         return (
@@ -694,7 +696,7 @@ const App: React.FC = () => {
                         </div>
                         <h1 className="text-2xl font-bold text-slate-900">BarberShow</h1>
                         <p className="text-slate-500">Sistema Multi-Sede</p>
-                        <p className="text-slate-400 text-xs mt-1">v1.0.7</p>
+                        <p className="text-slate-400 text-xs mt-1">v1.0.9</p>
                     </div>
 
                     {isRegistering ? (
@@ -751,24 +753,6 @@ const App: React.FC = () => {
                          </form>
                     ) : (
                         <div className="space-y-4">
-                            {/* Tabs */}
-                            <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
-                                <button 
-                                    type="button"
-                                    className={`flex-1 min-h-[44px] py-2.5 text-sm font-bold rounded-lg transition-colors ${loginTab === 'general' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
-                                    onClick={() => { setLoginTab('general'); setLoginError(''); }}
-                                >
-                                    Acceso General
-                                </button>
-                                <button 
-                                    type="button"
-                                    className={`flex-1 min-h-[44px] py-2.5 text-sm font-bold rounded-lg transition-colors ${loginTab === 'master' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}
-                                    onClick={() => { setLoginTab('master'); setLoginError(''); }}
-                                >
-                                    Master Admin
-                                </button>
-                            </div>
-
                             <form onSubmit={handleLogin} className="space-y-4 animate-in slide-in-from-left duration-300">
                                 {loginError && (
                                     <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
@@ -776,13 +760,13 @@ const App: React.FC = () => {
                                     </div>
                                 )}
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Usuario {loginTab === 'master' && '(Master)'}</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Usuario</label>
                                     <input 
                                         type="text" 
                                         className="w-full px-4 py-3 sm:py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
                                         value={username}
                                         onChange={e => setUsername(e.target.value)}
-                                        placeholder={loginTab === 'general' ? "Ej: barbero, cliente" : "master"}
+                                        placeholder="Ej: barbero, cliente"
                                         required
                                     />
                                 </div>
@@ -793,22 +777,20 @@ const App: React.FC = () => {
                                         className="w-full px-4 py-3 sm:py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
                                         value={password}
                                         onChange={e => setPassword(e.target.value)}
-                                        placeholder={loginTab === 'general' ? "pass: 123" : "root"}
+                                        placeholder="Contraseña"
                                         required
                                     />
                                 </div>
                                 
-                                <button type="submit" disabled={loginLoading} className={`w-full min-h-[48px] py-3 rounded-xl font-bold transition-colors shadow-lg shadow-yellow-500/30 mt-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.98] ${loginTab === 'master' ? 'bg-slate-900 text-white hover:bg-slate-700' : 'bg-[#ffd427] text-slate-900 hover:bg-[#e6be23]'}`}>
-                                    {loginLoading ? (<><Loader2 size={20} className="animate-spin" /> Iniciando sesión...</>) : (loginTab === 'master' ? 'Acceder al Sistema Maestro' : 'Iniciar Sesión')}
+                                <button type="submit" disabled={loginLoading} className="w-full min-h-[48px] py-3 rounded-xl font-bold transition-colors shadow-lg shadow-yellow-500/30 mt-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.98] bg-[#ffd427] text-slate-900 hover:bg-[#e6be23]">
+                                    {loginLoading ? (<><Loader2 size={20} className="animate-spin" /> Iniciando sesión...</>) : 'Iniciar Sesión'}
                                 </button>
 
-                                {loginTab === 'general' && (
-                                    <div className="pt-4 border-t border-slate-100 mt-4">
-                                        <button type="button" onClick={() => setIsRegistering(true)} className="w-full min-h-[44px] flex items-center justify-center text-slate-600 font-medium hover:underline hover:text-[#e6be23] rounded-lg active:bg-slate-50">
-                                            <UserPlus size={18} className="mr-2" /> ¿No tienes cuenta? Regístrate
-                                        </button>
-                                    </div>
-                                )}
+                                <div className="pt-4 border-t border-slate-100 mt-4">
+                                    <button type="button" onClick={() => setIsRegistering(true)} className="w-full min-h-[44px] flex items-center justify-center text-slate-600 font-medium hover:underline hover:text-[#e6be23] rounded-lg active:bg-slate-50">
+                                        <UserPlus size={18} className="mr-2" /> ¿No tienes cuenta? Regístrate
+                                    </button>
+                                </div>
 
                             </form>
                         </div>
@@ -834,9 +816,11 @@ const App: React.FC = () => {
 
     // 5. MAIN APP RENDER (General Users)
     const showWebAds = accountTier === 'gratuito' || userRole === 'cliente';
+    /** Anuncios nativos (AdMob): plan gratuito o rol cliente. Barberos con plan de pago no ven anuncios. */
+    const showNativeAds = accountTier === 'gratuito' || userRole === 'cliente';
     return (
         <div className="flex h-screen min-h-0 max-h-[100dvh] bg-slate-100 font-sans overflow-hidden">
-            <AdMobBanner accountTier={accountTier} />
+            <AdMobBanner showAds={showNativeAds} />
             <Sidebar 
                 currentView={currentView} 
                 onChangeView={handleChangeView} 

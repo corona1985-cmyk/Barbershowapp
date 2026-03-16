@@ -1,21 +1,22 @@
 import React, { useEffect, useRef } from 'react';
 import { ADMOB_AVAILABLE, initializeAdMob, showAdMobBanner, removeAdMobBanner } from '../services/adMob';
-import type { AccountTier } from '../types';
 
 interface AdMobBannerProps {
-  accountTier: AccountTier;
+  /** true = mostrar banner (plan gratuito, cliente, o pantalla de inicio sin login). Barberos con plan de pago no reciben true. */
+  showAds: boolean;
 }
 
 /**
- * Gestiona el banner de AdMob en la parte inferior solo cuando:
+ * Gestiona el banner de AdMob en la parte inferior cuando:
  * - La app corre en plataforma nativa (Android/iOS) y
- * - El usuario está en plan gratuito.
+ * - showAds es true (plan gratuito, rol cliente, o pantalla de bienvenida).
+ * Barberos con planes de pago (solo, barberia, multisede) no ven anuncios.
  */
-const AdMobBanner: React.FC<AdMobBannerProps> = ({ accountTier }) => {
+const AdMobBanner: React.FC<AdMobBannerProps> = ({ showAds }) => {
   const bannerShown = useRef(false);
 
   useEffect(() => {
-    const shouldShow = ADMOB_AVAILABLE && accountTier === 'gratuito';
+    const shouldShow = ADMOB_AVAILABLE && showAds;
 
     if (!shouldShow) {
       if (bannerShown.current) {
@@ -42,7 +43,7 @@ const AdMobBanner: React.FC<AdMobBannerProps> = ({ accountTier }) => {
         bannerShown.current = false;
       }
     };
-  }, [accountTier]);
+  }, [showAds]);
 
   return null;
 };
