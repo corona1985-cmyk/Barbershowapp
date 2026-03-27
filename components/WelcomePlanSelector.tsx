@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AccountTier } from '../types';
-import { Scissors, User, Users, MapPin, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle, CreditCard, X } from 'lucide-react';
+import { Scissors, User, Users, MapPin, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle, CreditCard, X, Mail } from 'lucide-react';
 import { DataService } from '../services/data';
 import { createPlanCheckout, activatePlanFromPlay, type PlanCheckoutProvider } from '../services/firebase';
 import SelfServiceBarberSignup from './SelfServiceBarberSignup';
@@ -169,6 +169,10 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
     const waLink = whatsappNumber && whatsappMessage
         ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(whatsappMessage)}`
         : null;
+
+    /** Enlace de contacto genérico para la pantalla de inicio (sin plan seleccionado) */
+    const homeContactWhatsAppHref = `https://wa.me/${CONTACT.whatsapp}?text=${encodeURIComponent('Hola, tengo una consulta sobre BarberShow.')}`;
+    const homeContactEmailHref = `mailto:${supportEmail}?subject=${encodeURIComponent('Consulta BarberShow')}`;
 
     const goBack = () => {
         if (step === 'barber_plan' || step === 'client_registered') {
@@ -560,6 +564,28 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 <CreditCard size={16} /> Ver planes y precios
                             </button>
                         </p>
+                        <div className="mt-6 max-w-lg mx-auto rounded-xl border border-white/15 bg-white/5 p-4 sm:p-5">
+                            <p className="text-center text-white text-sm font-medium mb-1">¿Dudas o soporte?</p>
+                            <p className="text-center text-slate-400 text-xs mb-4">Escríbenos y te respondemos pronto.</p>
+                            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 justify-center">
+                                <a
+                                    href={homeContactWhatsAppHref}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-sm transition-colors active:scale-[0.98]"
+                                >
+                                    <MessageCircle size={18} />
+                                    WhatsApp
+                                </a>
+                                <a
+                                    href={homeContactEmailHref}
+                                    className="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-sm transition-colors active:scale-[0.98]"
+                                >
+                                    <Mail size={18} />
+                                    Correo
+                                </a>
+                            </div>
+                        </div>
                     </>
                 )}
 

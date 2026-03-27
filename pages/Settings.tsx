@@ -261,6 +261,13 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
     };
 
     const isBarber = currentUserRole === 'barbero';
+    const currentPlanLabel = accountTier === 'gratuito'
+        ? 'Plan Gratuito'
+        : accountTier === 'solo'
+            ? 'Plan Solo'
+            : accountTier === 'barberia'
+                ? 'Plan Barbería'
+                : 'Plan Multi-Sede';
     const canAccessSettings = ['admin', 'superadmin', 'dueno', 'barbero'].includes(currentUserRole);
     if (!canAccessSettings) {
         return (
@@ -280,6 +287,13 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
             <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center min-w-0 break-words gap-2">
                 <SettingsIcon className="flex-shrink-0" /> <span>{isBarber ? 'Mis Servicios' : 'Administración de Sede'}</span>
             </h2>
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 flex items-center justify-between gap-3">
+                <p className="text-sm text-slate-600">Plan actual de la barbería</p>
+                <span className="inline-flex items-center gap-2 rounded-full bg-[#ffd427]/20 px-3 py-1 text-sm font-semibold text-slate-800">
+                    <CreditCard size={14} />
+                    {currentPlanLabel}
+                </span>
+            </div>
 
             {/* Tabs: scroll horizontal en móvil para que no se corten */}
             <div className="w-full max-w-full overflow-x-auto overflow-y-hidden scrollbar-hide -mx-1 px-1">

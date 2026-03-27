@@ -24,7 +24,7 @@ interface SidebarProps {
 type NavGroup = 'principal' | 'operaciones' | 'administracion';
 
 /** Ítems que se ocultan en plan Solo (menú simplificado) */
-const HIDDEN_IN_TIER_SOLO: ViewState[] = ['calendar', 'whatsapp_console', 'inventory', 'finance', 'user_admin'];
+const HIDDEN_IN_TIER_SOLO: ViewState[] = ['calendar', 'inventory', 'finance', 'user_admin'];
 
 /** Plan Gratuito: ver citas, Ventas (POS) para registrar pagos, Mi perfil, Configuración, y permitir buscar más barberías / escanear QR. */
 const SHOWN_IN_TIER_GRATUITO: ViewState[] = ['dashboard', 'sales', 'client_profile', 'appointments', 'settings', 'client_discovery', 'qr_scanner'];
@@ -132,7 +132,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                         if (group.id === 'operaciones' && effectiveRole === 'cliente' && !clientHasSelectedBarberia) return null;
                         // Filter items for this group based on permissions
                         let filteredItems = group.items.filter(item => item.roles.includes(effectiveRole as UserRole));
-                        // En plan Solo ocultar: Calendario, WhatsApp, Inventario, Finanzas, Admin Usuarios
+                        // En plan Solo ocultar: Calendario, Inventario, Finanzas, Admin Usuarios
                         if (accountTier === 'solo') {
                             filteredItems = filteredItems.filter(item => !HIDDEN_IN_TIER_SOLO.includes(item.id as ViewState));
                         }
@@ -140,8 +140,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                         if (accountTier === 'gratuito' && effectiveRole !== 'superadmin') {
                             filteredItems = filteredItems.filter(item => SHOWN_IN_TIER_GRATUITO.includes(item.id as ViewState));
                         }
-                        // Consola WhatsApp solo en plan Multi-Sede
-                        if (accountTier !== 'multisede') {
+                        // Consola WhatsApp en todos los planes pagos (solo, barberia, multisede)
+                        if (accountTier === 'gratuito') {
                             filteredItems = filteredItems.filter(item => item.id !== 'whatsapp_console');
                         }
                         if (filteredItems.length === 0) return null;
