@@ -696,7 +696,7 @@ const App: React.FC = () => {
                         </div>
                         <h1 className="text-2xl font-bold text-slate-900">BarberShow</h1>
                         <p className="text-slate-500">Sistema Multi-Sede</p>
-                        <p className="text-slate-400 text-xs mt-1">v1.0.9</p>
+                        <p className="text-slate-400 text-xs mt-1">v1.0.10</p>
                     </div>
 
                     {isRegistering ? (
