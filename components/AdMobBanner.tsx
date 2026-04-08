@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { ADMOB_AVAILABLE, initializeAdMob, showAdMobBanner, removeAdMobBanner } from '../services/adMob';
+import { ADMOB_AVAILABLE, initAdMob, showBannerAd, removeBannerAd } from '../services/adMob';
 
 interface AdMobBannerProps {
   /** true = mostrar banner (plan gratuito, cliente, o pantalla de inicio sin login). Barberos con plan de pago no reciben true. */
@@ -20,7 +20,7 @@ const AdMobBanner: React.FC<AdMobBannerProps> = ({ showAds }) => {
 
     if (!shouldShow) {
       if (bannerShown.current) {
-        removeAdMobBanner();
+        removeBannerAd();
         bannerShown.current = false;
       }
       return;
@@ -29,17 +29,17 @@ const AdMobBanner: React.FC<AdMobBannerProps> = ({ showAds }) => {
     let cancelled = false;
 
     (async () => {
-      const init = await initializeAdMob();
+      const init = await initAdMob();
       if (cancelled || !init.ok) return;
 
-      const result = await showAdMobBanner();
+      const result = await showBannerAd();
       if (!cancelled && result.ok) bannerShown.current = true;
     })();
 
     return () => {
       cancelled = true;
       if (bannerShown.current) {
-        removeAdMobBanner();
+        removeBannerAd();
         bannerShown.current = false;
       }
     };
