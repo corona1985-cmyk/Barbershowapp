@@ -1,6 +1,7 @@
 import { ref, get, set, update, remove, query, orderByChild, equalTo } from 'firebase/database';
 import { db } from './firebase';
 import { hashPassword, verifyPassword, isStoredHash } from './passwordHash';
+import { Capacitor } from '@capacitor/core';
 import {
   Client,
   Product,
@@ -22,6 +23,77 @@ import {
 } from '../types';
 
 const ROOT = 'barbershow';
+const RTDB_BASE_URL = 'https://gen-lang-client-0624135070-default-rtdb.firebaseio.com';
+
+/** Timeout para operaciones de Firebase en milisegundos (iOS WKWebView puede colgarse). */
+const FIREBASE_TIMEOUT_MS = 10000;
+
+/** Wrapper que agrega timeout a promesas de Firebase (evita cuelgues en iOS WKWebView). */
+function withTimeout<T>(promise: Promise<T>, ms: number = FIREBASE_TIMEOUT_MS, operation = 'Firebase operation'): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${operation} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
+async function nativeRtdbGet<T>(path: string, operation: string): Promise<T | null> {
+  // #region agent log
+  fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'barberias-debug-1',hypothesisId:'B1',location:'services/data.ts:nativeRtdbGet:before-fetch',message:'nativeRtdbGet starting',data:{operation,path},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  const response = await withTimeout(
+    fetch(`${RTDB_BASE_URL}/${path}.json`, { method: 'GET' }),
+    FIREBASE_TIMEOUT_MS,
+    `${operation}.nativeFetch`
+  );
+  // #region agent log
+  fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'barberias-debug-1',hypothesisId:'B1',location:'services/data.ts:nativeRtdbGet:after-fetch',message:'nativeRtdbGet response',data:{operation,status:response.status,ok:response.ok},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  if (!response.ok) {
+    throw new Error(`${operation} HTTP ${response.status}`);
+  }
+  return response.json() as Promise<T | null>;
+}
+
+async function nativeRtdbSet(path: string, value: unknown, operation: string): Promise<void> {
+  // #region agent log
+  fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-fix-1',hypothesisId:'V2',location:'services/data.ts:nativeRtdbSet:before-fetch',message:'nativeRtdbSet starting',data:{operation,path},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  const response = await withTimeout(
+    fetch(`${RTDB_BASE_URL}/${path}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(value),
+    }),
+    FIREBASE_TIMEOUT_MS,
+    `${operation}.nativeSet`
+  );
+  // #region agent log
+  fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-fix-1',hypothesisId:'V2',location:'services/data.ts:nativeRtdbSet:after-fetch',message:'nativeRtdbSet response',data:{operation,status:response.status,ok:response.ok},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  if (!response.ok) {
+    throw new Error(`${operation} HTTP ${response.status}`);
+  }
+}
+
+async function readNode<T>(path: string, operation: string): Promise<T | null> {
+  if (Capacitor.isNativePlatform()) {
+    return nativeRtdbGet<T>(path, operation);
+  }
+  const snap = await withTimeout(get(ref(db, path)), FIREBASE_TIMEOUT_MS, operation);
+  return (snap.val() as T | null) ?? null;
+}
+
+async function readCollectionByPos<T extends { posId?: number }>(collection: string, posId: number, operation: string): Promise<T[]> {
+  if (Capacitor.isNativePlatform()) {
+    const all = await nativeRtdbGet<Record<string, T> | null>(`${ROOT}/${collection}`, operation);
+    return snapshotToArray<T>(all).filter((item) => item.posId === posId);
+  }
+  const q = query(ref(db, ROOT + '/' + collection), orderByChild('posId'), equalTo(posId));
+  const snap = await withTimeout(get(q), FIREBASE_TIMEOUT_MS, operation);
+  return snapshotToArray<T>(snap.val());
+}
 
 // Solo usuarios mínimos para poder acceder y crear sedes/barberos desde la app. El resto está en la base de datos (ver database-seed.json).
 const INITIAL_USERS_MINIMAL: SystemUser[] = [
@@ -74,6 +146,13 @@ function snapshotToUsers(val: unknown): SystemUser[] {
   if (val == null) return [];
   const obj = val as Record<string, SystemUser>;
   return Object.values(obj);
+}
+
+export function isAccountDeactivated(user: SystemUser | null | undefined): boolean {
+  if (!user) return false;
+  if (user.active === false) return true;
+  if (user.accountStatus === 'deactivated') return true;
+  return false;
 }
 
 let ACTIVE_POS_ID: number | null = null;
@@ -148,8 +227,29 @@ export const DataService = {
     const key = 'pointsOfSale';
     const cached = cacheGet<PointOfSale[]>(key);
     if (cached) return cached;
-    const snap = await get(ref(db, ROOT + '/pointsOfSale'));
-    const arr = snapshotToArray<PointOfSale>(snap.val());
+    const isNative = Capacitor.isNativePlatform();
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'post-fix-2',hypothesisId:'H2',location:'services/data.ts:getPointsOfSale:mode',message:'getPointsOfSale source selected',data:{isNative},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    let raw: Record<string, PointOfSale> | null = null;
+    try {
+      raw = isNative
+        ? await nativeRtdbGet<Record<string, PointOfSale> | null>(`${ROOT}/pointsOfSale`, 'getPointsOfSale')
+        : (await withTimeout(
+            get(ref(db, ROOT + '/pointsOfSale')),
+            FIREBASE_TIMEOUT_MS,
+            'getPointsOfSale'
+          )).val();
+    } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'barberias-debug-1',hypothesisId:'B2',location:'services/data.ts:getPointsOfSale:error',message:'getPointsOfSale failed',data:{error:err instanceof Error ? err.message : 'unknown_getPointsOfSale_error',isNative},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      throw err;
+    }
+    const arr = snapshotToArray<PointOfSale>(raw);
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'barberias-debug-1',hypothesisId:'B3',location:'services/data.ts:getPointsOfSale:after-map',message:'getPointsOfSale mapped',data:{count:arr.length,hasRaw:raw != null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     const out = arr.map((p) => ({ ...p, id: Number(p.id), plan: p.plan || 'basic', tier: p.tier ?? 'barberia' }));
     cacheSet(key, out);
     return out;
@@ -193,24 +293,78 @@ export const DataService = {
   },
 
   getUsers: async (): Promise<SystemUser[]> => {
-    const snap = await get(ref(db, ROOT + '/users'));
-    const users = snapshotToUsers(snap.val());
+    const raw = await readNode<Record<string, SystemUser>>(`${ROOT}/users`, 'getUsers');
+    const users = snapshotToUsers(raw);
     if (ACTIVE_POS_ID) return users.filter((u) => u.posId === ACTIVE_POS_ID || u.role === 'superadmin');
     return users;
   },
 
   getAllUsersGlobal: async (): Promise<SystemUser[]> => {
-    const snap = await get(ref(db, ROOT + '/users'));
-    return snapshotToUsers(snap.val());
+    const raw = await readNode<Record<string, SystemUser>>(`${ROOT}/users`, 'getAllUsersGlobal');
+    return snapshotToUsers(raw);
+  },
+
+  /** Busca usuario por username sin modificar datos (para registro/comprobaciones). */
+  getUserByUsername: async (username: string): Promise<SystemUser | null> => {
+    const searchUsername = String(username || '').trim().toLowerCase();
+    if (!searchUsername) return null;
+    const user = await readNode<SystemUser>(`${ROOT}/users/${searchUsername}`, 'getUserByUsername');
+    if (!user) return null;
+    return user;
   },
 
   /** Busca usuario por username sin modificar datos (para registro/comprobaciones). */
   findUserByUsername: async (username: string): Promise<SystemUser | null> => {
     const searchUsername = String(username || '').trim().toLowerCase();
     if (!searchUsername) return null;
-    const snap = await get(ref(db, ROOT + '/users'));
-    const users = snapshotToUsers(snap.val());
-    const user = users.find((u) => (u.username || '').trim().toLowerCase() === searchUsername);
+    let restProbe: { ok: boolean; status: number | null; error: string | null } = { ok: false, status: null, error: null };
+    try {
+      const probeResponse = await withTimeout(
+        fetch(`${RTDB_BASE_URL}/${ROOT}/users/${encodeURIComponent(searchUsername)}.json`, { method: 'GET' }),
+        6000,
+        'findUserByUsername.restProbe'
+      );
+      restProbe = { ok: probeResponse.ok, status: probeResponse.status, error: null };
+    } catch (probeErr) {
+      restProbe = {
+        ok: false,
+        status: null,
+        error: probeErr instanceof Error ? probeErr.message : 'unknown_probe_error',
+      };
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'investigation-2',hypothesisId:'H1',location:'services/data.ts:findUserByUsername:rest-probe',message:'RTDB REST probe result',data:{ok:restProbe.ok,status:restProbe.status,error:restProbe.error},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'investigation-2',hypothesisId:'H2',location:'services/data.ts:findUserByUsername:before-sdk-get',message:'RTDB SDK get starting',data:{restProbeOk:restProbe.ok,restProbeStatus:restProbe.status},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    const isNative = Capacitor.isNativePlatform();
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'post-fix-2',hypothesisId:'H2',location:'services/data.ts:findUserByUsername:source-selected',message:'findUserByUsername source selected',data:{isNative},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    let user: SystemUser | null = null;
+    if (isNative) {
+      user = await nativeRtdbGet<SystemUser | null>(`${ROOT}/users/${searchUsername}`, 'findUserByUsername');
+    } else {
+      let snap;
+      try {
+        snap = await withTimeout(
+          get(ref(db, ROOT + '/users/' + searchUsername)),
+          FIREBASE_TIMEOUT_MS,
+          'findUserByUsername'
+        );
+      } catch (sdkErr) {
+        // #region agent log
+        fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'investigation-2',hypothesisId:'H2',location:'services/data.ts:findUserByUsername:sdk-get-error',message:'RTDB SDK get failed',data:{error:sdkErr instanceof Error ? sdkErr.message : 'unknown_sdk_error'},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        throw sdkErr;
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'investigation-2',hypothesisId:'H2',location:'services/data.ts:findUserByUsername:after-sdk-get',message:'RTDB SDK get completed',data:{exists:snap.exists()},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      user = snap.exists() ? (snap.val() as SystemUser) : null;
+    }
+    if (!user) return null;
     if (!user || user.status === 'suspended' || user.status === 'locked') return null;
     return user;
   },
@@ -280,6 +434,9 @@ export const DataService = {
   authenticate: async (username: string, password: string): Promise<SystemUser | null> => {
     const user = await DataService.findUserByUsername(username);
     if (!user) return null;
+    if (isAccountDeactivated(user)) {
+      throw new Error('ACCOUNT_DEACTIVATED');
+    }
     const storedPassword = user.password;
     if (storedPassword === undefined || storedPassword === null || storedPassword === '') {
       throw new Error('NO_PASSWORD_SET');
@@ -317,9 +474,9 @@ export const DataService = {
   getCurrentUserFromFirebase: async (): Promise<SystemUser | null> => {
     const current = DataService.getCurrentUser();
     if (!current?.username) return null;
-    const snap = await get(ref(db, ROOT + '/users/' + current.username));
-    if (!snap.exists()) return null;
-    return snap.val() as SystemUser;
+    const user = await readNode<SystemUser>(`${ROOT}/users/${current.username}`, 'getCurrentUserFromFirebase');
+    if (!user) return null;
+    return user;
   },
 
   /** El usuario logueado actualiza solo su propio nombre y/o foto. No toca contraseña ni otros campos. Actualiza localStorage para que la foto se vea en toda la app al instante. */
@@ -376,8 +533,11 @@ export const DataService = {
     const snap = await get(ref(db, ROOT + '/users/' + user.username));
     const isUpdate = snap.exists();
     const existing = snap.exists() ? (snap.val() as SystemUser | null) : null;
-    const toWrite: Record<string, unknown> = { ...user, status: user.status || 'active', loginAttempts: user.loginAttempts ?? 0 };
+    const toWrite: Record<string, unknown> = { ...user, status: user.status || existing?.status || 'active', loginAttempts: user.loginAttempts ?? existing?.loginAttempts ?? 0 };
     if (isUpdate && existing?.lastLogin) toWrite.lastLogin = existing.lastLogin;
+    if (isUpdate && user.active === undefined && existing?.active !== undefined) toWrite.active = existing.active;
+    if (isUpdate && user.accountStatus === undefined && existing?.accountStatus !== undefined) toWrite.accountStatus = existing.accountStatus;
+    if (isUpdate && user.deactivatedAt === undefined && existing?.deactivatedAt !== undefined) toWrite.deactivatedAt = existing.deactivatedAt;
     // Al editar, si no se envió contraseña no sobrescribir la existente
     if (isUpdate && (user.password === undefined || user.password === null || user.password === '')) {
       if (existing?.password) toWrite.password = existing.password;
@@ -396,23 +556,43 @@ export const DataService = {
 
   /** Barbería preferida del cliente (por QR o elección). Al iniciar sesión se abre esa barbería. Solo clientes. */
   getClientPreferredPos: async (username: string): Promise<number | null> => {
-    const snap = await get(ref(db, ROOT + '/clientPreferences/' + encodeURIComponent(username)));
-    const val = snap.val();
+    const key = encodeURIComponent(username);
+    const isNative = Capacitor.isNativePlatform();
+    const val = isNative
+      ? await nativeRtdbGet<{ preferredPosId?: number } | null>(`${ROOT}/clientPreferences/${key}`, 'getClientPreferredPos')
+      : (await withTimeout(
+          get(ref(db, ROOT + '/clientPreferences/' + key)),
+          FIREBASE_TIMEOUT_MS,
+          'getClientPreferredPos'
+        )).val();
     if (val == null || typeof val.preferredPosId !== 'number') return null;
     return val.preferredPosId;
   },
 
   setClientPreferredPos: async (username: string, posId: number | null): Promise<void> => {
-    await set(ref(db, ROOT + '/clientPreferences/' + encodeURIComponent(username)), { preferredPosId: posId });
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V2',location:'services/data.ts:setClientPreferredPos:entry',message:'setClientPreferredPos started',data:{username,hasPosId:posId != null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    const path = `${ROOT}/clientPreferences/${encodeURIComponent(username)}`;
+    if (Capacitor.isNativePlatform()) {
+      await nativeRtdbSet(path, { preferredPosId: posId }, 'setClientPreferredPos');
+    } else {
+      await withTimeout(
+        set(ref(db, ROOT + '/clientPreferences/' + encodeURIComponent(username)), { preferredPosId: posId }),
+        FIREBASE_TIMEOUT_MS,
+        'setClientPreferredPos'
+      );
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V2',location:'services/data.ts:setClientPreferredPos:after-set',message:'setClientPreferredPos completed',data:{},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
   },
 
   getSettings: async (): Promise<AppSettings> => {
     if (ACTIVE_POS_ID == null) return DEFAULT_SETTINGS;
-    const snap = await get(ref(db, ROOT + '/settings/' + ACTIVE_POS_ID));
-    let posSettings = snap.val();
+    let posSettings = await readNode<AppSettings>(`${ROOT}/settings/${ACTIVE_POS_ID}`, 'getSettings.byPos');
     if (posSettings == null) {
-      const legacySnap = await get(ref(db, ROOT + '/settings'));
-      const obj = legacySnap.val() || {};
+      const obj = (await readNode<Record<string, AppSettings>>(`${ROOT}/settings`, 'getSettings.legacy')) || {};
       posSettings = obj[String(ACTIVE_POS_ID)];
     }
     return posSettings || DEFAULT_SETTINGS;
@@ -433,8 +613,8 @@ export const DataService = {
   },
 
   getGlobalSettings: async (): Promise<GlobalSettings> => {
-    const snap = await get(ref(db, ROOT + '/globalSettings'));
-    return snap.val() || DEFAULT_GLOBAL_SETTINGS;
+    const settings = await readNode<GlobalSettings>(`${ROOT}/globalSettings`, 'getGlobalSettings');
+    return settings || DEFAULT_GLOBAL_SETTINGS;
   },
 
   updateGlobalSettings: async (settings: GlobalSettings): Promise<void> => {
@@ -456,7 +636,15 @@ export const DataService = {
     if (posId !== undefined && posId !== null) {
       log.posId = posId;
     }
-    await set(ref(db, ROOT + '/auditLogs/' + id), log);
+    if (Capacitor.isNativePlatform()) {
+      await nativeRtdbSet(`${ROOT}/auditLogs/${id}`, log, 'logAuditAction');
+    } else {
+      await withTimeout(
+        set(ref(db, ROOT + '/auditLogs/' + id), log),
+        FIREBASE_TIMEOUT_MS,
+        'logAuditAction'
+      );
+    }
   },
 
   getAuditLogs: async (): Promise<AuditLog[]> => {
@@ -483,9 +671,7 @@ export const DataService = {
     const key = `clients_${ACTIVE_POS_ID}`;
     const cached = cacheGet<Client[]>(key);
     if (cached) return cached;
-    const q = query(ref(db, ROOT + '/clients'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
-    const snap = await get(q);
-    const arr = snapshotToArray<Client>(snap.val());
+    const arr = await readCollectionByPos<Client>('clients', ACTIVE_POS_ID, 'getClients');
     const out = arr.map((c) => ({ ...c, id: Number(c.id) }));
     cacheSet(key, out);
     return out;
@@ -507,8 +693,8 @@ export const DataService = {
   findClientByPhone: async (phone: string): Promise<Client | null> => {
     const normalized = String(phone ?? '').replace(/\D/g, '');
     if (normalized.length < 6) return null;
-    const snap = await get(ref(db, ROOT + '/clients'));
-    const arr = snapshotToArray<Client>(snap.val()) || [];
+    const clientsRaw = await readNode<Record<string, Client>>(`${ROOT}/clients`, 'findClientByPhone');
+    const arr = snapshotToArray<Client>(clientsRaw) || [];
     const found = arr.find((c) => String(c.telefono || '').replace(/\D/g, '') === normalized);
     return found ? { ...found, id: Number(found.id) } : null;
   },
@@ -520,14 +706,14 @@ export const DataService = {
     const key = `clientsActivity_${ACTIVE_POS_ID}_${barberId ?? 'all'}`;
     const cached = cacheGet<Client[]>(key);
     if (cached) return cached;
-    const [clientsSnap, apptsSnap, salesSnap] = await Promise.all([
-      get(query(ref(db, ROOT + '/clients'), orderByChild('posId'), equalTo(ACTIVE_POS_ID))),
-      get(query(ref(db, ROOT + '/appointments'), orderByChild('posId'), equalTo(ACTIVE_POS_ID))),
-      get(query(ref(db, ROOT + '/sales'), orderByChild('posId'), equalTo(ACTIVE_POS_ID))),
+    const [allClientsRaw, apptsRaw, salesRaw] = await Promise.all([
+      readCollectionByPos<Client>('clients', ACTIVE_POS_ID, 'getClientsWithActivity.clients'),
+      readCollectionByPos<Appointment>('appointments', ACTIVE_POS_ID, 'getClientsWithActivity.appointments'),
+      readCollectionByPos<Sale>('sales', ACTIVE_POS_ID, 'getClientsWithActivity.sales'),
     ]);
-    const allClients = snapshotToArray<Client>(clientsSnap.val()).map((c) => ({ ...c, id: Number(c.id) }));
-    let appts = snapshotToArray<Appointment>(apptsSnap.val());
-    let sales = snapshotToArray<Sale>(salesSnap.val());
+    const allClients = allClientsRaw.map((c) => ({ ...c, id: Number(c.id) }));
+    let appts = apptsRaw;
+    let sales = salesRaw;
     if (barberId != null) {
       appts = appts.filter((a) => a.barberoId === barberId);
       sales = sales.filter((s) => (s.barberoId ?? null) === barberId);
@@ -544,9 +730,23 @@ export const DataService = {
     if (DataService.getCurrentUserRole() !== '') requireRole(['admin', 'superadmin', 'barbero', 'cliente']);
     const effectivePosId = ACTIVE_POS_ID ?? 1;
     const newClient = { ...client, id: generateUniqueId(), posId: effectivePosId } as Client;
-    await set(ref(db, ROOT + '/clients/' + newClient.id), newClient);
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-debug-2',hypothesisId:'A3',location:'services/data.ts:addClient:entry',message:'addClient started',data:{isNative:Capacitor.isNativePlatform(),clientId:newClient.id,posId:effectivePosId},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    if (Capacitor.isNativePlatform()) {
+      await nativeRtdbSet(`${ROOT}/clients/${newClient.id}`, newClient, 'addClient');
+    } else {
+      await withTimeout(
+        set(ref(db, ROOT + '/clients/' + newClient.id), newClient),
+        FIREBASE_TIMEOUT_MS,
+        'addClient'
+      );
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-debug-2',hypothesisId:'A3',location:'services/data.ts:addClient:after-write',message:'addClient persisted',data:{clientId:newClient.id},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     cacheInvalidate('clients');
-    await DataService.logAuditAction('create_client', 'system', `Registered client: ${client.nombre}`, effectivePosId);
+    DataService.logAuditAction('create_client', 'system', `Registered client: ${client.nombre}`, effectivePosId).catch(() => {});
     return newClient;
   },
 
@@ -568,9 +768,8 @@ export const DataService = {
 
   /** Obtiene un cliente por ID (cualquier sede). */
   getClientById: async (id: number): Promise<Client | null> => {
-    const snap = await get(ref(db, ROOT + '/clients/' + id));
-    if (!snap.exists()) return null;
-    const c = snap.val() as Client;
+    const c = await readNode<Client>(`${ROOT}/clients/${id}`, 'getClientById');
+    if (!c) return null;
     return { ...c, id: Number(c.id) };
   },
 
@@ -662,9 +861,8 @@ export const DataService = {
   /** Si barberId se pasa (barbero), devuelve solo productos de ese barbero. Sin argumento: todos los de la sede (admin). */
   getProducts: async (barberId?: number): Promise<Product[]> => {
     if (ACTIVE_POS_ID == null) return [];
-    const q = query(ref(db, ROOT + '/products'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
-    const snap = await get(q);
-    let list = snapshotToArray<Product>(snap.val()).map((p) => ({ ...p, id: Number(p.id), barberId: p.barberId ?? null }));
+    let list = (await readCollectionByPos<Product>('products', ACTIVE_POS_ID, 'getProducts'))
+      .map((p) => ({ ...p, id: Number(p.id), barberId: p.barberId ?? null }));
     if (barberId !== undefined) {
       list = list.filter((p) => p.barberId === barberId);
     }
@@ -733,9 +931,8 @@ export const DataService = {
   /** Si barberId se pasa, devuelve solo servicios de la sede (barberId null) + de ese barbero. Sin argumento: todos los de la sede (admin/config). */
   getServices: async (barberId?: number): Promise<Service[]> => {
     if (ACTIVE_POS_ID == null) return [];
-    const q = query(ref(db, ROOT + '/services'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
-    const snap = await get(q);
-    let list = snapshotToArray<Service>(snap.val()).map((s) => ({ ...s, id: Number(s.id), barberId: s.barberId ?? null }));
+    let list = (await readCollectionByPos<Service>('services', ACTIVE_POS_ID, 'getServices'))
+      .map((s) => ({ ...s, id: Number(s.id), barberId: s.barberId ?? null }));
     if (barberId !== undefined) {
       list = list.filter((s) => s.barberId == null || s.barberId === barberId);
     }
@@ -782,18 +979,16 @@ export const DataService = {
     const key = `barbers_${ACTIVE_POS_ID}`;
     const cached = cacheGet<Barber[]>(key);
     if (cached) return cached;
-    const q = query(ref(db, ROOT + '/barbers'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
-    const snap = await get(q);
-    const out = snapshotToArray<Barber>(snap.val()).map((b) => ({ ...b, id: Number(b.id) }));
+    const out = (await readCollectionByPos<Barber>('barbers', ACTIVE_POS_ID, 'getBarbers'))
+      .map((b) => ({ ...b, id: Number(b.id) }));
     cacheSet(key, out);
     return out;
   },
 
   /** Barbers de una sede (para Admin al asignar usuario barbero). No depende de ACTIVE_POS_ID. */
   getBarbersForPos: async (posId: number): Promise<Barber[]> => {
-    const q = query(ref(db, ROOT + '/barbers'), orderByChild('posId'), equalTo(posId));
-    const snap = await get(q);
-    return snapshotToArray<Barber>(snap.val()).map((b) => ({ ...b, id: Number(b.id) }));
+    return (await readCollectionByPos<Barber>('barbers', posId, 'getBarbersForPos'))
+      .map((b) => ({ ...b, id: Number(b.id) }));
   },
 
   addBarber: async (barber: Omit<Barber, 'id' | 'posId'>): Promise<Barber> => {
@@ -937,18 +1132,15 @@ export const DataService = {
     const key = `appointments_${ACTIVE_POS_ID}_${barberId ?? 'all'}`;
     const cached = cacheGet<Appointment[]>(key);
     if (cached) return cached;
-    const q = query(ref(db, ROOT + '/appointments'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
-    const snap = await get(q);
-    let arr = snapshotToArray<Appointment>(snap.val()).map((a) => ({ ...a, id: Number(a.id) }));
+    let arr = (await readCollectionByPos<Appointment>('appointments', ACTIVE_POS_ID, 'getAppointments'))
+      .map((a) => ({ ...a, id: Number(a.id) }));
     if (barberId != null) arr = arr.filter((a) => a.barberoId === barberId);
     cacheSet(key, arr);
     return arr;
   },
 
   checkAppointmentConflict: async (posId: number, barberId: number, date: string, time: string): Promise<boolean> => {
-    const q = query(ref(db, ROOT + '/appointments'), orderByChild('posId'), equalTo(posId));
-    const snap = await get(q);
-    const arr = snapshotToArray<Appointment>(snap.val());
+    const arr = await readCollectionByPos<Appointment>('appointments', posId, 'checkAppointmentConflict');
     return arr.some((a) => a.barberoId === barberId && a.fecha === date && a.hora === time && a.estado !== 'cancelada');
   },
 
@@ -957,7 +1149,21 @@ export const DataService = {
     const id = generateUniqueId();
     const apt: Appointment = { ...appointment, id };
     const toWrite = JSON.parse(JSON.stringify(apt)) as Record<string, unknown>;
-    await set(ref(db, ROOT + '/appointments/' + id), toWrite);
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-fix-1',hypothesisId:'A1',location:'services/data.ts:addAppointment:entry',message:'addAppointment started',data:{isNative:Capacitor.isNativePlatform(),appointmentId:id,posId:apt.posId},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    if (Capacitor.isNativePlatform()) {
+      await nativeRtdbSet(`${ROOT}/appointments/${id}`, toWrite, 'addAppointment');
+    } else {
+      await withTimeout(
+        set(ref(db, ROOT + '/appointments/' + id), toWrite),
+        FIREBASE_TIMEOUT_MS,
+        'addAppointment'
+      );
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-fix-1',hypothesisId:'A1',location:'services/data.ts:addAppointment:after-write',message:'addAppointment persisted',data:{appointmentId:id},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     cacheInvalidate('appointments');
     cacheInvalidate('clientsActivity');
     return apt;
@@ -1005,9 +1211,8 @@ export const DataService = {
     const key = `sales_${ACTIVE_POS_ID}_${barberId ?? 'all'}`;
     const cached = cacheGet<Sale[]>(key);
     if (cached) return cached;
-    const q = query(ref(db, ROOT + '/sales'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
-    const snap = await get(q);
-    let arr = snapshotToArray<Sale>(snap.val()).map((s) => ({ ...s, id: Number(s.id) }));
+    let arr = (await readCollectionByPos<Sale>('sales', ACTIVE_POS_ID, 'getSales'))
+      .map((s) => ({ ...s, id: Number(s.id) }));
     if (barberId != null) arr = arr.filter((s) => (s.barberoId ?? null) === barberId);
     cacheSet(key, arr);
     return arr;
@@ -1015,16 +1220,14 @@ export const DataService = {
 
   /** Ventas de una sede concreta (para reportes por sede en Multi-Sede). No depende de ACTIVE_POS_ID. */
   getSalesForPos: async (posId: number): Promise<Sale[]> => {
-    const q = query(ref(db, ROOT + '/sales'), orderByChild('posId'), equalTo(posId));
-    const snap = await get(q);
-    return snapshotToArray<Sale>(snap.val()).map((s) => ({ ...s, id: Number(s.id) }));
+    return (await readCollectionByPos<Sale>('sales', posId, 'getSalesForPos'))
+      .map((s) => ({ ...s, id: Number(s.id) }));
   },
 
   /** Citas de una sede concreta (para reportes por sede en Multi-Sede). No depende de ACTIVE_POS_ID. */
   getAppointmentsForPos: async (posId: number): Promise<Appointment[]> => {
-    const q = query(ref(db, ROOT + '/appointments'), orderByChild('posId'), equalTo(posId));
-    const snap = await get(q);
-    return snapshotToArray<Appointment>(snap.val()).map((a) => ({ ...a, id: Number(a.id) }));
+    return (await readCollectionByPos<Appointment>('appointments', posId, 'getAppointmentsForPos'))
+      .map((a) => ({ ...a, id: Number(a.id) }));
   },
 
   /** Cuenta citas no canceladas del mes en curso para una sede (plan gratuito: límite 100/mes). */
@@ -1071,9 +1274,8 @@ export const DataService = {
 
   getFinances: async (): Promise<FinanceRecord[]> => {
     if (ACTIVE_POS_ID == null) return [];
-    const q = query(ref(db, ROOT + '/finances'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
-    const snap = await get(q);
-    return snapshotToArray<FinanceRecord>(snap.val()).map((f) => ({ ...f, id: Number(f.id) }));
+    return (await readCollectionByPos<FinanceRecord>('finances', ACTIVE_POS_ID, 'getFinances'))
+      .map((f) => ({ ...f, id: Number(f.id) }));
   },
 
   /** Añade un registro de finanzas (escritura por ítem). */
@@ -1109,9 +1311,7 @@ export const DataService = {
 
   getNotificationLogs: async (): Promise<NotificationLog[]> => {
     if (ACTIVE_POS_ID == null) return [];
-    const q = query(ref(db, ROOT + '/notificationLogs'), orderByChild('posId'), equalTo(ACTIVE_POS_ID));
-    const snap = await get(q);
-    const arr = snapshotToArray<NotificationLog>(snap.val());
+    const arr = await readCollectionByPos<NotificationLog>('notificationLogs', ACTIVE_POS_ID, 'getNotificationLogs');
     return arr.map((l) => ({ ...l, id: Number(l.id) }));
   },
 
@@ -1136,5 +1336,3 @@ export const DataService = {
   },
 };
 
-// Inicializar Firebase al cargar (seed si está vacío)
-DataService.initialize().catch(console.error);

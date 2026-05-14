@@ -208,18 +208,38 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             if (clientRecord) {
                 finalClientId = clientRecord.id;
             } else if ((clientPhoneForBooking || '').trim()) {
-                const client = await DataService.addClientOrGetExisting({
-                    nombre: (currUser?.name || 'Cliente').trim(),
-                    telefono: clientPhoneForBooking.trim(),
-                    email: '',
-                    notas: 'Registrado al agendar cita (cliente)',
-                    fechaRegistro: new Date().toISOString().split('T')[0],
-                    ultimaVisita: 'N/A',
-                    puntos: 0,
-                    status: 'active',
-                });
-                finalClientId = client.id;
-                if (!clients.some(c => c.id === client.id)) setClients(prev => [...prev, client]);
+                try {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-debug-2',hypothesisId:'A4',location:'pages/Appointments.tsx:handleSave:before-addClientOrGetExisting-cliente',message:'creating/finding client before appointment',data:{phoneLen:(clientPhoneForBooking || '').trim().length},timestamp:Date.now()})}).catch(()=>{});
+                    // #endregion
+                    const clientPromise = DataService.addClientOrGetExisting({
+                        nombre: (currUser?.name || 'Cliente').trim(),
+                        telefono: clientPhoneForBooking.trim(),
+                        email: '',
+                        notas: 'Registrado al agendar cita (cliente)',
+                        fechaRegistro: new Date().toISOString().split('T')[0],
+                        ultimaVisita: 'N/A',
+                        puntos: 0,
+                        status: 'active',
+                    });
+                    const timeoutPromise = new Promise<never>((_, reject) =>
+                        setTimeout(() => reject(new Error('Tiempo de espera al crear/buscar cliente. Revisa tu conexión e intenta de nuevo.')), SAVE_TIMEOUT_MS)
+                    );
+                    const client = await Promise.race([clientPromise, timeoutPromise]);
+                    // #region agent log
+                    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-debug-2',hypothesisId:'A4',location:'pages/Appointments.tsx:handleSave:after-addClientOrGetExisting-cliente',message:'client ready before appointment',data:{clientId:client.id},timestamp:Date.now()})}).catch(()=>{});
+                    // #endregion
+                    finalClientId = client.id;
+                    if (!clients.some(c => c.id === client.id)) setClients(prev => [...prev, client]);
+                } catch (err) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-debug-2',hypothesisId:'A4',location:'pages/Appointments.tsx:handleSave:addClientOrGetExisting-cliente-error',message:'client pre-step failed',data:{errorMessage:err instanceof Error ? err.message : String(err)},timestamp:Date.now()})}).catch(()=>{});
+                    // #endregion
+                    setSaving(false);
+                    const msg = err instanceof Error ? err.message : String(err);
+                    alert(msg);
+                    return;
+                }
             }
         } else if (isNewClient) {
             if (!newClientName.trim() || !newClientPhone.trim()) {
@@ -227,18 +247,38 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                 alert('Ingrese nombre y teléfono del nuevo cliente.');
                 return;
             }
-            const client = await DataService.addClientOrGetExisting({
-                nombre: newClientName.trim(),
-                telefono: newClientPhone.trim(),
-                email: '',
-                notas: 'Registrado al agendar cita',
-                fechaRegistro: new Date().toISOString().split('T')[0],
-                ultimaVisita: 'N/A',
-                puntos: 0,
-                status: 'active',
-            });
-            finalClientId = client.id;
-            if (!clients.some(c => c.id === client.id)) setClients([...clients, client]);
+            try {
+                // #region agent log
+                fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-debug-2',hypothesisId:'A4',location:'pages/Appointments.tsx:handleSave:before-addClientOrGetExisting-admin',message:'creating/finding new client',data:{phoneLen:newClientPhone.trim().length},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+                const clientPromise = DataService.addClientOrGetExisting({
+                    nombre: newClientName.trim(),
+                    telefono: newClientPhone.trim(),
+                    email: '',
+                    notas: 'Registrado al agendar cita',
+                    fechaRegistro: new Date().toISOString().split('T')[0],
+                    ultimaVisita: 'N/A',
+                    puntos: 0,
+                    status: 'active',
+                });
+                const timeoutPromise = new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('Tiempo de espera al crear/buscar cliente. Revisa tu conexión e intenta de nuevo.')), SAVE_TIMEOUT_MS)
+                );
+                const client = await Promise.race([clientPromise, timeoutPromise]);
+                // #region agent log
+                fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-debug-2',hypothesisId:'A4',location:'pages/Appointments.tsx:handleSave:after-addClientOrGetExisting-admin',message:'new client ready',data:{clientId:client.id},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+                finalClientId = client.id;
+                if (!clients.some(c => c.id === client.id)) setClients([...clients, client]);
+            } catch (err) {
+                // #region agent log
+                fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-debug-2',hypothesisId:'A4',location:'pages/Appointments.tsx:handleSave:addClientOrGetExisting-admin-error',message:'new client pre-step failed',data:{errorMessage:err instanceof Error ? err.message : String(err)},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+                setSaving(false);
+                const msg = err instanceof Error ? err.message : String(err);
+                alert(msg);
+                return;
+            }
         }
         if (!finalClientId) {
             setSaving(false);
@@ -307,6 +347,9 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             alert('Cita agendada con éxito.');
             await loadData();
         } catch (err) {
+            // #region agent log
+            fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-fix-1',hypothesisId:'A2',location:'pages/Appointments.tsx:handleSave:catch',message:'appointment save failed',data:{errorMessage:err instanceof Error ? err.message : String(err)},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             console.error('Error al agendar cita:', err);
             const msg = err instanceof Error ? err.message : String(err);
             alert(msg.includes('permiso') || msg.includes('conexión') || msg.includes('tardó demasiado') ? msg : `No se pudo guardar la cita. ${msg}`);

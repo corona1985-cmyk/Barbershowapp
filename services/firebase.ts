@@ -1,7 +1,9 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
+import { getAuth, signInAnonymously } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import { getAnalytics, isSupported, logEvent } from 'firebase/analytics';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { DataService } from './data';
 const firebaseConfig = {
   apiKey: "AIzaSyDDHc3BVRBU8CE2SRPhIzqK0aLQ_gcgAhA",
   authDomain: "gen-lang-client-0624135070.firebaseapp.com",
@@ -15,9 +17,36 @@ const firebaseConfig = {
 
 const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
 export const db = getDatabase(app);
+export const auth = getAuth(app);
+export const firestore = getFirestore(app);
+
+export const APP_VERSION = '1.0.10';
 
 /** Región donde están desplegadas las Cloud Functions (debe coincidir con functions/src). */
 const FUNCTIONS_REGION = 'us-central1';
+
+/** Garantiza una sesión anónima para servicios que requieren auth, sin tocar el login principal. */
+export async function ensureAnonymousAuth(): Promise<void> {
+  if (auth.currentUser) return;
+  await signInAnonymously(auth);
+}
+
+/** Obtiene Analytics solo si está soportado en este runtime. */
+export async function getAnalyticsIfSupported() {
+  if (!(await isSupported())) return null;
+  return getAnalytics(app);
+}
+
+/** Registra eventos de Analytics de forma segura y silenciosa. */
+export async function logAnalyticsEvent(name: string, params: Record<string, unknown>): Promise<void> {
+  try {
+    const analytics = await getAnalyticsIfSupported();
+    if (!analytics) return;
+    logEvent(analytics, name, params);
+  } catch {
+    // Fallback silencioso: la app no debe depender de Analytics para completar el flujo.
+  }
+}
 
 /** Envía un mensaje de WhatsApp desde la app (requiere Cloud Function + Twilio configurados). */
 export async function sendWhatsAppFromApp(to: string, body: string): Promise<{ success: boolean; sid?: string }> {
@@ -88,6 +117,7 @@ export interface CompleteSelfSignupFreeParams {
 
 /** Completa el autoregistro con plan gratuito: crea usuario y barbería en Realtime Database (sin Cloud Functions). */
 export async function completeSelfSignupFree(params: CompleteSelfSignupFreeParams): Promise<{ success: true }> {
+  const { DataService } = await import('./data');
   return DataService.completeSelfSignupFree(params);
 }
 

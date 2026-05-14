@@ -76,6 +76,33 @@ export interface SystemUser {
     loginAttempts?: number;
     /** active = acceso normal; locked/suspended = bloqueado; pending_payment = registro barbero sin pago completado (no puede iniciar sesión hasta pagar). */
     status?: 'active' | 'locked' | 'suspended' | 'pending_payment';
+    /** Cuenta desactivada por el usuario. Si falta, se considera activa por compatibilidad legacy. */
+    active?: boolean;
+    /** Timestamp de desactivación en ms. */
+    deactivatedAt?: number;
+    /** Estado de cuenta usado por el nuevo flujo de desactivación. */
+    accountStatus?: 'active' | 'deactivated';
+}
+
+export type DeactivationReason =
+    | 'no_longer_need_app'
+    | 'found_another_barbershop'
+    | 'technical_issues'
+    | 'hard_to_use'
+    | 'too_many_notifications'
+    | 'account_issues'
+    | 'privacy_security'
+    | 'other';
+
+export interface AccountDeactivationFeedback {
+    userId: string;
+    username: string;
+    reason: DeactivationReason;
+    customReason?: string | null;
+    improvementFeedback?: string | null;
+    createdAt: unknown;
+    platform: 'web' | 'ios' | 'android' | 'unknown';
+    appVersion: string;
 }
 
 export interface Client {

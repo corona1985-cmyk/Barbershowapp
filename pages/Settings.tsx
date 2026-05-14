@@ -5,8 +5,9 @@ import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as Setti
 import { Capacitor } from '@capacitor/core';
 import { handlePrintQR as handlePrintQRNative } from '../utils/print';
 import { DEFAULT_PUBLIC_APP_URL } from '../config/app';
+import DeactivateAccountSection from '../components/account/DeactivateAccountSection';
 
-type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'barbers' | 'taxes' | 'qr' | 'planes';
+type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'account' | 'barbers' | 'taxes' | 'qr' | 'planes';
 
 const PLANES_INFO: { value: AccountTier; label: string; description: string; price: number }[] = [
   { value: 'gratuito', label: 'Plan Gratuito', description: 'Solo ver y gestionar citas. Hasta 100 citas al mes.', price: 0 },
@@ -17,9 +18,10 @@ const PLANES_INFO: { value: AccountTier; label: string; description: string; pri
 
 interface SettingsProps {
     accountTier?: AccountTier;
+    onAccountDeactivated?: () => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
+const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccountDeactivated }) => {
     const [activeTab, setActiveTab] = useState<SettingsTab>('general');
     const [settings, setSettings] = useState<AppSettings>({ taxRate: 0.16, storeName: '', currencySymbol: '$' });
     const [users, setUsers] = useState<SystemUser[]>([]);
@@ -94,7 +96,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
 
     // Plan Gratuito: en Configuración solo tiene acceso a la pestaña QR
     useEffect(() => {
-        if (accountTier === 'gratuito' && activeTab !== 'qr') setActiveTab('qr');
+        if (accountTier === 'gratuito' && activeTab !== 'qr' && activeTab !== 'account') setActiveTab('qr');
     }, [accountTier, activeTab]);
 
     const handleSaveSettings = async () => {
@@ -369,6 +371,12 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                                 </button>
                             </>
                         )}
+                        <button
+                            onClick={() => setActiveTab('account')}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'account' ? 'bg-red-600 text-white' : 'text-red-600 hover:bg-red-50'}`}
+                        >
+                            <Power size={16} className="mr-2" /> Cuenta
+                        </button>
                     </>
                 )}
                 </div>
@@ -940,6 +948,18 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia' }) => {
                          <div className="flex justify-end">
                              <button className="text-blue-600 text-sm font-medium hover:underline">Descargar PDF</button>
                          </div>
+                    </div>
+                )}
+
+                {activeTab === 'account' && (
+                    <div className="space-y-5">
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">Ajustes de Cuenta</h3>
+                            <p className="mt-2 text-sm text-slate-600">
+                                Aquí puedes desactivar tu cuenta de manera segura. Los datos administrativos e históricos se conservarán según la política de la app.
+                            </p>
+                        </div>
+                        <DeactivateAccountSection onDeactivated={onAccountDeactivated} />
                     </div>
                 )}
 

@@ -30,7 +30,8 @@ import QRScannerView from './components/QRScannerView';
 import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { DataService } from './services/data';
-import { authenticateMasterWithPassword } from './services/firebase';
+import { isAccountDeactivated } from './services/data';
+import { APP_VERSION, authenticateMasterWithPassword } from './services/firebase';
 import { initPlayBilling, isPlayBillingAvailable } from './services/playBilling';
 
 const ViewFallback = () => (
@@ -89,6 +90,13 @@ const App: React.FC = () => {
     const [preferredPosId, setPreferredPosId] = useState<number | null>(null);
     /** Sede actual (para comprobar vencimiento de suscripción). */
     const [currentPos, setCurrentPos] = useState<PointOfSale | null>(null);
+    const accountDeactivatedMessage = 'Tu cuenta ha sido desactivada. Contacta soporte si deseas reactivarla.';
+
+    useEffect(() => {
+        DataService.initialize().catch((err) => {
+            console.error('Error inicializando DataService:', err);
+        });
+    }, []);
 
     const handleSwitchPos = async (posId: number): Promise<AccountTier> => {
         DataService.setActivePosId(posId);
@@ -225,12 +233,27 @@ const App: React.FC = () => {
                     setIsLoadingSession(false);
                     return;
                 }
-                const role = userData.role === 'empleado' ? 'barbero' : userData.role;
+                const freshUser = userData.username ? await DataService.getUserByUsername(userData.username) : null;
+                if (isAccountDeactivated(freshUser)) {
+                    localStorage.removeItem('currentUser');
+                    setIsAuthenticated(false);
+                    setLoginError(accountDeactivatedMessage);
+                    setShowLoginScreen(true);
+                    setIsRegistering(false);
+                    setShowBarberiasGuest(false);
+                    setGuestBookingPos(null);
+                    setUsername('');
+                    setPassword('');
+                    setIsLoadingSession(false);
+                    return;
+                }
+                const resolvedUser = (freshUser ?? userData) as { role?: string; name?: string; username?: string; posId?: number; photoUrl?: string; barberId?: number; clientId?: number };
+                const role = resolvedUser.role === 'empleado' ? 'barbero' : resolvedUser.role;
                 setIsAuthenticated(true);
                 setUserRole(role);
-                setFullName(userData.name);
-                setUsername(userData.username ?? '');
-                setUserPhotoUrl((userData as any).photoUrl ?? '');
+                setFullName(resolvedUser.name ?? '');
+                setUsername(resolvedUser.username ?? '');
+                setUserPhotoUrl((resolvedUser as any).photoUrl ?? '');
 
                 if (role === 'platform_owner') {
                     setCurrentView('master_dashboard');
@@ -283,7 +306,7 @@ const App: React.FC = () => {
                             setCurrentView('client_discovery');
                         }
                     } else {
-                        const assignedPosId = userData.posId;
+                        const assignedPosId = resolvedUser.posId;
                         const tier = assignedPosId ? await handleSwitchPos(assignedPosId) : 'barberia';
                         if (!assignedPosId) setAccountTier('barberia');
                         setCurrentView(tier === 'gratuito' ? 'appointments' : 'dashboard');
@@ -324,6 +347,8 @@ const App: React.FC = () => {
                     setLoginLoading(false);
                     if (e instanceof Error && e.message === 'NO_PASSWORD_SET') {
                         setLoginError('Este usuario no tiene contraseña. El administrador debe asignarla en Admin Usuarios.');
+                    } else if (e instanceof Error && e.message === 'ACCOUNT_DEACTIVATED') {
+                        setLoginError(accountDeactivatedMessage);
                     } else {
                         setLoginError(e instanceof Error ? e.message : 'Error de conexión. Revisa tu internet e intenta de nuevo.');
                     }
@@ -339,6 +364,13 @@ const App: React.FC = () => {
                 if (!user) {
                     setLoginLoading(false);
                     setLoginError('Usuario no encontrado o credenciales inválidas.');
+                    return;
+                }
+
+                if (isAccountDeactivated(user)) {
+                    setLoginLoading(false);
+                    setLoginError(accountDeactivatedMessage);
+                    setPassword('');
                     return;
                 }
 
@@ -416,9 +448,15 @@ const App: React.FC = () => {
                 }
             }
         } catch (err) {
+            // #region agent log
+            fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'investigation-2',hypothesisId:'H3',location:'App.tsx:handleLogin:catch',message:'handleLogin catch reached',data:{error:err instanceof Error ? err.message : 'unknown_login_error',isNative:Capacitor.isNativePlatform(),online:navigator.onLine},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             console.error('Error en login:', err);
             setLoginError('Error de conexión. Revisa tu internet o las reglas de Firebase Realtime Database e intenta de nuevo.');
         } finally {
+            // #region agent log
+            fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'investigation-2',hypothesisId:'H4',location:'App.tsx:handleLogin:finally',message:'handleLogin finally reached',data:{loadingWillBeFalse:true},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             setLoginLoading(false);
         }
     };
@@ -487,20 +525,45 @@ const App: React.FC = () => {
         setCurrentPosId(null);
     };
 
+    const handleAccountDeactivated = () => {
+        handleLogout();
+        setShowLoginScreen(true);
+        setIsRegistering(false);
+        setLoginError(accountDeactivatedMessage);
+    };
+
     const acceptCookies = () => {
         localStorage.setItem('acceptedCookies', 'true');
         setAcceptedCookies(true);
     };
 
     const handleClientPosSwitch = async (id: number) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V1',location:'App.tsx:handleClientPosSwitch:entry',message:'client switch started',data:{posId:id},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         const currentUser = DataService.getCurrentUser();
         if (currentUser?.username && (currentUser.role === 'cliente' || (currentUser as any).role === 'cliente')) {
+            // #region agent log
+            fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V2',location:'App.tsx:handleClientPosSwitch:before-setPreferred',message:'calling setClientPreferredPos',data:{username:currentUser.username},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             await DataService.setClientPreferredPos(currentUser.username, id);
+            // #region agent log
+            fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V2',location:'App.tsx:handleClientPosSwitch:after-setPreferred',message:'setClientPreferredPos resolved',data:{},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             setPreferredPosId(id);
         }
+        // #region agent log
+        fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V3',location:'App.tsx:handleClientPosSwitch:before-handleSwitchPos',message:'calling handleSwitchPos from discovery',data:{posId:id},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         await handleSwitchPos(id);
+        // #region agent log
+        fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V3',location:'App.tsx:handleClientPosSwitch:after-handleSwitchPos',message:'handleSwitchPos resolved from discovery',data:{},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         setCurrentView('appointments');
         window.history.replaceState({}, '', `${window.location.pathname}?ref_pos=${id}`);
+        // #region agent log
+        fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V4',location:'App.tsx:handleClientPosSwitch:done',message:'client switch finished',data:{nextView:'appointments'},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
     };
 
     /** Al volver a Descubrir Barberías, el cliente debe limpiar la barbería seleccionada y la URL. */
@@ -530,12 +593,12 @@ const App: React.FC = () => {
             case 'finance': return <Finance key={k} />;
             case 'reports': return <Reports key={k} accountTier={accountTier} posListForOwner={accountTier === 'multisede' ? posListForOwner : []} />;
             case 'sales_records': return <SalesRecords key={k} accountTier={accountTier} />;
-            case 'settings': return <Settings key={k} {...planProps} />;
+            case 'settings': return <Settings key={k} {...planProps} onAccountDeactivated={handleAccountDeactivated} />;
             case 'calendar': return <CalendarView key={k} />;
             case 'whatsapp_console': return <WhatsAppConsole key={k} />;
             case 'user_admin': return <UserAdmin key={k} />;
             case 'client_discovery': return <ClientDiscovery key={k} onSwitchPos={handleClientPosSwitch} preferredPosId={preferredPosId} onRemoveFavorite={async () => { const u = DataService.getCurrentUser(); if (u?.username) { await DataService.setClientPreferredPos(u.username, null); setPreferredPosId(null); } }} />;
-            case 'client_profile': return <ClientProfile key={k} onChangeView={setCurrentView} onProfileUpdated={() => { const u = DataService.getCurrentUser(); if (u) { setFullName(u.name ?? fullName); setUserPhotoUrl(u.photoUrl ?? ''); } }} />;
+            case 'client_profile': return <ClientProfile key={k} onChangeView={setCurrentView} onProfileUpdated={() => { const u = DataService.getCurrentUser(); if (u) { setFullName(u.name ?? fullName); setUserPhotoUrl(u.photoUrl ?? ''); } }} onAccountDeactivated={handleAccountDeactivated} />;
             case 'qr_scanner': return null;
             default: return <Dashboard key={k} onChangeView={setCurrentView} />;
         }
@@ -696,7 +759,7 @@ const App: React.FC = () => {
                         </div>
                         <h1 className="text-2xl font-bold text-slate-900">BarberShow</h1>
                         <p className="text-slate-500">Sistema Multi-Sede</p>
-                        <p className="text-slate-400 text-xs mt-1">v1.0.10</p>
+                        <p className="text-slate-400 text-xs mt-1">v{APP_VERSION}</p>
                     </div>
 
                     {isRegistering ? (

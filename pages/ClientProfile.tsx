@@ -3,13 +3,15 @@ import { DataService } from '../services/data';
 import { Client } from '../types';
 import { User, Upload, ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
 import { ViewState } from '../types';
+import DeactivateAccountSection from '../components/account/DeactivateAccountSection';
 
 interface ClientProfileProps {
   onChangeView: (view: ViewState) => void;
   onProfileUpdated?: () => void;
+  onAccountDeactivated?: () => void;
 }
 
-const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUpdated }) => {
+const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUpdated, onAccountDeactivated }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -248,6 +250,10 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
             {saving ? <><Loader2 size={20} className="animate-spin" /> Guardando...</> : 'Guardar cambios'}
           </button>
         </form>
+
+        <div className="border-t border-slate-100 bg-slate-50/60 p-6">
+          <DeactivateAccountSection onDeactivated={onAccountDeactivated} compact />
+        </div>
       </div>
     </div>
   );
