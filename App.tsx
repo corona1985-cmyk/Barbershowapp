@@ -1040,8 +1040,8 @@ const App: React.FC = () => {
                 </div>
             </main>
 
-            {/* Cookie Consent Banner */}
-            {!acceptedCookies && (
+            {/* Cookie Consent Banner — solo web; en iOS/Android nativo oculto (requisitos App Store) */}
+            {!acceptedCookies && !Capacitor.isNativePlatform() && (
                 <div className="fixed bottom-0 left-0 right-0 w-full bg-slate-900 text-white p-4 z-50 shadow-2xl animate-in slide-in-from-bottom duration-500 safe-area-bottom">
                     <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div className="flex items-center space-x-3">
