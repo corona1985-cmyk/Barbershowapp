@@ -81,6 +81,49 @@ En `ios/App/App/Info.plist` están definidos:
 - El **App ID** de AdMob para iOS está en `Info.plist` (`GADApplicationIdentifier`). Si creas una app iOS en la consola de AdMob, puedes usar ese ID.
 - La verificación **app-ads.txt** es la misma que en Android: el dominio que uses en la ficha de la app en App Store Connect debe ser el mismo donde esté desplegado `app-ads.txt` (por ejemplo tu sitio en Firebase Hosting). Ver sección 7 de [DEPLOY.md](DEPLOY.md).
 
+## App Tracking Transparency (ATT)
+
+La app usa **Capacitor + React** con `@capacitor-community/admob`. El flujo ATT está en:
+
+| Archivo | Función |
+|---------|---------|
+| `services/att.ts` | Solicita el popup ATT en iOS antes de anuncios |
+| `services/adMob.ts` | ATT → UMP (GDPR) → `AdMob.initialize()` → banner |
+| `components/AdMobBanner.tsx` | Monta anuncios solo cuando `showAds` es true |
+| `ios/App/App/Info.plist` | `NSUserTrackingUsageDescription` (obligatorio) |
+
+**Orden en iOS:** popup ATT → consentimiento UMP (si aplica) → inicializar AdMob → cargar banner.
+
+### Probar ATT en dispositivo real
+
+El simulador a veces no muestra el diálogo ATT de forma fiable. Usa un **iPhone físico** con iOS 14+:
+
+1. **Restablecer permiso ATT** (para ver el popup otra vez):
+   - Ajustes → Privacidad y seguridad → Rastreo → activar **Permitir que las apps soliciten rastreo**.
+   - Borra la app BarberShow del dispositivo o: Ajustes → BarberShow → (si aparece) restablecer permisos.
+   - Alternativa: Ajustes → Privacidad → Rastreo → desactivar BarberShow y reinstalar la app.
+
+2. **Build y ejecutar:**
+   ```bash
+   npm run ios
+   ```
+   En Xcode, elige tu iPhone y pulsa Run.
+
+3. **Cuándo aparece el popup:** al abrir la pantalla de bienvenida (plan gratuito) o al entrar como cliente/plan gratuito, porque ahí `AdMobBanner` tiene `showAds={true}`.
+
+4. **Logs en Xcode:** filtra por `[ATT]` o `[AdMob]` en la consola.
+
+### Errores frecuentes de App Store Review
+
+| Rechazo | Causa | Solución en este proyecto |
+|---------|--------|---------------------------|
+| *permission request not found* | Framework ATT enlazado pero nunca se llama `requestTrackingAuthorization` | `services/att.ts` llama `AdMob.requestTrackingAuthorization()` |
+| Falta descripción de uso | Sin `NSUserTrackingUsageDescription` | Ya en `Info.plist` |
+| Anuncios antes de ATT | `GADMobileAds.start()` antes del popup | `initAdMob()` espera ATT en iOS |
+| Rastreo global desactivado | Usuario tiene desactivado “Permitir que las apps soliciten rastreo” | El popup no aparece; la app sigue con anuncios no personalizados (`npa`) |
+
+**Nota para revisión:** En App Store Connect → Información de la app → Privacidad, declara que la app recopila datos para publicidad y que usas el identificador con fines de seguimiento, coherente con ATT.
+
 ## Comandos útiles
 
 | Comando           | Descripción                          |

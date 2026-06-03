@@ -1,9 +1,19 @@
 /**
- * Servicio AdMob: inicialización y banner solo en plataforma nativa (Android/iOS).
- * Uso exclusivo para plan gratuito; no se ejecuta en web.
+ * Servicio AdMob: ATT → consentimiento UMP (si aplica) → inicialización → banner.
+ * Solo plataforma nativa (Android/iOS). No se ejecuta en web.
+ *
+ * Orden en iOS (requisito Apple + Google):
+ * 1. App Tracking Transparency (popup ATT)
+ * 2. User Messaging Platform / GDPR (si hay formulario disponible)
+ * 3. AdMob.initialize() — inicia GADMobileAds
+ * 4. showBannerAd()
  */
 
 import { Capacitor } from '@capacitor/core';
+import {
+  ensureAppTrackingAuthorization,
+  shouldUseNonPersonalizedAds,
+} from './att';
 
 export const ADMOB_AVAILABLE = Capacitor.isNativePlatform();
 const BANNER_AD_UNIT_ID = 'ca-app-pub-6169287781659857/2859576248';
@@ -22,7 +32,26 @@ let initialized = false;
 let initPromise: Promise<AdMobInitResult> | null = null;
 
 /**
- * Inicializa el SDK de AdMob. Idempotente; solo efectúa la llamada nativa una vez.
+ * Consentimiento de anuncios (UMP) para usuarios en la UE/EEE.
+ * No sustituye ATT; se ejecuta después del popup ATT en iOS.
+ */
+async function ensureAdMobUserConsent(): Promise<void> {
+  try {
+    const { AdMob } = await import('@capacitor-community/admob');
+    const info = await AdMob.requestConsentInfo();
+    if (info.isConsentFormAvailable) {
+      console.log('[AdMob] Mostrando formulario de consentimiento UMP...');
+      await AdMob.showConsentForm();
+    }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.warn('[AdMob] Consentimiento UMP omitido o no disponible:', message);
+  }
+}
+
+/**
+ * Inicializa el SDK de AdMob. Idempotente.
+ * En iOS: ATT y UMP se completan antes de GADMobileAds.start().
  */
 export async function initAdMob(): Promise<AdMobInitResult> {
   if (!ADMOB_AVAILABLE || Capacitor.getPlatform() === 'web') {
@@ -40,7 +69,12 @@ export async function initAdMob(): Promise<AdMobInitResult> {
 
   initPromise = (async () => {
     try {
-      console.log('[AdMob] initializing...');
+      if (Capacitor.getPlatform() === 'ios') {
+        await ensureAppTrackingAuthorization();
+        await ensureAdMobUserConsent();
+      }
+
+      console.log('[AdMob] initializing SDK...');
       const { AdMob } = await import('@capacitor-community/admob');
       await AdMob.initialize({
         initializeForTesting: false,
@@ -63,7 +97,7 @@ export async function initAdMob(): Promise<AdMobInitResult> {
 
 /**
  * Muestra el banner en la parte inferior. Solo en plataforma nativa.
- * Debe llamarse después de initAdMob().
+ * Debe llamarse después de initAdMob() (que ya resolvió ATT en iOS).
  */
 export async function showBannerAd(): Promise<AdMobBannerResult> {
   if (!ADMOB_AVAILABLE || Capacitor.getPlatform() === 'web') {
@@ -72,10 +106,19 @@ export async function showBannerAd(): Promise<AdMobBannerResult> {
   }
 
   try {
+    const init = await initAdMob();
+    if (!init.ok) {
+      return { ok: false, error: init.error ?? 'AdMob no inicializado' };
+    }
+
     const { AdMob, BannerAdSize, BannerAdPosition } = await import('@capacitor-community/admob');
 
-    // Evita banners duplicados/superpuestos al re-renderizar.
     await AdMob.removeBanner().catch(() => {});
+
+    const npa = shouldUseNonPersonalizedAds();
+    if (npa) {
+      console.log('[AdMob] Anuncios no personalizados (usuario denegó ATT)');
+    }
 
     await AdMob.showBanner({
       adId: BANNER_AD_UNIT_ID,
@@ -83,6 +126,7 @@ export async function showBannerAd(): Promise<AdMobBannerResult> {
       position: BannerAdPosition.BOTTOM_CENTER,
       margin: 0,
       isTesting: false,
+      npa,
     });
     console.log('[AdMob] banner shown:', BANNER_AD_UNIT_ID);
     return { ok: true };
@@ -121,7 +165,6 @@ export async function removeBannerAd(): Promise<void> {
   }
 }
 
-// Compatibilidad con nombres previos usados en la app.
 export const initializeAdMob = initAdMob;
 export const showAdMobBanner = showBannerAd;
 export const removeAdMobBanner = removeBannerAd;

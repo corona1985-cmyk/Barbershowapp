@@ -7,7 +7,7 @@ interface UseDeactivateAccountOptions {
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
-  return 'No se pudo desactivar la cuenta. Intenta de nuevo.';
+  return 'No se pudo eliminar la cuenta. Intenta de nuevo.';
 }
 
 export function useDeactivateAccount(options?: UseDeactivateAccountOptions) {

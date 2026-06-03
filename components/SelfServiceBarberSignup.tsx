@@ -61,7 +61,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
     setCheckingUser(true);
     setUsernameExists(null);
     try {
-      const existing = await DataService.findUserByUsername(u);
+      const existing = await DataService.isUsernameTaken(u);
       setUsernameExists(!!existing);
     } catch {
       setUsernameExists(null);

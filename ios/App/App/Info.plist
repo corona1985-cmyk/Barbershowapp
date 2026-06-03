@@ -27,7 +27,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>BarberShow usa la cámara para escanear códigos QR de barberías y agendar citas.</string>
 	<key>NSUserTrackingUsageDescription</key>
-	<string>Este identificador se usa para mostrarte anuncios más relevantes en la app.</string>
+	<string>BarberShow usa este identificador para mostrarte anuncios más relevantes y medir el rendimiento de los anuncios. Puedes cambiar esta opción en Ajustes en cualquier momento.</string>
 	<key>SKAdNetworkItems</key>
 	<array>
 		<dict>

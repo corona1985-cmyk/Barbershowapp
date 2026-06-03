@@ -956,7 +956,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
                         <div>
                             <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">Ajustes de Cuenta</h3>
                             <p className="mt-2 text-sm text-slate-600">
-                                Aquí puedes desactivar tu cuenta de manera segura. Los datos administrativos e históricos se conservarán según la política de la app.
+                                Aquí puedes eliminar tu cuenta de manera segura. Los datos administrativos e históricos se conservarán según la política de la app.
                             </p>
                         </div>
                         <DeactivateAccountSection onDeactivated={onAccountDeactivated} />

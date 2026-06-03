@@ -11,6 +11,8 @@ interface AdMobBannerProps {
  * - La app corre en plataforma nativa (Android/iOS) y
  * - showAds es true (plan gratuito, rol cliente, o pantalla de bienvenida).
  * Barberos con planes de pago (solo, barberia, multisede) no ven anuncios.
+ *
+ * En iOS, initAdMob() muestra primero el popup ATT y solo después inicializa AdMob.
  */
 const AdMobBanner: React.FC<AdMobBannerProps> = ({ showAds }) => {
   const bannerShown = useRef(false);

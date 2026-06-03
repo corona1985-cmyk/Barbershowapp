@@ -90,7 +90,7 @@ const App: React.FC = () => {
     const [preferredPosId, setPreferredPosId] = useState<number | null>(null);
     /** Sede actual (para comprobar vencimiento de suscripción). */
     const [currentPos, setCurrentPos] = useState<PointOfSale | null>(null);
-    const accountDeactivatedMessage = 'Tu cuenta ha sido desactivada. Contacta soporte si deseas reactivarla.';
+    const accountDeactivatedMessage = 'Tu cuenta ha sido eliminada. Contacta soporte si deseas recuperarla.';
 
     useEffect(() => {
         DataService.initialize().catch((err) => {
@@ -447,17 +447,9 @@ const App: React.FC = () => {
                     localStorage.removeItem('currentUser');
                 }
             }
-        } catch (err) {
-            // #region agent log
-            fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'investigation-2',hypothesisId:'H3',location:'App.tsx:handleLogin:catch',message:'handleLogin catch reached',data:{error:err instanceof Error ? err.message : 'unknown_login_error',isNative:Capacitor.isNativePlatform(),online:navigator.onLine},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
-            console.error('Error en login:', err);
+        } catch (err) {            console.error('Error en login:', err);
             setLoginError('Error de conexión. Revisa tu internet o las reglas de Firebase Realtime Database e intenta de nuevo.');
-        } finally {
-            // #region agent log
-            fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'investigation-2',hypothesisId:'H4',location:'App.tsx:handleLogin:finally',message:'handleLogin finally reached',data:{loadingWillBeFalse:true},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
-            setLoginLoading(false);
+        } finally {            setLoginLoading(false);
         }
     };
 
@@ -476,8 +468,7 @@ const App: React.FC = () => {
             return;
         }
         try {
-            const existing = await DataService.findUserByUsername(userTrim);
-            if (existing) {
+            if (await DataService.isUsernameTaken(userTrim)) {
                 setLoginError('El usuario ya existe. Elige otro o inicia sesión.');
                 return;
             }
@@ -537,34 +528,10 @@ const App: React.FC = () => {
         setAcceptedCookies(true);
     };
 
-    const handleClientPosSwitch = async (id: number) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V1',location:'App.tsx:handleClientPosSwitch:entry',message:'client switch started',data:{posId:id},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        const currentUser = DataService.getCurrentUser();
-        if (currentUser?.username && (currentUser.role === 'cliente' || (currentUser as any).role === 'cliente')) {
-            // #region agent log
-            fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V2',location:'App.tsx:handleClientPosSwitch:before-setPreferred',message:'calling setClientPreferredPos',data:{username:currentUser.username},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
-            await DataService.setClientPreferredPos(currentUser.username, id);
-            // #region agent log
-            fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V2',location:'App.tsx:handleClientPosSwitch:after-setPreferred',message:'setClientPreferredPos resolved',data:{},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
-            setPreferredPosId(id);
-        }
-        // #region agent log
-        fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V3',location:'App.tsx:handleClientPosSwitch:before-handleSwitchPos',message:'calling handleSwitchPos from discovery',data:{posId:id},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        await handleSwitchPos(id);
-        // #region agent log
-        fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V3',location:'App.tsx:handleClientPosSwitch:after-handleSwitchPos',message:'handleSwitchPos resolved from discovery',data:{},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        setCurrentView('appointments');
-        window.history.replaceState({}, '', `${window.location.pathname}?ref_pos=${id}`);
-        // #region agent log
-        fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V4',location:'App.tsx:handleClientPosSwitch:done',message:'client switch finished',data:{nextView:'appointments'},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-    };
+    const handleClientPosSwitch = async (id: number) => {        const currentUser = DataService.getCurrentUser();
+        if (currentUser?.username && (currentUser.role === 'cliente' || (currentUser as any).role === 'cliente')) {            await DataService.setClientPreferredPos(currentUser.username, id);            setPreferredPosId(id);
+        }        await handleSwitchPos(id);        setCurrentView('appointments');
+        window.history.replaceState({}, '', `${window.location.pathname}?ref_pos=${id}`);    };
 
     /** Al volver a Descubrir Barberías, el cliente debe limpiar la barbería seleccionada y la URL. */
     const handleChangeView = (view: ViewState) => {

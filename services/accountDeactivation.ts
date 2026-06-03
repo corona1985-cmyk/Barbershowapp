@@ -62,7 +62,7 @@ export async function deactivateCurrentAccount(payload: DeactivateAccountPayload
   const current = DataService.getCurrentUser();
   if (!current?.username) throw new Error('No hay sesión iniciada.');
   if (current.role === 'platform_owner' || current.role === 'superadmin') {
-    throw new Error('Esta cuenta no puede desactivarse desde la app.');
+    throw new Error('Esta cuenta no puede eliminarse desde la app.');
   }
 
   const username = current.username.trim().toLowerCase();
@@ -71,10 +71,10 @@ export async function deactivateCurrentAccount(payload: DeactivateAccountPayload
 
   const freshUser = snap.val() as SystemUser;
   if (isAccountDeactivated(freshUser)) {
-    throw new Error('Tu cuenta ya está desactivada.');
+    throw new Error('Tu cuenta ya fue eliminada.');
   }
   if (freshUser.role === 'platform_owner' || freshUser.role === 'superadmin') {
-    throw new Error('Esta cuenta no puede desactivarse desde la app.');
+    throw new Error('Esta cuenta no puede eliminarse desde la app.');
   }
   if (!freshUser.password) {
     throw new Error('Este usuario no tiene contraseña configurada.');

@@ -38,18 +38,91 @@ function withTimeout<T>(promise: Promise<T>, ms: number = FIREBASE_TIMEOUT_MS, o
   ]);
 }
 
+/** Caché breve de claves en /users para búsqueda case-insensitive (ej. Yendrick vs yendrick). */
+let usernameKeysCache: { keys: string[]; ts: number } | null = null;
+const USERNAME_KEYS_TTL_MS = 30_000;
+
+async function listUserKeys(): Promise<string[]> {
+  if (usernameKeysCache && Date.now() - usernameKeysCache.ts < USERNAME_KEYS_TTL_MS) {
+    return usernameKeysCache.keys;
+  }
+  const response = await withTimeout(
+    fetch(`${RTDB_BASE_URL}/${ROOT}/users.json?shallow=true`),
+    FIREBASE_TIMEOUT_MS,
+    'listUserKeys'
+  );
+  if (!response.ok) {
+    throw new Error(`listUserKeys HTTP ${response.status}`);
+  }
+  const data = (await response.json()) as Record<string, unknown> | null;
+  const keys = data ? Object.keys(data) : [];
+  usernameKeysCache = { keys, ts: Date.now() };
+  return keys;
+}
+
+function invalidateUsernameKeysCache(): void {
+  usernameKeysCache = null;
+}
+
+/** Resuelve la clave real en RTDB ignorando mayúsculas/minúsculas. */
+async function resolveUsernameKey(username: string): Promise<string | null> {
+  const searchLower = String(username || '').trim().toLowerCase();
+  if (!searchLower) return null;
+  const keys = await listUserKeys();
+  return keys.find((k) => k.toLowerCase() === searchLower) ?? null;
+}
+
+/** Evita cargar en memoria fotos base64 enormes durante el login (ralentizan o agotan el timeout). */
+function withoutOversizedProfileBlob(user: SystemUser): SystemUser {
+  if (typeof user.photoUrl === 'string' && user.photoUrl.length > 100_000) {
+    console.warn(
+      `[Auth] photoUrl muy grande en usuario "${user.username}" (${Math.round(user.photoUrl.length / 1024)} KB). ` +
+        'Omitida en sesión; sube la foto de nuevo desde Configuración para guardarla como URL.'
+    );
+    const { photoUrl: _omit, ...rest } = user;
+    return rest as SystemUser;
+  }
+  return user;
+}
+
+/** Carga solo campos necesarios para login (evita descargar photoUrl base64 de varios MB). */
+async function loadUserForAuth(dbKey: string): Promise<SystemUser | null> {
+  const base = `${ROOT}/users/${dbKey}`;
+  const [password, role, status, name, posId, permissions, active, accountStatus, barberId, clientId] =
+    await Promise.all([
+      readNode<string>(`${base}/password`, 'authPassword'),
+      readNode<string>(`${base}/role`, 'authRole'),
+      readNode<string>(`${base}/status`, 'authStatus'),
+      readNode<string>(`${base}/name`, 'authName'),
+      readNode<number | null>(`${base}/posId`, 'authPosId'),
+      readNode<SystemUser['permissions']>(`${base}/permissions`, 'authPermissions'),
+      readNode<boolean>(`${base}/active`, 'authActive'),
+      readNode<string>(`${base}/accountStatus`, 'authAccountStatus'),
+      readNode<number>(`${base}/barberId`, 'authBarberId'),
+      readNode<number>(`${base}/clientId`, 'authClientId'),
+    ]);
+  if (role == null && password == null && name == null) return null;
+  return {
+    username: dbKey,
+    password: password ?? '',
+    role: (role ?? 'cliente') as SystemUser['role'],
+    name: name ?? dbKey,
+    status: status ?? 'active',
+    posId: posId ?? undefined,
+    permissions,
+    active,
+    accountStatus,
+    barberId,
+    clientId,
+  } as SystemUser;
+}
+
 async function nativeRtdbGet<T>(path: string, operation: string): Promise<T | null> {
-  // #region agent log
-  fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'barberias-debug-1',hypothesisId:'B1',location:'services/data.ts:nativeRtdbGet:before-fetch',message:'nativeRtdbGet starting',data:{operation,path},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   const response = await withTimeout(
     fetch(`${RTDB_BASE_URL}/${path}.json`, { method: 'GET' }),
     FIREBASE_TIMEOUT_MS,
     `${operation}.nativeFetch`
   );
-  // #region agent log
-  fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'barberias-debug-1',hypothesisId:'B1',location:'services/data.ts:nativeRtdbGet:after-fetch',message:'nativeRtdbGet response',data:{operation,status:response.status,ok:response.ok},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!response.ok) {
     throw new Error(`${operation} HTTP ${response.status}`);
   }
@@ -57,9 +130,6 @@ async function nativeRtdbGet<T>(path: string, operation: string): Promise<T | nu
 }
 
 async function nativeRtdbSet(path: string, value: unknown, operation: string): Promise<void> {
-  // #region agent log
-  fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-fix-1',hypothesisId:'V2',location:'services/data.ts:nativeRtdbSet:before-fetch',message:'nativeRtdbSet starting',data:{operation,path},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   const response = await withTimeout(
     fetch(`${RTDB_BASE_URL}/${path}.json`, {
       method: 'PUT',
@@ -69,9 +139,6 @@ async function nativeRtdbSet(path: string, value: unknown, operation: string): P
     FIREBASE_TIMEOUT_MS,
     `${operation}.nativeSet`
   );
-  // #region agent log
-  fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-fix-1',hypothesisId:'V2',location:'services/data.ts:nativeRtdbSet:after-fetch',message:'nativeRtdbSet response',data:{operation,status:response.status,ok:response.ok},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!response.ok) {
     throw new Error(`${operation} HTTP ${response.status}`);
   }
@@ -217,6 +284,7 @@ export const DataService = {
     }
     if (Object.keys(updates).length > 0) {
       await update(ref(db, ROOT + '/users'), updates);
+      invalidateUsernameKeysCache();
     }
   },
 
@@ -227,11 +295,7 @@ export const DataService = {
     const key = 'pointsOfSale';
     const cached = cacheGet<PointOfSale[]>(key);
     if (cached) return cached;
-    const isNative = Capacitor.isNativePlatform();
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'post-fix-2',hypothesisId:'H2',location:'services/data.ts:getPointsOfSale:mode',message:'getPointsOfSale source selected',data:{isNative},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    let raw: Record<string, PointOfSale> | null = null;
+    const isNative = Capacitor.isNativePlatform();    let raw: Record<string, PointOfSale> | null = null;
     try {
       raw = isNative
         ? await nativeRtdbGet<Record<string, PointOfSale> | null>(`${ROOT}/pointsOfSale`, 'getPointsOfSale')
@@ -240,17 +304,9 @@ export const DataService = {
             FIREBASE_TIMEOUT_MS,
             'getPointsOfSale'
           )).val();
-    } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'barberias-debug-1',hypothesisId:'B2',location:'services/data.ts:getPointsOfSale:error',message:'getPointsOfSale failed',data:{error:err instanceof Error ? err.message : 'unknown_getPointsOfSale_error',isNative},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      throw err;
+    } catch (err) {      throw err;
     }
-    const arr = snapshotToArray<PointOfSale>(raw);
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'barberias-debug-1',hypothesisId:'B3',location:'services/data.ts:getPointsOfSale:after-map',message:'getPointsOfSale mapped',data:{count:arr.length,hasRaw:raw != null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    const out = arr.map((p) => ({ ...p, id: Number(p.id), plan: p.plan || 'basic', tier: p.tier ?? 'barberia' }));
+    const arr = snapshotToArray<PointOfSale>(raw);    const out = arr.map((p) => ({ ...p, id: Number(p.id), plan: p.plan || 'basic', tier: p.tier ?? 'barberia' }));
     cacheSet(key, out);
     return out;
   },
@@ -306,67 +362,26 @@ export const DataService = {
 
   /** Busca usuario por username sin modificar datos (para registro/comprobaciones). */
   getUserByUsername: async (username: string): Promise<SystemUser | null> => {
-    const searchUsername = String(username || '').trim().toLowerCase();
-    if (!searchUsername) return null;
-    const user = await readNode<SystemUser>(`${ROOT}/users/${searchUsername}`, 'getUserByUsername');
+    const dbKey = await resolveUsernameKey(username);
+    if (!dbKey) return null;
+    const user = await readNode<SystemUser>(`${ROOT}/users/${dbKey}`, 'getUserByUsername');
     if (!user) return null;
-    return user;
+    return { ...user, username: user.username || dbKey };
   },
 
-  /** Busca usuario por username sin modificar datos (para registro/comprobaciones). */
+  /** true si el username ya existe (insensible a mayúsculas). */
+  isUsernameTaken: async (username: string): Promise<boolean> => {
+    return (await resolveUsernameKey(username)) != null;
+  },
+
+  /** Busca usuario por username (insensible a mayúsculas) sin modificar datos. */
   findUserByUsername: async (username: string): Promise<SystemUser | null> => {
-    const searchUsername = String(username || '').trim().toLowerCase();
-    if (!searchUsername) return null;
-    let restProbe: { ok: boolean; status: number | null; error: string | null } = { ok: false, status: null, error: null };
-    try {
-      const probeResponse = await withTimeout(
-        fetch(`${RTDB_BASE_URL}/${ROOT}/users/${encodeURIComponent(searchUsername)}.json`, { method: 'GET' }),
-        6000,
-        'findUserByUsername.restProbe'
-      );
-      restProbe = { ok: probeResponse.ok, status: probeResponse.status, error: null };
-    } catch (probeErr) {
-      restProbe = {
-        ok: false,
-        status: null,
-        error: probeErr instanceof Error ? probeErr.message : 'unknown_probe_error',
-      };
-    }
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'investigation-2',hypothesisId:'H1',location:'services/data.ts:findUserByUsername:rest-probe',message:'RTDB REST probe result',data:{ok:restProbe.ok,status:restProbe.status,error:restProbe.error},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'investigation-2',hypothesisId:'H2',location:'services/data.ts:findUserByUsername:before-sdk-get',message:'RTDB SDK get starting',data:{restProbeOk:restProbe.ok,restProbeStatus:restProbe.status},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    const isNative = Capacitor.isNativePlatform();
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'post-fix-2',hypothesisId:'H2',location:'services/data.ts:findUserByUsername:source-selected',message:'findUserByUsername source selected',data:{isNative},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    let user: SystemUser | null = null;
-    if (isNative) {
-      user = await nativeRtdbGet<SystemUser | null>(`${ROOT}/users/${searchUsername}`, 'findUserByUsername');
-    } else {
-      let snap;
-      try {
-        snap = await withTimeout(
-          get(ref(db, ROOT + '/users/' + searchUsername)),
-          FIREBASE_TIMEOUT_MS,
-          'findUserByUsername'
-        );
-      } catch (sdkErr) {
-        // #region agent log
-        fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'investigation-2',hypothesisId:'H2',location:'services/data.ts:findUserByUsername:sdk-get-error',message:'RTDB SDK get failed',data:{error:sdkErr instanceof Error ? sdkErr.message : 'unknown_sdk_error'},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        throw sdkErr;
-      }
-      // #region agent log
-      fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'investigation-2',hypothesisId:'H2',location:'services/data.ts:findUserByUsername:after-sdk-get',message:'RTDB SDK get completed',data:{exists:snap.exists()},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      user = snap.exists() ? (snap.val() as SystemUser) : null;
-    }
+    const dbKey = await resolveUsernameKey(username);
+    if (!dbKey) return null;
+    const user = await readNode<SystemUser>(`${ROOT}/users/${dbKey}`, 'findUserByUsername');
     if (!user) return null;
-    if (!user || user.status === 'suspended' || user.status === 'locked') return null;
-    return user;
+    if (user.status === 'suspended' || user.status === 'locked') return null;
+    return withoutOversizedProfileBlob({ ...user, username: user.username || dbKey });
   },
 
   /** Completa el autoregistro con plan gratuito sin Cloud Functions: crea usuario admin + POS en Realtime Database. */
@@ -395,8 +410,9 @@ export const DataService = {
     if (!barbershopName) throw new Error('El nombre de la barbería es obligatorio.');
     if (!address) throw new Error('La dirección es obligatoria.');
 
-    const existing = await DataService.findUserByUsername(username);
-    if (existing) throw new Error('Ese nombre de usuario ya existe. Elige otro.');
+    if (await DataService.isUsernameTaken(username)) {
+      throw new Error('Ese nombre de usuario ya existe. Elige otro.');
+    }
 
     const posId = generateUniqueId();
     const hashedPassword = await hashPassword(password);
@@ -432,8 +448,11 @@ export const DataService = {
 
   /** Autentica con usuario y contraseña. Verifica hash; no devuelve la contraseña. Lanza Error('NO_PASSWORD_SET') si el usuario no tiene contraseña asignada. */
   authenticate: async (username: string, password: string): Promise<SystemUser | null> => {
-    const user = await DataService.findUserByUsername(username);
+    const dbKey = await resolveUsernameKey(username);
+    if (!dbKey) return null;
+    const user = await loadUserForAuth(dbKey);
     if (!user) return null;
+    if (user.status === 'suspended' || user.status === 'locked') return null;
     if (isAccountDeactivated(user)) {
       throw new Error('ACCOUNT_DEACTIVATED');
     }
@@ -445,9 +464,11 @@ export const DataService = {
     if (!valid) return null;
     const updated = { ...user, lastLogin: new Date().toISOString(), loginAttempts: 0 };
     delete (updated as Record<string, unknown>).password;
-    // Escribir lastLogin y audit en segundo plano para no bloquear la respuesta al usuario
-    set(ref(db, ROOT + '/users/' + user.username), { ...user, lastLogin: updated.lastLogin, loginAttempts: 0 }).catch(() => {});
-    DataService.logAuditAction('login', username, 'User Logged In', user.posId ?? undefined).catch(() => {});
+    // Escribir lastLogin sin reenviar blobs enormes (ej. photoUrl base64 en el nodo de usuario)
+    const loginPatch: Record<string, unknown> = { lastLogin: updated.lastLogin, loginAttempts: 0 };
+    if (typeof user.password === 'string') loginPatch.password = user.password;
+    update(ref(db, ROOT + '/users/' + dbKey), loginPatch).catch(() => {});
+    DataService.logAuditAction('login', dbKey, 'User Logged In', user.posId ?? undefined).catch(() => {});
     return updated as SystemUser;
   },
 
@@ -545,12 +566,14 @@ export const DataService = {
       toWrite.password = await hashPassword(String(toWrite.password));
     }
     await set(ref(db, ROOT + '/users/' + user.username), toWrite);
+    invalidateUsernameKeysCache();
     await DataService.logAuditAction(isUpdate ? 'update_user' : 'create_user', 'admin', `User: ${user.username}`, user.posId ?? undefined);
   },
 
   deleteUser: async (username: string): Promise<void> => {
     requireRole(['superadmin']);
     await remove(ref(db, ROOT + '/users/' + username));
+    invalidateUsernameKeysCache();
     await DataService.logAuditAction('delete_user', 'admin', `Deleted user: ${username}`);
   },
 
@@ -569,11 +592,7 @@ export const DataService = {
     return val.preferredPosId;
   },
 
-  setClientPreferredPos: async (username: string, posId: number | null): Promise<void> => {
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V2',location:'services/data.ts:setClientPreferredPos:entry',message:'setClientPreferredPos started',data:{username,hasPosId:posId != null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    const path = `${ROOT}/clientPreferences/${encodeURIComponent(username)}`;
+  setClientPreferredPos: async (username: string, posId: number | null): Promise<void> => {    const path = `${ROOT}/clientPreferences/${encodeURIComponent(username)}`;
     if (Capacitor.isNativePlatform()) {
       await nativeRtdbSet(path, { preferredPosId: posId }, 'setClientPreferredPos');
     } else {
@@ -582,11 +601,7 @@ export const DataService = {
         FIREBASE_TIMEOUT_MS,
         'setClientPreferredPos'
       );
-    }
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'visit-barberia-debug-1',hypothesisId:'V2',location:'services/data.ts:setClientPreferredPos:after-set',message:'setClientPreferredPos completed',data:{},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  },
+    }  },
 
   getSettings: async (): Promise<AppSettings> => {
     if (ACTIVE_POS_ID == null) return DEFAULT_SETTINGS;
@@ -729,11 +744,7 @@ export const DataService = {
   addClient: async (client: Omit<Client, 'id' | 'posId'>): Promise<Client> => {
     if (DataService.getCurrentUserRole() !== '') requireRole(['admin', 'superadmin', 'barbero', 'cliente']);
     const effectivePosId = ACTIVE_POS_ID ?? 1;
-    const newClient = { ...client, id: generateUniqueId(), posId: effectivePosId } as Client;
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-debug-2',hypothesisId:'A3',location:'services/data.ts:addClient:entry',message:'addClient started',data:{isNative:Capacitor.isNativePlatform(),clientId:newClient.id,posId:effectivePosId},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    if (Capacitor.isNativePlatform()) {
+    const newClient = { ...client, id: generateUniqueId(), posId: effectivePosId } as Client;    if (Capacitor.isNativePlatform()) {
       await nativeRtdbSet(`${ROOT}/clients/${newClient.id}`, newClient, 'addClient');
     } else {
       await withTimeout(
@@ -741,11 +752,7 @@ export const DataService = {
         FIREBASE_TIMEOUT_MS,
         'addClient'
       );
-    }
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-debug-2',hypothesisId:'A3',location:'services/data.ts:addClient:after-write',message:'addClient persisted',data:{clientId:newClient.id},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    cacheInvalidate('clients');
+    }    cacheInvalidate('clients');
     DataService.logAuditAction('create_client', 'system', `Registered client: ${client.nombre}`, effectivePosId).catch(() => {});
     return newClient;
   },
@@ -1148,11 +1155,7 @@ export const DataService = {
   addAppointment: async (appointment: Omit<Appointment, 'id'>): Promise<Appointment> => {
     const id = generateUniqueId();
     const apt: Appointment = { ...appointment, id };
-    const toWrite = JSON.parse(JSON.stringify(apt)) as Record<string, unknown>;
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-fix-1',hypothesisId:'A1',location:'services/data.ts:addAppointment:entry',message:'addAppointment started',data:{isNative:Capacitor.isNativePlatform(),appointmentId:id,posId:apt.posId},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    if (Capacitor.isNativePlatform()) {
+    const toWrite = JSON.parse(JSON.stringify(apt)) as Record<string, unknown>;    if (Capacitor.isNativePlatform()) {
       await nativeRtdbSet(`${ROOT}/appointments/${id}`, toWrite, 'addAppointment');
     } else {
       await withTimeout(
@@ -1160,11 +1163,7 @@ export const DataService = {
         FIREBASE_TIMEOUT_MS,
         'addAppointment'
       );
-    }
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/9dbbb913-0c2c-4e63-b60e-2f7712a807fe',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'583c5b'},body:JSON.stringify({sessionId:'583c5b',runId:'appointment-fix-1',hypothesisId:'A1',location:'services/data.ts:addAppointment:after-write',message:'addAppointment persisted',data:{appointmentId:id},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    cacheInvalidate('appointments');
+    }    cacheInvalidate('appointments');
     cacheInvalidate('clientsActivity');
     return apt;
   },

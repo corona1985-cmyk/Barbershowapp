@@ -26,15 +26,15 @@ const DeactivateAccountSection: React.FC<DeactivateAccountSectionProps> = ({ onD
             <ShieldAlert size={20} />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="text-base font-bold text-slate-900">Desactivar Cuenta</h3>
+            <h3 className="text-base font-bold text-slate-900">Eliminar cuenta</h3>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              Puedes desactivar tu cuenta desde aquí. Se conservarán los datos administrativos y el historial relacionado con citas o pagos.
+              Puedes eliminar tu cuenta desde aquí. Se conservarán los datos administrativos y el historial relacionado con citas o pagos.
             </p>
 
             {!canDeactivate && (
               <div className="mt-3 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                 <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                <span>Esta cuenta no puede desactivarse desde la app.</span>
+                <span>Esta cuenta no puede eliminarse desde la app.</span>
               </div>
             )}
 
@@ -45,7 +45,7 @@ const DeactivateAccountSection: React.FC<DeactivateAccountSectionProps> = ({ onD
                 disabled={!canDeactivate}
                 className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <span>Desactivar Cuenta</span>
+                <span>Eliminar cuenta</span>
               </button>
               <p className="text-xs text-slate-500">
                 {currentUser.username}

@@ -51,7 +51,7 @@ const DeactivateAccountModal: React.FC<DeactivateAccountModalProps> = ({ isOpen,
 
   useEffect(() => {
     if (!success) return;
-    setLocalNotice({ type: 'success', text: 'Tu cuenta ha sido desactivada correctamente.' });
+    setLocalNotice({ type: 'success', text: 'Tu cuenta ha sido eliminada correctamente.' });
   }, [success]);
 
   useEffect(() => {
@@ -97,7 +97,7 @@ const DeactivateAccountModal: React.FC<DeactivateAccountModalProps> = ({ isOpen,
             </div>
             <div>
               <h2 id="deactivate-account-title" className="text-lg font-bold text-slate-900">
-                ¿Deseas desactivar tu cuenta?
+                ¿Deseas eliminar tu cuenta?
               </h2>
               <p className="text-sm text-slate-500">
                 {step === 1
@@ -248,7 +248,7 @@ const DeactivateAccountModal: React.FC<DeactivateAccountModalProps> = ({ isOpen,
                   className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {loading ? <Loader2 size={16} className="animate-spin" /> : null}
-                  Confirmar desactivación
+                  Confirmar eliminación
                 </button>
               </div>
             </div>
