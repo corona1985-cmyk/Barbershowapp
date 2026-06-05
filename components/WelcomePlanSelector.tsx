@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AccountTier } from '../types';
-import { Scissors, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle, CreditCard, X, Mail } from 'lucide-react';
+import { Scissors, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle, CreditCard, X, Mail, UserPlus } from 'lucide-react';
 import { DataService } from '../services/data';
 import { createPlanCheckout, activatePlanFromPlay, type PlanCheckoutProvider } from '../services/firebase';
 import SelfServiceBarberSignup from './SelfServiceBarberSignup';
@@ -13,6 +13,8 @@ import {
     getActivePlayTransactions,
 } from '../services/playBilling';
 import { CONTACT, TIER_OPTIONS } from '../constants/plans';
+import { SUPPORTED_COUNTRIES } from '../constants/regions';
+import { formatSignupAddress, getBarriosForCity, getCitiesForCountry } from '../utils/posLocation';
 
 type Step = 'who' | 'barber_plan' | 'barber_registered' | 'barber_contact' | 'client_registered' | 'client_new';
 type UserType = 'barbero' | 'cliente';
@@ -21,13 +23,15 @@ interface WelcomePlanSelectorProps {
     onGoToLogin: () => void;
     /** Cliente nuevo: ir al listado de barberías para elegir una y registrarse o agendar. */
     onGoToBarberias?: () => void;
+    /** Abre el formulario de registro de cliente (sin elegir barbería). */
+    onGoToClientRegister?: () => void;
     /** Cuando el barbero completa el autoregistro (plan gratuito), hacer login con estas credenciales. */
     onBarberSignupSuccess?: (username: string, password: string) => void;
     /** Volver a la landing page de marketing. */
     onBackToLanding?: () => void;
 }
 
-const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, onGoToBarberias, onBarberSignupSuccess, onBackToLanding }) => {
+const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, onGoToBarberias, onGoToClientRegister, onBarberSignupSuccess, onBackToLanding }) => {
     const [step, setStep] = useState<Step>('who');
     const [userType, setUserType] = useState<UserType | null>(null);
     const [showSelfSignup, setShowSelfSignup] = useState(false);
@@ -36,7 +40,10 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
     /** Formulario solicitud de acceso (estilo ICC Tech) */
     const [formNombre, setFormNombre] = useState('');
     const [formNegocio, setFormNegocio] = useState('');
-    const [formDireccion, setFormDireccion] = useState('');
+    const [formPais, setFormPais] = useState('');
+    const [formCiudad, setFormCiudad] = useState('');
+    const [formBarrio, setFormBarrio] = useState('');
+    const [formCalle, setFormCalle] = useState('');
     const [formEmail, setFormEmail] = useState('');
     const [formTelefono, setFormTelefono] = useState('');
     const [formMotivo, setFormMotivo] = useState('');
@@ -120,7 +127,10 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
             '',
             `Nombre: ${formNombre}`,
             `Negocio/Barbería: ${formNegocio}`,
-            `Dirección: ${formDireccion || '(No indicada)'}`,
+            `País: ${formPais || '(No indicado)'}`,
+            `Ciudad: ${formCiudad || '(No indicada)'}`,
+            `Barrio/Zona: ${formBarrio || '(No indicado)'}`,
+            `Dirección: ${formPais && formCiudad && formBarrio ? formatSignupAddress(formCalle, formBarrio, formCiudad, formPais) : formCalle || '(No indicada)'}`,
             `Correo: ${formEmail}`,
             `Teléfono: ${formTelefono}`,
             '',
@@ -328,12 +338,55 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             </div>
                         </div>
                         <div className="mb-4">
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Dirección de la barbería</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">País</label>
+                            <select
+                                value={formPais}
+                                onChange={(e) => { setFormPais(e.target.value); setFormCiudad(''); setFormBarrio(''); }}
+                                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#ffd427] focus:border-[#ffd427] text-slate-800 bg-white"
+                            >
+                                <option value="">Selecciona país</option>
+                                {SUPPORTED_COUNTRIES.map((c) => (
+                                    <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Ciudad</label>
+                                <select
+                                    value={formCiudad}
+                                    onChange={(e) => { setFormCiudad(e.target.value); setFormBarrio(''); }}
+                                    disabled={!formPais}
+                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#ffd427] focus:border-[#ffd427] text-slate-800 bg-white disabled:bg-slate-100"
+                                >
+                                    <option value="">{formPais ? 'Selecciona ciudad' : 'Elige país primero'}</option>
+                                    {(formPais ? getCitiesForCountry(formPais) : []).map((c) => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Barrio / Zona</label>
+                                <select
+                                    value={formBarrio}
+                                    onChange={(e) => setFormBarrio(e.target.value)}
+                                    disabled={!formCiudad}
+                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#ffd427] focus:border-[#ffd427] text-slate-800 bg-white disabled:bg-slate-100"
+                                >
+                                    <option value="">{formCiudad ? 'Selecciona barrio' : 'Elige ciudad primero'}</option>
+                                    {(formPais && formCiudad ? getBarriosForCity(formPais, formCiudad) : []).map((b) => (
+                                        <option key={b} value={b}>{b}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Calle o referencia (opcional)</label>
                             <input
                                 type="text"
-                                value={formDireccion}
-                                onChange={(e) => setFormDireccion(e.target.value)}
-                                placeholder="Ej: Calle Principal 123, Ciudad"
+                                value={formCalle}
+                                onChange={(e) => setFormCalle(e.target.value)}
+                                placeholder="Ej: Calle Principal 123"
                                 className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#ffd427] focus:border-[#ffd427] text-slate-800"
                             />
                         </div>
@@ -622,6 +675,15 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             >
                                 Soy nuevo
                             </button>
+                            {onGoToClientRegister && (
+                                <button
+                                    type="button"
+                                    onClick={onGoToClientRegister}
+                                    className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-[#ffd427]/90 hover:bg-[#ffd427] text-slate-900 font-semibold text-base transition-colors active:scale-[0.98]"
+                                >
+                                    <UserPlus size={20} /> Crear cuenta de cliente ahora
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}
@@ -633,17 +695,26 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             <ArrowLeft size={16} /> Volver
                         </button>
                         <p className="text-white text-center text-lg font-semibold mb-5">¿No tienes barbería aún?</p>
+                        {onGoToClientRegister && (
+                            <button
+                                type="button"
+                                onClick={onGoToClientRegister}
+                                className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base transition-colors mb-4 active:scale-[0.98]"
+                            >
+                                <UserPlus size={20} /> Crear cuenta de cliente gratis
+                            </button>
+                        )}
                         {onGoToBarberias && (
                             <button
                                 type="button"
                                 onClick={onGoToBarberias}
-                                className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base transition-colors mb-4 active:scale-[0.98]"
+                                className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-base transition-colors mb-4 active:bg-white/20"
                             >
                                 <Store size={20} /> Ver barberías – elegir una y agendar cita
                             </button>
                         )}
                         <div className="bg-white/10 rounded-lg border border-white/20 p-5 mb-5">
-                            <p className="text-white font-medium text-sm mb-2">O regístrate en una barbería:</p>
+                            <p className="text-white font-medium text-sm mb-2">O regístrate en una barbería específica:</p>
                             <p className="text-slate-400 text-sm">
                                 Visita la barbería donde quieres reservar y escanea el código QR o pide el enlace.
                             </p>

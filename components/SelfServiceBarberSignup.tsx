@@ -4,6 +4,8 @@ import { AccountTier } from '../types';
 import { Scissors, ArrowLeft, ArrowRight, LogIn, CheckCircle, Loader2, Smartphone, User, Lock, Mail, Phone, MapPin, Building2, ChevronLeft } from 'lucide-react';
 import { DataService } from '../services/data';
 import { completeSelfSignupFree, createPendingBarberSignupMobile, activatePlanFromPlay } from '../services/firebase';
+import { SUPPORTED_COUNTRIES } from '../constants/regions';
+import { formatSignupAddress, getBarriosForCity, getCitiesForCountry } from '../utils/posLocation';
 import { isPlayBillingAvailable, initPlayBilling, purchasePlan, addPlayPurchaseListener, getPlayProductId, getActivePlayTransactions } from '../services/playBilling';
 
 const TIER_OPTIONS: { value: AccountTier; label: string; description: string; price: number }[] = [
@@ -45,8 +47,13 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
 
   // Step 2
   const [barbershopName, setBarbershopName] = useState('');
-  const [address, setAddress] = useState('');
+  const [country, setCountry] = useState('');
+  const [city, setCity] = useState('');
+  const [barrio, setBarrio] = useState('');
+  const [streetAddress, setStreetAddress] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<AccountTier>('gratuito');
+  const cityOptions = country ? getCitiesForCountry(country) : [];
+  const barrioOptions = country && city ? getBarriosForCity(country, city) : [];
 
   // Step 3
   const [cicloPago, setCicloPago] = useState<'mensual' | 'anual'>('mensual');
@@ -84,7 +91,9 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
 
   const step2Valid =
     (barbershopName || '').trim().length > 0 &&
-    (address || '').trim().length > 0 &&
+    (country || '').trim().length > 0 &&
+    (city || '').trim().length > 0 &&
+    (barrio || '').trim().length > 0 &&
     selectedPlan != null;
 
   const step3Valid = isFree || acceptTerms;
@@ -116,7 +125,10 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
         phone: phone.trim(),
         email: email.trim() || undefined,
         barbershopName: barbershopName.trim(),
-        address: address.trim(),
+        address: formatSignupAddress(streetAddress, barrio, city, country),
+        country: country.trim(),
+        city: city.trim(),
+        barrio: barrio.trim(),
       });
       onSuccess(username.trim().toLowerCase(), password);
     } catch (err: unknown) {
@@ -185,7 +197,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
         phone: phone.trim(),
         email: email.trim() || undefined,
         barbershopName: barbershopName.trim(),
-        address: address.trim(),
+        address: formatSignupAddress(streetAddress, barrio, city, country),
         plan: selectedPlan,
         ciclo: cicloPago,
       });
@@ -452,19 +464,64 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                         />
                       </div>
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">País</label>
+                    <select
+                      required
+                      value={country}
+                      onChange={(e) => { setCountry(e.target.value); setCity(''); setBarrio(''); }}
+                      className="input-modern w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] bg-white"
+                    >
+                      <option value="">Selecciona un país</option>
+                      {SUPPORTED_COUNTRIES.map((c) => (
+                        <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Dirección</label>
-                      <div className="relative">
-                        <MapPin size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                        <input
-                          type="text"
-                          required
-                          value={address}
-                          onChange={(e) => setAddress(e.target.value)}
-                          placeholder="Calle, ciudad, país"
-                          className="input-modern w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] transition-all duration-200"
-                        />
-                      </div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Ciudad</label>
+                      <select
+                        required
+                        value={city}
+                        onChange={(e) => { setCity(e.target.value); setBarrio(''); }}
+                        disabled={!country}
+                        className="input-modern w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] bg-white disabled:bg-slate-100"
+                      >
+                        <option value="">{country ? 'Selecciona una ciudad' : 'Primero elige el país'}</option>
+                        {cityOptions.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Barrio / Zona</label>
+                      <select
+                        required
+                        value={barrio}
+                        onChange={(e) => setBarrio(e.target.value)}
+                        disabled={!city}
+                        className="input-modern w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] bg-white disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        <option value="">{city ? 'Selecciona barrio o zona' : 'Primero elige la ciudad'}</option>
+                        {barrioOptions.map((b) => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Calle o referencia (opcional)</label>
+                    <div className="relative">
+                      <MapPin size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={streetAddress}
+                        onChange={(e) => setStreetAddress(e.target.value)}
+                        placeholder="Ej: Calle Principal #12"
+                        className="input-modern w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] transition-all duration-200"
+                      />
                     </div>
                   </div>
                   <div>

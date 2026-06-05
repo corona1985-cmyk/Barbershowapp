@@ -14,6 +14,12 @@ export interface PointOfSale {
     id: number;
     name: string;
     address: string;
+    /** Código país ISO 2: DO, CO, US, MX, etc. */
+    country?: string;
+    /** Ciudad */
+    city?: string;
+    /** Barrio, colonia o zona dentro de la ciudad */
+    barrio?: string;
     ownerId: string; // Username of the owner
     isActive: boolean;
     /** Plan de suscripción; solo 'pro' habilita campana de notificaciones de citas para el barbero */

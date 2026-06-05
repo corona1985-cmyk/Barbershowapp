@@ -508,6 +508,15 @@ const App: React.FC = () => {
         }
     };
 
+    const openClientRegistration = (clearReferral = true) => {
+        if (clearReferral) setReferralPos(null);
+        setShowLandingPage(false);
+        setShowBarberiasGuest(false);
+        setShowLoginScreen(true);
+        setIsRegistering(true);
+        setLoginError('');
+    };
+
     const handleLogout = () => {
         localStorage.removeItem('currentUser');
         setIsAuthenticated(false);
@@ -651,19 +660,27 @@ const App: React.FC = () => {
     // 4. INVITADO: Ver barberías (cliente buscando barbería)
     if (!isAuthenticated && showBarberiasGuest) {
         return (
-            <div className="min-h-screen min-h-[100dvh] bg-slate-100">
-                <header className="bg-slate-900 text-white px-3 sm:px-4 py-3 flex items-center justify-between shadow-lg">
-                    <button type="button" onClick={() => setShowBarberiasGuest(false)} className="flex items-center gap-1.5 min-h-[44px] text-slate-300 hover:text-white text-sm rounded-lg active:bg-white/10 px-2 -ml-2">
+            <div className="min-h-screen min-h-[100dvh] bg-slate-50">
+                <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between safe-area-top shadow-sm">
+                    <button type="button" onClick={() => setShowBarberiasGuest(false)} className="flex items-center gap-1.5 min-h-[44px] text-slate-600 hover:text-slate-900 text-sm rounded-xl hover:bg-slate-100 px-3 -ml-1 transition-colors">
                         <ArrowLeft size={18} /> Volver
                     </button>
-                    <span className="font-bold text-[#ffd427]">BarberShow</span>
-                    <button type="button" onClick={() => { setShowBarberiasGuest(false); setShowLoginScreen(true); }} className="min-h-[44px] flex items-center text-sm text-[#ffd427] hover:text-amber-300 font-medium px-2 rounded-lg active:bg-white/10">
-                        Iniciar sesión
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <div className="w-9 h-9 bg-[#ffd427] rounded-lg flex items-center justify-center shadow-sm">
+                            <Scissors size={18} className="text-slate-900" />
+                        </div>
+                        <span className="font-bold text-slate-900 hidden sm:inline">BarberShow</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => openClientRegistration(true)} className="min-h-[44px] flex items-center text-sm border border-slate-200 hover:border-slate-300 text-slate-700 font-medium px-3 sm:px-4 rounded-xl transition-colors hover:bg-slate-50">
+                            Registrarse
+                        </button>
+                        <button type="button" onClick={() => { setShowBarberiasGuest(false); setShowLoginScreen(true); setIsRegistering(false); }} className="min-h-[44px] flex items-center text-sm bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold px-3 sm:px-4 rounded-xl transition-colors shadow-sm">
+                            Iniciar sesión
+                        </button>
+                    </div>
                 </header>
-                <main className="p-4 md:p-8 max-w-6xl mx-auto">
-                    <p className="text-slate-600 text-center mb-2">Elige una barbería para agendar tu cita (sin cuenta) o registrarte.</p>
-                    <p className="text-slate-400 text-center text-sm mb-6">Próximamente: ver barberías más cercanas a tu ubicación.</p>
+                <main className="px-4 sm:px-6 lg:px-10 py-8 md:py-12 max-w-7xl mx-auto">
                     <Suspense fallback={<ViewFallback />}>
                     <ClientDiscovery
                         guestMode
@@ -696,6 +713,7 @@ const App: React.FC = () => {
                     onGetStarted={() => setShowLandingPage(false)}
                     onGoToLogin={() => { setShowLandingPage(false); setShowLoginScreen(true); setIsRegistering(false); }}
                     onGoToBarberias={() => { setShowLandingPage(false); setShowBarberiasGuest(true); }}
+                    onGoToClientRegister={() => openClientRegistration(true)}
                 />
             </>
         );
@@ -710,6 +728,7 @@ const App: React.FC = () => {
                     <WelcomePlanSelector
                         onGoToLogin={() => { setShowLoginScreen(true); setIsRegistering(false); }}
                         onGoToBarberias={() => setShowBarberiasGuest(true)}
+                        onGoToClientRegister={() => openClientRegistration(true)}
                         onBackToLanding={() => setShowLandingPage(true)}
                         onBarberSignupSuccess={(username, password) => {
                             handleLogin({ preventDefault: () => {} } as React.FormEvent, { username, password });
@@ -751,6 +770,7 @@ const App: React.FC = () => {
 
                     {isRegistering ? (
                          <form onSubmit={handleRegister} className="space-y-4 animate-in slide-in-from-right duration-300">
+                             <p className="text-center text-slate-600 text-sm mb-1">Crea tu cuenta como <span className="font-semibold text-slate-800">cliente</span> para agendar citas y guardar tu historial.</p>
                              {loginError && (
                                  <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
                                      {loginError}
@@ -838,7 +858,7 @@ const App: React.FC = () => {
 
                                 <div className="pt-4 border-t border-slate-100 mt-4">
                                     <button type="button" onClick={() => setIsRegistering(true)} className="w-full min-h-[44px] flex items-center justify-center text-slate-600 font-medium hover:underline hover:text-[#e6be23] rounded-lg active:bg-slate-50">
-                                        <UserPlus size={18} className="mr-2" /> ¿No tienes cuenta? Regístrate
+                                        <UserPlus size={18} className="mr-2" /> ¿Eres cliente? Crear cuenta gratis
                                     </button>
                                 </div>
 

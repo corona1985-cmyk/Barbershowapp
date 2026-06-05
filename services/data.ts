@@ -393,6 +393,9 @@ export const DataService = {
     email?: string;
     barbershopName: string;
     address: string;
+    country: string;
+    city: string;
+    barrio: string;
   }): Promise<{ success: true }> => {
     const MIN_PHONE_DIGITS = 8;
     const username = String(params.username ?? '').trim().toLowerCase();
@@ -402,13 +405,18 @@ export const DataService = {
     const email = params.email != null ? String(params.email).trim() || undefined : undefined;
     const barbershopName = String(params.barbershopName ?? '').trim();
     const address = String(params.address ?? '').trim();
+    const country = String(params.country ?? '').trim().toUpperCase();
+    const city = String(params.city ?? '').trim();
+    const barrio = String(params.barrio ?? '').trim();
 
     if (!username) throw new Error('El nombre de usuario es obligatorio.');
     if (!password || password.length < 6) throw new Error('La contraseña es obligatoria (mín. 6 caracteres).');
     if (!name) throw new Error('El nombre completo es obligatorio.');
     if (phone.length < MIN_PHONE_DIGITS) throw new Error(`El teléfono debe tener al menos ${MIN_PHONE_DIGITS} dígitos.`);
     if (!barbershopName) throw new Error('El nombre de la barbería es obligatorio.');
-    if (!address) throw new Error('La dirección es obligatoria.');
+    if (!country) throw new Error('El país es obligatorio.');
+    if (!city) throw new Error('La ciudad es obligatoria.');
+    if (!barrio) throw new Error('El barrio o zona es obligatorio.');
 
     if (await DataService.isUsernameTaken(username)) {
       throw new Error('Ese nombre de usuario ya existe. Elige otro.');
@@ -422,6 +430,9 @@ export const DataService = {
       id: posId,
       name: barbershopName,
       address,
+      country,
+      city,
+      barrio,
       ownerId: username,
       isActive: true,
       tier: 'gratuito',
