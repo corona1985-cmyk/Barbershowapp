@@ -23,6 +23,7 @@ const Finance = lazy(() => import('./pages/InventoryClientsFinance').then(m => (
 import { Scissors, Cookie, MapPin, Globe, LogOut, Menu, UserPlus, CheckCircle, ArrowLeft, Shield, Loader2 } from 'lucide-react';
 import BarberNotificationBell from './components/BarberNotificationBell';
 import WelcomePlanSelector from './components/WelcomePlanSelector';
+import LandingPage from './components/landing/LandingPage';
 import GuestBookingView from './components/GuestBookingView';
 import AdMobBanner from './components/AdMobBanner';
 import AdSenseBanner from './components/AdSenseBanner';
@@ -74,6 +75,8 @@ const App: React.FC = () => {
     const [isLoadingSession, setIsLoadingSession] = useState(true);
     /** Si false, se muestra primero la bienvenida (tipo de barbería + contacto). Si true, el formulario de login. */
     const [showLoginScreen, setShowLoginScreen] = useState(false);
+    /** Landing page de marketing; al cerrarla se muestra WelcomePlanSelector o login. */
+    const [showLandingPage, setShowLandingPage] = useState(true);
     /** Cliente sin cuenta que quiere ver barberías: muestra lista para elegir una y registrarse ahí. */
     const [showBarberiasGuest, setShowBarberiasGuest] = useState(false);
     /** Invitado que está agendando cita en una barbería (sin cuenta). */
@@ -514,6 +517,8 @@ const App: React.FC = () => {
         setCurrentView('dashboard');
         DataService.setActivePosId(null);
         setCurrentPosId(null);
+        setShowLoginScreen(false);
+        setShowLandingPage(true);
     };
 
     const handleAccountDeactivated = () => {
@@ -682,7 +687,21 @@ const App: React.FC = () => {
         );
     }
 
-    // 5. BIENVENIDA (tipo de barbería + contacto) o LOGIN
+    // 5. LANDING PAGE (marketing)
+    if (!isAuthenticated && showLandingPage && !showBarberiasGuest && !guestBookingPos) {
+        return (
+            <>
+                <AdMobBanner showAds={true} />
+                <LandingPage
+                    onGetStarted={() => setShowLandingPage(false)}
+                    onGoToLogin={() => { setShowLandingPage(false); setShowLoginScreen(true); setIsRegistering(false); }}
+                    onGoToBarberias={() => { setShowLandingPage(false); setShowBarberiasGuest(true); }}
+                />
+            </>
+        );
+    }
+
+    // 6. BIENVENIDA (tipo de barbería + contacto) o LOGIN
     if (!isAuthenticated) {
         if (!showLoginScreen) {
             return (
@@ -691,6 +710,7 @@ const App: React.FC = () => {
                     <WelcomePlanSelector
                         onGoToLogin={() => { setShowLoginScreen(true); setIsRegistering(false); }}
                         onGoToBarberias={() => setShowBarberiasGuest(true)}
+                        onBackToLanding={() => setShowLandingPage(true)}
                         onBarberSignupSuccess={(username, password) => {
                             handleLogin({ preventDefault: () => {} } as React.FormEvent, { username, password });
                         }}
@@ -703,7 +723,7 @@ const App: React.FC = () => {
                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 md:p-8 relative overflow-hidden border-t-8 border-[#ffd427] my-2 sm:my-4">
                     <button
                         type="button"
-                        onClick={() => setShowLoginScreen(false)}
+                        onClick={() => { setShowLoginScreen(false); setShowLandingPage(true); }}
                         className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center justify-center gap-1.5 min-h-[44px] pl-2 pr-3 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 active:bg-slate-200 text-sm"
                     >
                         <ArrowLeft size={18} /> Volver

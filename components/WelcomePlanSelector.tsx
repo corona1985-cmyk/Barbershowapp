@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AccountTier } from '../types';
-import { Scissors, User, Users, MapPin, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle, CreditCard, X, Mail } from 'lucide-react';
+import { Scissors, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle, CreditCard, X, Mail } from 'lucide-react';
 import { DataService } from '../services/data';
 import { createPlanCheckout, activatePlanFromPlay, type PlanCheckoutProvider } from '../services/firebase';
 import SelfServiceBarberSignup from './SelfServiceBarberSignup';
@@ -12,83 +12,10 @@ import {
     getPlayProductId,
     getActivePlayTransactions,
 } from '../services/playBilling';
-
-/** Configuración de contacto: correo y WhatsApp para solicitudes de acceso empresarial */
-const CONTACT = {
-    whatsapp: '18295992941', // 829 599 2941 (República Dominicana)
-    email: 'contacto@barbershow.com',
-    /** Destino de las solicitudes de acceso (formulario "Enviar solicitud") */
-    solicitudEmail: 'corona1985@iccdigitalgroup.com',
-    solicitudWhatsApp: '18295992941',
-};
+import { CONTACT, TIER_OPTIONS } from '../constants/plans';
 
 type Step = 'who' | 'barber_plan' | 'barber_registered' | 'barber_contact' | 'client_registered' | 'client_new';
 type UserType = 'barbero' | 'cliente';
-
-/** Planes con precios (USD/mes). Gratuito = solo ver citas, 100/mes. */
-const TIER_OPTIONS: { value: AccountTier; label: string; description: string; price: number; benefits: string[]; icon: React.ReactNode }[] = [
-    {
-        value: 'gratuito',
-        label: 'Plan Gratuito',
-        description: 'Solo ver y gestionar citas. Hasta 100 citas al mes.',
-        price: 0,
-        benefits: [
-            'Solo agenda de citas: ver citas agendadas',
-            'Contador de citas mensuales (máximo 100 por mes)',
-            'Sin ventas POS, ni clientes, ni reportes ni inventario',
-            'Ideal para probar la app o negocios muy pequeños',
-        ],
-        icon: <Scissors size={32} className="text-slate-600" />,
-    },
-    {
-        value: 'solo',
-        label: 'Plan Solo',
-        description: 'Una persona, un local.',
-        price: 14.95,
-        benefits: [
-            'Interfaz simple: todo es "mi negocio", sin sedes ni lista de barberos',
-            'Menú reducido: Dashboard, Citas, Clientes, Ventas (POS), Configuración básica (servicios, datos del negocio)',
-            'Citas y ventas directas: no eliges barbero; la cita o venta es contigo',
-            'Reportes básicos: resumen de ventas y citas (sin desglose por barbero ni por sede)',
-            'Opcional: inventario simple (productos que vendes)',
-            'Ideal para: barbero independiente que trabaja solo en un solo lugar',
-        ],
-        icon: <User size={32} className="text-slate-700" />,
-    },
-    {
-        value: 'barberia',
-        label: 'Plan Barbería',
-        description: 'Varios barberos, una sede.',
-        price: 19.95,
-        benefits: [
-            'Todo lo del plan Solo',
-            'Varios barberos: alta y baja de barberos; asignar citas y ventas por barbero',
-            'Agenda por barbero: ver y gestionar la agenda de cada profesional',
-            'Reportes por barbero: ver rendimiento y ventas de cada uno',
-            'Una sede: un solo local; selector de barbero, no de sede',
-            'Control de equipo: gestionar quién hace qué (citas, ventas)',
-            'Opcional: inventario, finanzas, Consola WhatsApp, administración de usuarios por rol',
-            'Ideal para: barbería con 2–4 barberos en una sola ubicación',
-        ],
-        icon: <Users size={32} className="text-slate-700" />,
-    },
-    {
-        value: 'multisede',
-        label: 'Plan Multi-Sede',
-        description: 'Varias ubicaciones o cadena.',
-        price: 29.95,
-        benefits: [
-            'Todo lo del plan Barbería',
-            'Varias sedes: crear y gestionar múltiples ubicaciones',
-            'Selector de sede: cambiar de sede para ver agenda, barberos y reportes de cada una',
-            'Reportes por sede: comparar rendimiento entre ubicaciones',
-            'Administración global: vista centralizada; control por sede cuando haga falta',
-            'Sin límite de sedes ni barberos: escalable para cadenas',
-            'Ideal para: cadenas o negocios con varias barberías',
-        ],
-        icon: <MapPin size={32} className="text-slate-700" />,
-    },
-];
 
 interface WelcomePlanSelectorProps {
     onGoToLogin: () => void;
@@ -96,9 +23,11 @@ interface WelcomePlanSelectorProps {
     onGoToBarberias?: () => void;
     /** Cuando el barbero completa el autoregistro (plan gratuito), hacer login con estas credenciales. */
     onBarberSignupSuccess?: (username: string, password: string) => void;
+    /** Volver a la landing page de marketing. */
+    onBackToLanding?: () => void;
 }
 
-const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, onGoToBarberias, onBarberSignupSuccess }) => {
+const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, onGoToBarberias, onBarberSignupSuccess, onBackToLanding }) => {
     const [step, setStep] = useState<Step>('who');
     const [userType, setUserType] = useState<UserType | null>(null);
     const [showSelfSignup, setShowSelfSignup] = useState(false);
@@ -514,6 +443,15 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
             />
             {/* Overlay oscuro para legibilidad */}
             <div className="absolute inset-0 bg-slate-900/75" aria-hidden />
+            {onBackToLanding && !showSelfSignup && step === 'who' && (
+                <button
+                    type="button"
+                    onClick={onBackToLanding}
+                    className="fixed top-0 left-0 z-20 flex items-center gap-1.5 min-h-[44px] m-3 sm:m-4 px-3 py-2 rounded-xl text-slate-300 hover:text-white bg-black/30 hover:bg-black/50 border border-white/10 backdrop-blur-sm text-sm font-medium transition-colors safe-area-top"
+                >
+                    <ArrowLeft size={18} /> Volver al inicio
+                </button>
+            )}
             {/* Contenido */}
             <div className="relative z-10 w-full max-w-2xl lg:max-w-6xl min-w-0">
                 {/* Logo — tamaño medio, equilibrado */}
