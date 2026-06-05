@@ -4,7 +4,7 @@ import type { AccountTier } from '../types';
 
 export const CONTACT = {
     whatsapp: '18295992941',
-    email: 'contacto@barbershow.com',
+    email: 'corona1985@iccdigitalgroup.com',
     solicitudEmail: 'corona1985@iccdigitalgroup.com',
     solicitudWhatsApp: '18295992941',
     phoneDisplay: '829 599 2941',

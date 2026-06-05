@@ -181,7 +181,7 @@ const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   termsAndConditions: 'Términos y condiciones estándar...',
   privacyPolicy: 'Política de privacidad estándar...',
   cookiePolicy: 'Política de cookies estándar...',
-  supportEmail: 'support@barbershow.com',
+  supportEmail: 'corona1985@iccdigitalgroup.com',
   maintenanceMode: false,
 };
 
