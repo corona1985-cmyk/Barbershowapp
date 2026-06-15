@@ -4,7 +4,7 @@ import { AppSettings, SystemUser, Service, UserRole, Barber, BarberWorkingHours,
 import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as SettingsIcon, UserCheck, Power, QrCode, Download, Printer, Percent, Clock, CalendarOff, ImagePlus, CreditCard } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { handlePrintQR as handlePrintQRNative } from '../utils/print';
-import { DEFAULT_PUBLIC_APP_URL } from '../config/app';
+import { DEFAULT_PUBLIC_APP_URL, GLOBAL_FREE_MODE, isPromotionalFreeTier } from '../config/app';
 import DeactivateAccountSection from '../components/account/DeactivateAccountSection';
 
 type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'account' | 'barbers' | 'taxes' | 'qr' | 'planes';
@@ -969,7 +969,25 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
                 {activeTab === 'planes' && !isNativeApp && (
                     <div className="space-y-6">
                         <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">Planes disponibles</h3>
-                        <p className="text-sm text-slate-600">Tu plan actual: <strong className="text-[#ffd427]">{accountTier === 'gratuito' ? 'Plan Gratuito' : accountTier === 'solo' ? 'Plan Solo' : accountTier === 'barberia' ? 'Plan Barbería' : 'Plan Multi-Sede'}</strong></p>
+                        {GLOBAL_FREE_MODE && (
+                            <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
+                                Promoción activa: las barberías nuevas reciben el <strong>Plan Barbería</strong> sin costo por tiempo limitado.
+                            </p>
+                        )}
+                        <p className="text-sm text-slate-600">
+                            Tu plan actual:{' '}
+                            <strong className="text-[#ffd427]">
+                                {isPromotionalFreeTier(accountTier)
+                                    ? 'Plan Barbería (Promoción)'
+                                    : accountTier === 'gratuito'
+                                    ? 'Plan Gratuito'
+                                    : accountTier === 'solo'
+                                    ? 'Plan Solo'
+                                    : accountTier === 'barberia'
+                                    ? 'Plan Barbería'
+                                    : 'Plan Multi-Sede'}
+                            </strong>
+                        </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             {PLANES_INFO.map((plan) => (
                                 <div

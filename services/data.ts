@@ -2,6 +2,7 @@ import { ref, get, set, update, remove, query, orderByChild, equalTo } from 'fir
 import { db } from './firebase';
 import { hashPassword, verifyPassword, isStoredHash } from './passwordHash';
 import { Capacitor } from '@capacitor/core';
+import { getFreeSignupTierAndPlan, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER } from '../config/app';
 import {
   Client,
   Product,
@@ -540,6 +541,65 @@ export const DataService = {
       await update(ref(db, ROOT + '/users'), updates);
       invalidateUsernameKeysCache();
     }
+
+    if (GLOBAL_FREE_MODE) {
+      DataService.migrateGratuitoPosToPromotionalTier()
+        .then((result) => {
+          if (result.updated > 0) {
+            console.info(`[BarberShow] Migración promocional: ${result.updated} sede(s) actualizadas a Plan Barbería.`);
+          }
+        })
+        .catch((err) => console.warn('[BarberShow] Migración promocional omitida o fallida:', err));
+    }
+  },
+
+  /**
+   * Sube sedes con tier "gratuito" al Plan Barbería promocional (tier + plan pro).
+   * Idempotente: solo toca sedes que sigan en gratuito.
+   */
+  migrateGratuitoPosToPromotionalTier: async (): Promise<{ updated: number; posIds: number[]; message: string }> => {
+    if (!GLOBAL_FREE_MODE) {
+      return { updated: 0, posIds: [], message: 'Modo promocional desactivado (GLOBAL_FREE_MODE = false).' };
+    }
+
+    const { tier, plan } = getFreeSignupTierAndPlan();
+    if (tier !== PROMOTIONAL_FREE_TIER) {
+      return { updated: 0, posIds: [], message: 'El tier promocional configurado no es Plan Barbería.' };
+    }
+
+    const snap = await get(ref(db, ROOT + '/pointsOfSale'));
+    if (!snap.exists()) {
+      return { updated: 0, posIds: [], message: 'No hay sedes registradas.' };
+    }
+
+    const raw = snap.val() as Record<string, PointOfSale>;
+    const posIds: number[] = [];
+    const flatUpdates: Record<string, unknown> = {};
+
+    for (const [id, pos] of Object.entries(raw)) {
+      const posData = pos as PointOfSale;
+      if (posData.tier !== 'gratuito') continue;
+      const numericId = Number(id);
+      posIds.push(numericId);
+      flatUpdates[`${ROOT}/pointsOfSale/${id}/tier`] = tier;
+      flatUpdates[`${ROOT}/pointsOfSale/${id}/plan`] = plan;
+    }
+
+    if (posIds.length === 0) {
+      return { updated: 0, posIds: [], message: 'No hay sedes con Plan Gratuito pendientes de migrar.' };
+    }
+
+    await update(ref(db), flatUpdates);
+    cacheInvalidate('pointsOfSale');
+
+    const details = `Migración promocional: ${posIds.length} sede(s) de gratuito → ${tier} (plan ${plan}). IDs: ${posIds.join(', ')}`;
+    await DataService.logAuditAction('migration_promotional_tier', 'system', details).catch(() => {});
+
+    return {
+      updated: posIds.length,
+      posIds,
+      message: `${posIds.length} sede(s) migrada(s) al Plan Barbería promocional.`,
+    };
   },
 
   setActivePosId: (id: number | null) => { ACTIVE_POS_ID = id; },
@@ -678,6 +738,7 @@ export const DataService = {
 
     const posId = generateUniqueId();
     const hashedPassword = await hashPassword(password);
+    const { tier: signupTier, plan: signupPlan } = getFreeSignupTierAndPlan();
 
     const pointsOfSaleRef = ref(db, ROOT + '/pointsOfSale/' + posId);
     await set(pointsOfSaleRef, {
@@ -689,7 +750,8 @@ export const DataService = {
       barrio,
       ownerId: username,
       isActive: true,
-      tier: 'gratuito',
+      tier: signupTier,
+      plan: signupPlan,
     });
 
     const settingsRef = ref(db, ROOT + '/settings/' + posId);

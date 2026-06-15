@@ -146,6 +146,17 @@ export const sendWhatsAppMessage = onCall(
 
 const MIN_PHONE_DIGITS = 8;
 const PAID_PLANS = ["solo", "barberia", "multisede"] as const;
+
+/** Sincronizar con config/app.ts del frontend */
+const GLOBAL_FREE_MODE = true;
+const PROMOTIONAL_FREE_TIER = "barberia" as const;
+
+function getFreeSignupTierAndPlan(): { tier: string; plan: string } {
+  if (GLOBAL_FREE_MODE) {
+    return { tier: PROMOTIONAL_FREE_TIER, plan: "pro" };
+  }
+  return { tier: "gratuito", plan: "basic" };
+}
 const PLAN_PRICES: Record<string, number> = {
   solo: 14.95,
   barberia: 19.95,
@@ -208,6 +219,7 @@ export const completeSelfSignupFree = onCall(
       }
 
       const posId = generateUniqueId();
+      const { tier: signupTier, plan: signupPlan } = getFreeSignupTierAndPlan();
       const pointsOfSaleRef = db.ref(ROOT + "/pointsOfSale/" + posId);
       const newPos = {
         id: posId,
@@ -215,7 +227,8 @@ export const completeSelfSignupFree = onCall(
         address,
         ownerId: username,
         isActive: true,
-        tier: "gratuito",
+        tier: signupTier,
+        plan: signupPlan,
       };
       await pointsOfSaleRef.set(newPos);
 

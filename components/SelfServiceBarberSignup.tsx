@@ -8,6 +8,7 @@ import { SUPPORTED_COUNTRIES } from '../constants/regions';
 import { formatSignupAddress, getBarriosForCity, getCitiesForCountry } from '../utils/posLocation';
 import { isPlayBillingAvailable, initPlayBilling, purchasePlan, addPlayPurchaseListener, getPlayProductId, getActivePlayTransactions } from '../services/playBilling';
 import { navigateToLegal } from '../utils/legal';
+import { GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER } from '../config/app';
 
 const TIER_OPTIONS: { value: AccountTier; label: string; description: string; price: number }[] = [
   { value: 'gratuito', label: 'Plan Gratuito', description: 'Solo ver y gestionar citas. Hasta 100 citas al mes.', price: 0 },
@@ -52,7 +53,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const [city, setCity] = useState('');
   const [barrio, setBarrio] = useState('');
   const [streetAddress, setStreetAddress] = useState('');
-  const [selectedPlan, setSelectedPlan] = useState<AccountTier>('gratuito');
+  const [selectedPlan, setSelectedPlan] = useState<AccountTier>(GLOBAL_FREE_MODE ? 'barberia' : 'gratuito');
   const cityOptions = country ? getCitiesForCountry(country) : [];
   const barrioOptions = country && city ? getBarriosForCity(country, city) : [];
 
@@ -61,7 +62,15 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const [acceptTerms, setAcceptTerms] = useState(false);
 
   const planOption = TIER_OPTIONS.find((o) => o.value === selectedPlan);
-  const isFree = selectedPlan === 'gratuito';
+  const isFree = GLOBAL_FREE_MODE ? selectedPlan === PROMOTIONAL_FREE_TIER : selectedPlan === 'gratuito';
+  const signupTierOptions = GLOBAL_FREE_MODE
+    ? TIER_OPTIONS.filter((o) => o.value !== 'gratuito')
+    : TIER_OPTIONS;
+
+  const formatPlanPrice = (opt: (typeof TIER_OPTIONS)[number]) => {
+    if (GLOBAL_FREE_MODE && opt.value === PROMOTIONAL_FREE_TIER) return 'Gratis';
+    return opt.price === 0 ? 'Gratis' : `$${opt.price}/mes`;
+  };
 
   const checkUsername = async () => {
     const u = (username || '').trim().toLowerCase();
@@ -558,7 +567,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Plan</label>
                     <div className="space-y-2">
-                      {TIER_OPTIONS.map((opt) => (
+                      {signupTierOptions.map((opt) => (
                         <label
                           key={opt.value}
                           className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
@@ -574,10 +583,15 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                             className="mt-1 text-[#F5B301] focus:ring-[#F5B301]"
                           />
                           <div className="flex-1 min-w-0">
-                            <span className="font-medium text-slate-800">{opt.label}</span>
-                            <span className="ml-2 font-bold" style={{ color: primary }}>
-                              {opt.price === 0 ? 'Gratis' : `$${opt.price}/mes`}
+                            <span className="font-medium text-slate-800">
+                              {GLOBAL_FREE_MODE && opt.value === PROMOTIONAL_FREE_TIER ? 'Plan Barbería (Promoción)' : opt.label}
                             </span>
+                            <span className="ml-2 font-bold" style={{ color: primary }}>
+                              {formatPlanPrice(opt)}
+                            </span>
+                            {GLOBAL_FREE_MODE && opt.value === PROMOTIONAL_FREE_TIER && (
+                              <p className="text-xs text-emerald-600 font-medium mt-0.5">Acceso completo sin costo por tiempo limitado</p>
+                            )}
                             <p className="text-xs text-slate-500 mt-0.5">{opt.description}</p>
                           </div>
                         </label>

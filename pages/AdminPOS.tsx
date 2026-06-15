@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
+import { getFreeSignupTierAndPlan } from '../config/app';
 import { PointOfSale, SystemUser, AccountTier } from '../types';
 import { getDisplayPlanName } from '../utils/planDisplay';
 import { MapPin, Plus, Edit2, Trash2, X, Save, User } from 'lucide-react';
@@ -49,7 +50,7 @@ const AdminPOS: React.FC = () => {
         if (pos) {
             setCurrentPos(pos);
         } else {
-            setCurrentPos({ name: '', address: '', ownerId: '', isActive: true, tier: 'gratuito' });
+            setCurrentPos({ name: '', address: '', ownerId: '', isActive: true, tier: getFreeSignupTierAndPlan().tier });
         }
         setShowModal(true);
     };

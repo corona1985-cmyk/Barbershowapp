@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
+import { GLOBAL_FREE_MODE } from '../config/app';
 import { PointOfSale, SystemUser, AuditLog, GlobalSettings, Sale, DisplayPlanName } from '../types';
 import { getDisplayPlanName, displayPlanNameToTierAndPlan } from '../utils/planDisplay';
 import { LayoutDashboard, Trash2, Globe, DollarSign, Users, Building, LogOut, Activity, Shield, Settings, FileText, Search, Plus, Save, Monitor, AlertTriangle, Eye, Lock } from 'lucide-react';
@@ -25,6 +26,31 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showUserModal, setShowUserModal] = useState(false);
     const [newUser, setNewUser] = useState<Partial<SystemUser>>({ username: '', role: 'support', name: '', password: '' });
+    const [migrationLoading, setMigrationLoading] = useState(false);
+
+    const gratuitoSedeCount = sedes.filter((s) => s.tier === 'gratuito').length;
+
+    const handlePromotionalMigration = async () => {
+        if (!GLOBAL_FREE_MODE) {
+            alert('Activa GLOBAL_FREE_MODE en config/app.ts para usar la migración promocional.');
+            return;
+        }
+        if (gratuitoSedeCount === 0) {
+            alert('No hay sedes con Plan Gratuito por migrar.');
+            return;
+        }
+        if (!confirm(`¿Migrar ${gratuitoSedeCount} sede(s) al Plan Barbería promocional (gratis)?`)) return;
+        setMigrationLoading(true);
+        try {
+            const result = await DataService.migrateGratuitoPosToPromotionalTier();
+            alert(result.message);
+            await loadData();
+        } catch (e) {
+            alert(e instanceof Error ? e.message : 'Error al migrar sedes.');
+        } finally {
+            setMigrationLoading(false);
+        }
+    };
 
     const loadData = async () => {
         const [statsData, sedesData, usersData, auditData, settingsData, financialDataRes] = await Promise.all([
@@ -131,6 +157,27 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                              <p className="text-slate-400 text-xs">Todos los servicios funcionando correctamente.</p>
                          </div>
                      </div>
+                     {GLOBAL_FREE_MODE && gratuitoSedeCount > 0 && (
+                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-amber-900/20 border border-amber-900/50 rounded-lg">
+                             <div className="flex items-start gap-3">
+                                 <AlertTriangle className="text-amber-400 mr-1 flex-shrink-0 mt-0.5" size={20} />
+                                 <div>
+                                     <p className="text-amber-300 font-bold text-sm">Migración Plan Barbería promocional</p>
+                                     <p className="text-slate-400 text-xs">
+                                         {gratuitoSedeCount} sede(s) aún tienen Plan Gratuito limitado. Puedes subirlas al Plan Barbería sin costo.
+                                     </p>
+                                 </div>
+                             </div>
+                             <button
+                                 type="button"
+                                 onClick={handlePromotionalMigration}
+                                 disabled={migrationLoading}
+                                 className="shrink-0 px-4 py-2 bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-bold text-sm rounded-lg disabled:opacity-60"
+                             >
+                                 {migrationLoading ? 'Migrando…' : 'Migrar ahora'}
+                             </button>
+                         </div>
+                     )}
                      {stats.totalRevenue > 100000 && (
                          <div className="flex items-center p-3 bg-yellow-900/20 border border-yellow-900/50 rounded-lg">
                             <DollarSign className="text-yellow-500 mr-3" size={20} />
