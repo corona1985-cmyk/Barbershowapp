@@ -365,7 +365,12 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
 
                 <div>
                     <label className="block text-sm font-bold text-slate-400 mb-2">Términos y Condiciones (Global)</label>
-                    <textarea className="w-full bg-slate-900 border border-slate-600 text-white rounded p-3 h-32" value={globalSettings.termsAndConditions} onChange={e => setGlobalSettings({...globalSettings, termsAndConditions: e.target.value})}></textarea>
+                    <textarea className="w-full bg-slate-900 border border-slate-600 text-white rounded p-3 h-40" value={globalSettings.termsAndConditions} onChange={e => setGlobalSettings({...globalSettings, termsAndConditions: e.target.value})}></textarea>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-bold text-slate-400 mb-2">Política de Privacidad (Global)</label>
+                    <textarea className="w-full bg-slate-900 border border-slate-600 text-white rounded p-3 h-40" value={globalSettings.privacyPolicy} onChange={e => setGlobalSettings({...globalSettings, privacyPolicy: e.target.value})}></textarea>
                 </div>
 
                 <div className="flex items-center justify-between pt-6 border-t border-slate-700">

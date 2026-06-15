@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { ref, get, update, serverTimestamp as rtdbServerTimestamp } from 'firebase/database';
+import { ref, get, remove } from 'firebase/database';
 import { db, firestore, ensureAnonymousAuth, logAnalyticsEvent, APP_VERSION } from './firebase';
 import { DataService, isAccountDeactivated } from './data';
 import { verifyPassword } from './passwordHash';
@@ -54,7 +54,7 @@ function validatePayload(payload: DeactivateAccountPayload): void {
 }
 
 /**
- * This functionality was implemented for App Store Guideline 5.1.1 Account Deletion Requirements.
+ * Elimina permanentemente la cuenta del usuario (Guideline 5.1.1(v) App Store).
  */
 export async function deactivateCurrentAccount(payload: DeactivateAccountPayload): Promise<void> {
   validatePayload(payload);
@@ -105,24 +105,23 @@ export async function deactivateCurrentAccount(payload: DeactivateAccountPayload
 
   await addDoc(collection(firestore, 'account_deactivation_feedback'), feedback);
 
-  await update(ref(db, `${ROOT}/users/${username}`), {
-    active: false,
-    accountStatus: 'deactivated',
-    deactivatedAt: rtdbServerTimestamp(),
-  });
+  await remove(ref(db, `${ROOT}/users/${username}`));
 
-  await logAnalyticsEvent('account_deactivated', {
+  await logAnalyticsEvent('account_deleted_permanently', {
     reason,
     timestamp: Date.now(),
     platform,
     appVersion: APP_VERSION,
   });
 
+  DataService.setActivePosId(null);
+
   try {
-    localStorage.removeItem('currentUser');
+    localStorage.clear();
+    sessionStorage.clear();
   } catch {
     // ignore
   }
 
-  DataService.setActivePosId(null);
+  window.location.href = '/';
 }

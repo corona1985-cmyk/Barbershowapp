@@ -7,6 +7,7 @@ import { completeSelfSignupFree, createPendingBarberSignupMobile, activatePlanFr
 import { SUPPORTED_COUNTRIES } from '../constants/regions';
 import { formatSignupAddress, getBarriosForCity, getCitiesForCountry } from '../utils/posLocation';
 import { isPlayBillingAvailable, initPlayBilling, purchasePlan, addPlayPurchaseListener, getPlayProductId, getActivePlayTransactions } from '../services/playBilling';
+import { navigateToLegal } from '../utils/legal';
 
 const TIER_OPTIONS: { value: AccountTier; label: string; description: string; price: number }[] = [
   { value: 'gratuito', label: 'Plan Gratuito', description: 'Solo ver y gestionar citas. Hasta 100 citas al mes.', price: 0 },
@@ -228,6 +229,36 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   };
 
   const primary = '#F5B301';
+
+  if (isNativeMobile) {
+    return (
+      <div className="h-[100dvh] min-h-0 max-h-[100dvh] relative flex flex-col items-center justify-center px-6 font-sans">
+        <div className="absolute inset-0 bg-slate-900" aria-hidden />
+        <div className="relative z-10 max-w-md w-full text-center space-y-6">
+          <div className="w-14 h-14 bg-[#F5B301] rounded-xl flex items-center justify-center mx-auto">
+            <Scissors size={28} className="text-slate-900" />
+          </div>
+          <h1 className="text-xl font-bold text-white">Acceso para barberos</h1>
+          <p className="text-slate-400 text-sm leading-relaxed">
+            El registro de barberías no está disponible en la app móvil. Si ya tienes cuenta, inicia sesión. Si eres nuevo, visita nuestra plataforma web.
+          </p>
+          <button
+            type="button"
+            onClick={onGoToLogin}
+            className="w-full min-h-[48px] flex items-center justify-center gap-2 py-3 rounded-xl text-slate-900 font-semibold"
+            style={{ backgroundColor: primary }}
+          >
+            <LogIn size={20} /> Iniciar sesión
+          </button>
+          {onGoBack && (
+            <button type="button" onClick={onGoBack} className="text-slate-500 hover:text-white text-sm">
+              Volver
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-[100dvh] min-h-0 max-h-[100dvh] relative flex flex-col font-sans">
@@ -612,7 +643,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                         className="mt-1 rounded border-slate-300 text-[#F5B301] focus:ring-[#F5B301]"
                       />
                       <span className="text-sm text-slate-600">
-                        Acepto los Términos de Servicio y la Política de Privacidad. Sin pago no se activará la cuenta.
+                        Acepto los <button type="button" onClick={(e) => { e.preventDefault(); navigateToLegal('terminos'); }} className="text-[#F5B301] hover:underline font-medium">Términos de Servicio</button> y la <button type="button" onClick={(e) => { e.preventDefault(); navigateToLegal('privacidad'); }} className="text-[#F5B301] hover:underline font-medium">Política de Privacidad</button>. Sin pago no se activará la cuenta.
                       </span>
                     </label>
                   </>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
 import {
     Scissors, ArrowRight, Shield, Headphones, RefreshCw, Sparkles,
     Calendar, Users, ShoppingBag, Package, BarChart3, MapPin, UserCheck, MessageCircle,
@@ -7,6 +8,7 @@ import {
 } from 'lucide-react';
 import { TIER_OPTIONS, CONTACT } from '../../constants/plans';
 import HeroMockup from './HeroMockup';
+import { navigateToLegal } from '../../utils/legal';
 
 const NAV_LINKS = [
     { id: 'inicio', label: 'Inicio' },
@@ -84,6 +86,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
     onGoToClientRegister,
     supportEmail = CONTACT.email,
 }) => {
+    const isNativeMobile = Capacitor.isNativePlatform();
     const [activeNav, setActiveNav] = useState('inicio');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeTestimonial, setActiveTestimonial] = useState(1);
@@ -116,6 +119,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
     };
 
     const container = 'max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 xl:px-12';
+    const navLinks = isNativeMobile ? NAV_LINKS.filter((l) => l.id !== 'planes') : NAV_LINKS;
 
     return (
         <div className="min-h-screen bg-[#12121c] text-white scroll-smooth text-[17px] lg:text-[18px]">
@@ -134,7 +138,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                         </button>
 
                         <nav className="hidden lg:flex items-center gap-1">
-                            {NAV_LINKS.map((link) => (
+                            {navLinks.map((link) => (
                                 <button
                                     key={link.id}
                                     type="button"
@@ -152,12 +156,21 @@ const LandingPage: React.FC<LandingPageProps> = ({
                         </nav>
 
                         <div className="flex items-center gap-2">
+                            {!isNativeMobile && (
                             <button
                                 type="button"
                                 onClick={onGetStarted}
                                 className="hidden sm:inline-flex items-center gap-1.5 px-5 py-2.5 bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base rounded-xl transition-colors"
                             >
                                 Comenzar Gratis <ArrowRight size={18} />
+                            </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={onGoToLogin}
+                                className="hidden sm:inline-flex items-center gap-1.5 px-5 py-2.5 border border-white/25 hover:border-white/50 text-white font-semibold text-base rounded-xl transition-colors"
+                            >
+                                Iniciar sesión
                             </button>
                             <button
                                 type="button"
@@ -173,7 +186,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
 
                 {mobileMenuOpen && (
                     <div className="lg:hidden border-t border-white/5 bg-[#12121c] px-4 py-4 space-y-1">
-                        {NAV_LINKS.map((link) => (
+                        {navLinks.map((link) => (
                             <button
                                 key={link.id}
                                 type="button"
@@ -192,12 +205,21 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 <Calendar size={16} /> Buscar barbería y agendar
                             </button>
                         )}
+                        {!isNativeMobile && (
                         <button
                             type="button"
                             onClick={onGetStarted}
                             className="w-full mt-2 flex items-center justify-center gap-1.5 px-4 py-3 bg-[#ffd427] text-slate-900 font-semibold text-sm rounded-xl"
                         >
                             Comenzar Gratis <ArrowRight size={16} />
+                        </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={onGoToLogin}
+                            className="w-full mt-2 flex items-center justify-center gap-1.5 px-4 py-3 border border-white/25 text-white font-semibold text-sm rounded-xl"
+                        >
+                            Iniciar sesión
                         </button>
                     </div>
                 )}
@@ -223,6 +245,8 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 Agenda citas, gestiona clientes, procesa ventas, administra tu equipo y haz crecer tu negocio desde una sola plataforma.
                             </p>
                             <div className="flex flex-col sm:flex-row gap-4">
+                                {!isNativeMobile && (
+                                <>
                                 <button
                                     type="button"
                                     onClick={onGetStarted}
@@ -237,6 +261,17 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 >
                                     Ver planes
                                 </button>
+                                </>
+                                )}
+                                {isNativeMobile && onGoToBarberias && (
+                                <button
+                                    type="button"
+                                    onClick={handleGoToBarberias}
+                                    className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-bold rounded-xl transition-colors"
+                                >
+                                    <Search size={18} /> Buscar barbería y agendar
+                                </button>
+                                )}
                             </div>
                             {onGoToBarberias && (
                                 <div className="mt-8 pt-6 border-t border-white/10">
@@ -413,7 +448,8 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
             </section>
 
-            {/* Pricing */}
+            {/* Pricing — solo web (Guideline 3.1.1) */}
+            {!isNativeMobile && (
             <section id="planes" className="py-20 lg:py-28">
                 <div className={container}>
                     <div className="text-center mb-16">
@@ -484,6 +520,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
                 </div>
             </section>
+            )}
 
             {/* Testimonials */}
             <section id="testimonios" className="py-20 lg:py-28 bg-[#16162a]/30 border-y border-white/5">
@@ -580,6 +617,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 </div>
                             </div>
                             <div className="flex flex-col sm:flex-row gap-4 flex-shrink-0">
+                                {!isNativeMobile && (
                                 <button
                                     type="button"
                                     onClick={onGetStarted}
@@ -587,6 +625,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 >
                                     Crear mi barbería ahora
                                 </button>
+                                )}
                                 {onGoToBarberias ? (
                                     <button
                                         type="button"
@@ -680,8 +719,8 @@ const LandingPage: React.FC<LandingPageProps> = ({
                         <div>
                             <h4 className="font-semibold text-base mb-4">Legal</h4>
                             <ul className="space-y-2 text-base text-slate-500">
-                                <li><span className="cursor-default">Términos y condiciones</span></li>
-                                <li><span className="cursor-default">Política de privacidad</span></li>
+                                <li><button type="button" onClick={() => navigateToLegal('terminos')} className="hover:text-[#ffd427] transition-colors">Términos y condiciones</button></li>
+                                <li><button type="button" onClick={() => navigateToLegal('privacidad')} className="hover:text-[#ffd427] transition-colors">Política de privacidad</button></li>
                             </ul>
                         </div>
                         <div>

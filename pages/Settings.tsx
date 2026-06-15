@@ -357,12 +357,14 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
                         )}
                         {!isBarber && (
                             <>
+                                {!isNativeApp && (
                                 <button 
                                     onClick={() => setActiveTab('planes')}
                                     className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'planes' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
                                 >
                                     <CreditCard size={16} className="mr-2" /> Planes
                                 </button>
+                                )}
                                 <button 
                                     onClick={() => setActiveTab('privacy')}
                                     className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'privacy' ? 'bg-[#ffd427] text-slate-900' : 'text-slate-600 hover:bg-slate-50'}`}
@@ -956,15 +958,15 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
                         <div>
                             <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">Ajustes de Cuenta</h3>
                             <p className="mt-2 text-sm text-slate-600">
-                                Aquí puedes eliminar tu cuenta de manera segura. Los datos administrativos e históricos se conservarán según la política de la app.
+                                Puedes eliminar tu cuenta de forma permanente e irreversible desde aquí.
                             </p>
                         </div>
                         <DeactivateAccountSection onDeactivated={onAccountDeactivated} />
                     </div>
                 )}
 
-                {/* PLANES: información de todos los planes */}
-                {activeTab === 'planes' && (
+                {/* PLANES: información de todos los planes — oculto en app nativa (Guideline 3.1.1) */}
+                {activeTab === 'planes' && !isNativeApp && (
                     <div className="space-y-6">
                         <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">Planes disponibles</h3>
                         <p className="text-sm text-slate-600">Tu plan actual: <strong className="text-[#ffd427]">{accountTier === 'gratuito' ? 'Plan Gratuito' : accountTier === 'solo' ? 'Plan Solo' : accountTier === 'barberia' ? 'Plan Barbería' : 'Plan Multi-Sede'}</strong></p>

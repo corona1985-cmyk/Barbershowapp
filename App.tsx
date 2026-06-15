@@ -34,6 +34,9 @@ import { DataService } from './services/data';
 import { isAccountDeactivated } from './services/data';
 import { APP_VERSION, authenticateMasterWithPassword } from './services/firebase';
 import { initPlayBilling, isPlayBillingAvailable } from './services/playBilling';
+import LegalDocumentPage from './pages/LegalDocumentPage';
+import { getLegalDocumentFromUrl, navigateToLegal, LegalDocumentType } from './utils/legal';
+import { GLOBAL_FREE_MODE } from './config/app';
 
 const ViewFallback = () => (
     <div className="flex items-center justify-center min-h-[200px]">
@@ -42,12 +45,14 @@ const ViewFallback = () => (
 );
 
 const App: React.FC = () => {
+    const isNativeApp = Capacitor.isNativePlatform();
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [currentView, setCurrentView] = useState<ViewState>('dashboard');
     const [userRole, setUserRole] = useState<UserRole>('admin');
     const [fullName, setFullName] = useState('');
     const [userPhotoUrl, setUserPhotoUrl] = useState('');
     const [acceptedCookies, setAcceptedCookies] = useState(false);
+    const [legalView, setLegalView] = useState<LegalDocumentType | null>(() => getLegalDocumentFromUrl());
     
     // Mobile Sidebar State
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -75,8 +80,8 @@ const App: React.FC = () => {
     const [isLoadingSession, setIsLoadingSession] = useState(true);
     /** Si false, se muestra primero la bienvenida (tipo de barbería + contacto). Si true, el formulario de login. */
     const [showLoginScreen, setShowLoginScreen] = useState(false);
-    /** Landing page de marketing; al cerrarla se muestra WelcomePlanSelector o login. */
-    const [showLandingPage, setShowLandingPage] = useState(true);
+    /** Landing page de marketing; nunca en iOS/Android nativo (Guideline 4.2). */
+    const [showLandingPage, setShowLandingPage] = useState(() => !isNativeApp);
     /** Cliente sin cuenta que quiere ver barberías: muestra lista para elegir una y registrarse ahí. */
     const [showBarberiasGuest, setShowBarberiasGuest] = useState(false);
     /** Invitado que está agendando cita en una barbería (sin cuenta). */
@@ -93,12 +98,18 @@ const App: React.FC = () => {
     const [preferredPosId, setPreferredPosId] = useState<number | null>(null);
     /** Sede actual (para comprobar vencimiento de suscripción). */
     const [currentPos, setCurrentPos] = useState<PointOfSale | null>(null);
-    const accountDeactivatedMessage = 'Tu cuenta ha sido eliminada. Contacta soporte si deseas recuperarla.';
+    const accountDeactivatedMessage = 'Tu cuenta ha sido eliminada permanentemente.';
 
     useEffect(() => {
         DataService.initialize().catch((err) => {
             console.error('Error inicializando DataService:', err);
         });
+    }, []);
+
+    useEffect(() => {
+        const syncLegalFromUrl = () => setLegalView(getLegalDocumentFromUrl());
+        window.addEventListener('popstate', syncLegalFromUrl);
+        return () => window.removeEventListener('popstate', syncLegalFromUrl);
     }, []);
 
     const handleSwitchPos = async (posId: number): Promise<AccountTier> => {
@@ -157,9 +168,9 @@ const App: React.FC = () => {
         }
     }, [isLoadingSession]);
 
-    // Inicializar Google Play Billing en Android al arranque (verificación de compras).
+    // Google Play Billing solo cuando no estamos en modo promocional global (App Store / Play Store).
     useEffect(() => {
-        if (isPlayBillingAvailable()) initPlayBilling();
+        if (!GLOBAL_FREE_MODE && isPlayBillingAvailable()) initPlayBilling();
     }, []);
 
     // Plan Gratuito: no tiene acceso al Dashboard; redirigir a Agenda (superadmin puede ver todo)
@@ -527,7 +538,7 @@ const App: React.FC = () => {
         DataService.setActivePosId(null);
         setCurrentPosId(null);
         setShowLoginScreen(false);
-        setShowLandingPage(true);
+        setShowLandingPage(!isNativeApp);
     };
 
     const handleAccountDeactivated = () => {
@@ -587,6 +598,10 @@ const App: React.FC = () => {
 
     // --- RENDER ---
 
+    if (legalView) {
+        return <LegalDocumentPage type={legalView} />;
+    }
+
     // 1. MASTER DASHBOARD RENDER (No sidebar, full screen exclusive)
     if (isAuthenticated && userRole === 'platform_owner') {
         return (
@@ -597,7 +612,7 @@ const App: React.FC = () => {
     }
 
     // 2. SUSCRIPCIÓN VENCIDA (admin/dueno/barbero con sede vencida)
-    if (isAuthenticated && isSubscriptionExpired && currentPos) {
+    if (isAuthenticated && isSubscriptionExpired && currentPos && !GLOBAL_FREE_MODE) {
         const expiresAt = currentPos.subscriptionExpiresAt;
         const expiryDate = expiresAt ? new Date(expiresAt).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
         return (
@@ -704,8 +719,8 @@ const App: React.FC = () => {
         );
     }
 
-    // 5. LANDING PAGE (marketing)
-    if (!isAuthenticated && showLandingPage && !showBarberiasGuest && !guestBookingPos) {
+    // 5. LANDING PAGE (marketing) — solo web; nunca en app compilada iOS/Android
+    if (!isAuthenticated && showLandingPage && !isNativeApp && !showBarberiasGuest && !guestBookingPos) {
         return (
             <>
                 <AdMobBanner showAds={true} />
@@ -729,7 +744,7 @@ const App: React.FC = () => {
                         onGoToLogin={() => { setShowLoginScreen(true); setIsRegistering(false); }}
                         onGoToBarberias={() => setShowBarberiasGuest(true)}
                         onGoToClientRegister={() => openClientRegistration(true)}
-                        onBackToLanding={() => setShowLandingPage(true)}
+                        onBackToLanding={isNativeApp ? undefined : () => setShowLandingPage(true)}
                         onBarberSignupSuccess={(username, password) => {
                             handleLogin({ preventDefault: () => {} } as React.FormEvent, { username, password });
                         }}
@@ -742,7 +757,10 @@ const App: React.FC = () => {
                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 md:p-8 relative overflow-hidden border-t-8 border-[#ffd427] my-2 sm:my-4">
                     <button
                         type="button"
-                        onClick={() => { setShowLoginScreen(false); setShowLandingPage(true); }}
+                        onClick={() => {
+                            setShowLoginScreen(false);
+                            if (!isNativeApp) setShowLandingPage(true);
+                        }}
                         className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center justify-center gap-1.5 min-h-[44px] pl-2 pr-3 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 active:bg-slate-200 text-sm"
                     >
                         <ArrowLeft size={18} /> Volver
@@ -1059,7 +1077,7 @@ const App: React.FC = () => {
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                            <button type="button" onClick={() => setCurrentView('settings')} className="min-h-[44px] px-4 flex items-center text-slate-300 hover:text-white text-sm underline rounded-lg active:bg-white/10">Ver Política</button>
+                            <button type="button" onClick={() => navigateToLegal('privacidad')} className="min-h-[44px] px-4 flex items-center text-slate-300 hover:text-white text-sm underline rounded-lg active:bg-white/10">Ver Política</button>
                             <button type="button" onClick={acceptCookies} className="min-h-[44px] bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-6 py-2.5 rounded-full text-sm font-bold transition-colors active:scale-[0.98]">
                                 Aceptar
                             </button>

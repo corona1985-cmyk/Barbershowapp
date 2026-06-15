@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { ADMOB_AVAILABLE, initAdMob, showBannerAd, removeBannerAd } from '../services/adMob';
 
 interface AdMobBannerProps {
@@ -7,17 +8,16 @@ interface AdMobBannerProps {
 }
 
 /**
- * Gestiona el banner de AdMob en la parte inferior cuando:
- * - La app corre en plataforma nativa (Android/iOS) y
- * - showAds es true (plan gratuito, rol cliente, o pantalla de bienvenida).
- * Barberos con planes de pago (solo, barberia, multisede) no ven anuncios.
- *
- * En iOS, initAdMob() muestra primero el popup ATT y solo después inicializa AdMob.
+ * Gestiona el banner de AdMob en web/PWA.
+ * En compilación nativa (iOS/Android) no se cargan anuncios ni ATT (Guideline 2.1).
  */
 const AdMobBanner: React.FC<AdMobBannerProps> = ({ showAds }) => {
   const bannerShown = useRef(false);
+  const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
+    if (isNative) return;
+
     const shouldShow = ADMOB_AVAILABLE && showAds;
 
     if (!shouldShow) {
@@ -45,7 +45,9 @@ const AdMobBanner: React.FC<AdMobBannerProps> = ({ showAds }) => {
         bannerShown.current = false;
       }
     };
-  }, [showAds]);
+  }, [showAds, isNative]);
+
+  if (isNative) return null;
 
   return null;
 };

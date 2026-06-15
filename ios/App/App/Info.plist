@@ -20,21 +20,10 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>GADApplicationIdentifier</key>
-	<string>ca-app-pub-6169287781659857~4172657911</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>BarberShow usa la cámara para escanear códigos QR de barberías y agendar citas.</string>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>BarberShow usa este identificador para mostrarte anuncios más relevantes y medir el rendimiento de los anuncios. Puedes cambiar esta opción en Ajustes en cualquier momento.</string>
-	<key>SKAdNetworkItems</key>
-	<array>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>cstr6suwn9.skadnetwork</string>
-		</dict>
-	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

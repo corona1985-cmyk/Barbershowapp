@@ -178,9 +178,263 @@ const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   appName: 'BarberShow',
   primaryColor: '#ffd427',
   secondaryColor: '#1e293b',
-  termsAndConditions: 'Términos y condiciones estándar...',
-  privacyPolicy: 'Política de privacidad estándar...',
-  cookiePolicy: 'Política de cookies estándar...',
+  termsAndConditions: `TÉRMINOS Y CONDICIONES DE USO
+BarberShow — Plataforma de gestión para barberías
+Versión vigente | Sitio: https://barbershow.net
+
+═══════════════════════════════════════════════════════════════
+
+1. IDENTIFICACIÓN DEL PRESTADOR
+
+Estos Términos y Condiciones ("Términos") regulan el acceso y uso de BarberShow, plataforma digital de gestión para barberías y peluquerías, operada por ICC Digital Group ("BarberShow", "nosotros" o "el Prestador").
+
+Contacto oficial:
+• Correo: corona1985@iccdigitalgroup.com
+• WhatsApp / teléfono: 829 599 2941
+• Web: https://barbershow.net
+
+Al registrarte, iniciar sesión, agendar una cita, contratar un plan o utilizar BarberShow en cualquiera de sus versiones (sitio web, aplicación móvil para Android/iOS u otros canales autorizados), declaras haber leído, comprendido y aceptado estos Términos. Si no estás de acuerdo, no utilices el servicio.
+
+═══════════════════════════════════════════════════════════════
+
+2. OBJETO DEL SERVICIO
+
+BarberShow es un software en la nube (SaaS) multi-sede que permite a barberías y profesionales del sector:
+
+• Gestionar agenda y citas por barbero o sede
+• Administrar clientes, servicios y horarios de trabajo
+• Registrar ventas desde punto de venta (POS)
+• Controlar inventario, finanzas y reportes
+• Comunicarse con clientes (incluida integración con WhatsApp desde el número del usuario)
+• Publicar códigos QR para registro y reservas
+• Permitir que clientes finales descubran barberías, se registren y agenden citas
+
+BarberShow actúa como proveedor tecnológico. No presta servicios de barbería ni peluquería; la relación comercial entre la barbería y su cliente final es independiente de BarberShow.
+
+═══════════════════════════════════════════════════════════════
+
+3. DEFINICIONES
+
+• "Usuario": persona que accede a BarberShow con credenciales o como invitado en funciones limitadas.
+• "Barbería" o "Sede" (Punto de Venta / POS): negocio registrado en la plataforma con agenda, barberos y configuración propia.
+• "Dueño" o "Administrador": usuario responsable de una o varias sedes.
+• "Barbero" / "Empleado": miembro del equipo asignado a una sede, con permisos según su rol.
+• "Cliente final": usuario registrado como cliente para agendar citas y gestionar su perfil.
+• "Plan" o "Tier": modalidad de suscripción que determina funciones, límites y precio.
+• "Invitado": persona que agenda cita o consulta barberías sin crear cuenta permanente.
+
+═══════════════════════════════════════════════════════════════
+
+4. TIPOS DE USUARIO Y ACCESO
+
+4.1 Barberías y profesionales
+Pueden registrarse mediante autoregistro (plan gratuito o de pago), solicitud de acceso revisada por el equipo, o alta por un administrador. Cada sede tiene un dueño identificado y puede incluir barberos, empleados y administradores con distintos permisos (gestión de usuarios, reportes, inventario, citas, etc.).
+
+4.2 Clientes finales
+Pueden crear cuenta para agendar citas, guardar historial, marcar barberías favoritas (por ejemplo mediante código QR) y gestionar su perfil. El registro puede vincularse a una barbería específica cuando acceden por QR o enlace de referencia.
+
+4.3 Invitados
+BarberShow permite reservar citas sin cuenta en barberías que lo habiliten. Los datos proporcionados (nombre, teléfono, etc.) serán tratados conforme a la Política de Privacidad y bajo responsabilidad de la barbería que recibe la reserva.
+
+4.4 Credenciales
+Eres responsable de mantener la confidencialidad de tu usuario y contraseña, y de toda actividad realizada con tu cuenta. Debes notificar de inmediato cualquier uso no autorizado a soporte.
+
+═══════════════════════════════════════════════════════════════
+
+5. PLANES, PRECIOS Y FUNCIONALIDADES
+
+Los planes disponibles, sus precios en USD y sus características se muestran en la aplicación y pueden actualizarse. A la fecha de estos Términos, BarberShow ofrece:
+
+PLAN GRATUITO — USD 0/mes
+• Solo agenda de citas: visualización y gestión de citas agendadas
+• Límite de hasta 100 citas no canceladas por mes y por sede
+• Sin acceso a ventas POS, clientes, reportes avanzados, inventario ni finanzas
+• Puede incluir publicidad (banners) en web y aplicación móvil
+• Ideal para prueba del servicio o negocios muy pequeños
+
+PLAN SOLO — USD 14,95/mes
+• Un profesional, un local
+• Dashboard, citas, clientes, ventas (POS) y configuración básica
+• Reportes básicos de ventas y citas
+• Inventario simple opcional
+
+PLAN BARBERÍA — USD 19,95/mes
+• Varios barberos en una sola sede
+• Agenda, citas y ventas por barbero; reportes por profesional
+• Funciones ampliadas: inventario, finanzas, consola WhatsApp, administración de usuarios (según configuración)
+
+PLAN MULTI-SEDE — USD 29,95/mes
+• Varias ubicaciones bajo un mismo dueño
+• Selector de sede, reportes comparativos y administración centralizada
+• Sin límite de sedes ni barberos dentro de lo razonable para uso comercial normal
+
+Descuento anual: los planes de pago pueden contratarse con ciclo anual con descuento del 40 % sobre el precio mensual, según se indique en la app al contratar.
+
+Plan Pro (notificaciones): algunas sedes pueden tener habilitadas notificaciones de citas para barberos; esta función depende del plan contratado y de la configuración de la sede.
+
+BarberShow se reserva el derecho de modificar precios, límites o funciones de cada plan. Los cambios no afectarán retroactivamente un período ya pagado, salvo disposición legal en contrario.
+
+═══════════════════════════════════════════════════════════════
+
+6. CONTRATACIÓN, PAGOS Y RENOVACIÓN
+
+6.1 Plan gratuito
+El plan gratuito puede activarse sin pago, sujeto a verificación de datos y a los límites descritos. BarberShow puede solicitar información adicional antes de aprobar una cuenta.
+
+6.2 Planes de pago
+Los planes de pago requieren suscripción activa. En aplicación móvil (Android/iOS), el pago se procesa exclusivamente a través de Google Play o App Store / Apple Pay, según corresponda. En la versión web, la contratación de planes de pago puede requerir completar el proceso en la app móvil.
+
+6.3 Renovación y vencimiento
+Las suscripciones tienen una fecha de vencimiento (subscriptionExpiresAt). Si la suscripción vence y no se renueva, el acceso a funciones de pago puede bloquearse hasta regularizar el pago. El plan gratuito no requiere pago pero sigue sujeto a sus límites.
+
+6.4 Reembolsos
+Los reembolsos de suscripciones contratadas por App Store o Google Play se rigen por las políticas de Apple y Google respectivamente. Para consultas, contacta primero al proveedor de la tienda y, si es necesario, a soporte de BarberShow.
+
+6.5 Impuestos
+Los precios publicados pueden no incluir impuestos locales; estos serán aplicados según la legislación vigente y las políticas de la tienda de aplicaciones.
+
+═══════════════════════════════════════════════════════════════
+
+7. USO ACEPTABLE
+
+Queda estrictamente prohibido:
+
+• Utilizar BarberShow para actividades ilegales, fraudulentas o que vulneren derechos de terceros
+• Suplantar identidad o registrar barberías falsas
+• Intentar acceder sin autorización a datos de otras sedes, usuarios o clientes
+• Realizar ingeniería inversa, scraping masivo, ataques o interferencia con la infraestructura
+• Revender, sublicenciar o redistribuir el acceso a la plataforma sin autorización escrita
+• Cargar contenido ofensivo, difamatorio, obsceno o que infrinja propiedad intelectual
+• Eludir límites del plan gratuito (por ejemplo, superar el tope de 100 citas mensuales mediante cuentas duplicadas)
+• Usar la consola WhatsApp o mensajería para spam o comunicaciones no solicitadas
+
+BarberShow puede suspender o eliminar cuentas, sedes o contenido que incumplan estos Términos, sin perjuicio de acciones legales.
+
+═══════════════════════════════════════════════════════════════
+
+8. DATOS, PRIVACIDAD Y RESPONSABILIDAD DE LA BARBERÍA
+
+8.1 Datos ingresados por barberías
+Las barberías y sus administradores son responsables de la veracidad y legalidad de los datos que ingresan sobre clientes, empleados, ventas, citas e inventario. Deben contar con base legal para tratar datos personales de sus clientes (consentimiento, ejecución de contrato, etc.) conforme a la normativa aplicable.
+
+8.2 BarberShow como encargado tecnológico
+BarberShow almacena y procesa datos en infraestructura en la nube (Firebase / Google) para prestar el servicio. El tratamiento de datos personales se describe en la Política de Privacidad, accesible en la aplicación y en https://barbershow.net/?legal=privacidad
+
+8.3 WhatsApp y comunicaciones
+Las funciones de mensajería y WhatsApp abren enlaces o flujos desde el dispositivo del usuario; los mensajes se envían desde el número del propio usuario o barbería. BarberShow no es responsable del contenido de mensajes enviados por los usuarios ni de políticas de terceros (WhatsApp/Meta).
+
+8.4 Eliminación de cuenta
+Los usuarios pueden solicitar la desactivación o eliminación de su cuenta desde la configuración de la app. Algunos datos operativos e históricos pueden conservarse según obligaciones legales o necesidades de seguridad, como se indica en la Política de Privacidad.
+
+═══════════════════════════════════════════════════════════════
+
+9. PROPIEDAD INTELECTUAL
+
+BarberShow, su nombre, logotipo, diseño, código fuente, documentación y materiales asociados son propiedad de ICC Digital Group o sus licenciantes. Se concede al usuario una licencia limitada, no exclusiva, intransferible y revocable para usar la plataforma conforme al plan contratado y estos Términos.
+
+Los contenidos que subas (fotos de barberos, logos de barbería, etc.) siguen siendo tuyos; otorgas a BarberShow una licencia para almacenarlos y mostrarlos dentro del servicio.
+
+═══════════════════════════════════════════════════════════════
+
+10. DISPONIBILIDAD, MANTENIMIENTO Y SOPORTE
+
+BarberShow se presta "tal cual" y "según disponibilidad". Podemos realizar mantenimientos programados o de emergencia que afecten temporalmente el acceso. En modo mantenimiento, el acceso puede restringirse a usuarios master/administradores de plataforma.
+
+El soporte técnico se presta por los canales indicados (correo y WhatsApp) en horarios comerciales razonables. No garantizamos tiempos de respuesta específicos salvo acuerdo comercial aparte.
+
+═══════════════════════════════════════════════════════════════
+
+11. LIMITACIÓN DE RESPONSABILIDAD
+
+En la máxima medida permitida por la ley:
+
+• BarberShow no garantiza resultados comerciales, aumento de clientes ni ausencia total de errores en el software
+• No somos responsables de citas perdidas, conflictos entre barbería y cliente, ni de daños derivados del uso de WhatsApp u otros servicios de terceros
+• No respondemos por pérdida de datos debida a causas fuera de nuestro control razonable; se recomienda exportar reportes periódicamente
+• La responsabilidad total de BarberShow frente al usuario por cualquier reclamación relacionada con el servicio se limitará al monto pagado por el usuario en los doce (12) meses anteriores al hecho, o a cero en plan gratuito
+
+Nada en estos Términos excluye responsabilidades que no puedan limitarse por ley.
+
+═══════════════════════════════════════════════════════════════
+
+12. SUSPENSIÓN Y TERMINACIÓN
+
+BarberShow puede suspender o terminar el acceso si:
+• Incumples estos Términos o la Política de Privacidad
+• Tu suscripción está vencida o impaga
+• Detectamos actividad fraudulenta o riesgo para la plataforma u otros usuarios
+• Lo exige una autoridad competente
+
+Puedes dejar de usar el servicio en cualquier momento. La terminación no exime de obligaciones de pago ya devengadas ni de responsabilidades por uso previo.
+
+═══════════════════════════════════════════════════════════════
+
+13. MODIFICACIONES
+
+Podemos actualizar estos Términos cuando sea necesario. Publicaremos la versión vigente en la aplicación y en https://barbershow.net/?legal=terminos. Los cambios relevantes pueden comunicarse por correo o aviso en la app. El uso continuado del servicio tras la entrada en vigor de los cambios implica aceptación, salvo que la ley exija consentimiento expreso adicional.
+
+═══════════════════════════════════════════════════════════════
+
+14. LEGISLACIÓN APLICABLE Y JURISDICCIÓN
+
+Estos Términos se rigen por las leyes de la República Dominicana, sin perjuicio de normas imperativas de protección al consumidor del país de residencia del usuario cuando resulten aplicables. Cualquier controversia se someterá preferentemente a solución amigable; de no alcanzarse acuerdo, a los tribunales competentes de la República Dominicana.
+
+═══════════════════════════════════════════════════════════════
+
+15. CONTACTO
+
+Para consultas sobre estos Términos, soporte o reclamaciones:
+
+• Email: corona1985@iccdigitalgroup.com
+• WhatsApp: 829 599 2941
+• Web: https://barbershow.net
+
+Al utilizar BarberShow confirmas que has leído y aceptado estos Términos y Condiciones.`,
+  privacyPolicy: `POLÍTICA DE PRIVACIDAD — BARSHOW
+
+1. Introducción
+BarberShow ("nosotros") respeta tu privacidad. Esta política explica qué datos recopilamos, para qué los usamos y cuáles son tus derechos.
+
+2. Responsable del tratamiento
+ICC Digital Group — BarberShow
+Correo de contacto: corona1985@iccdigitalgroup.com
+
+3. Datos que recopilamos
+• Datos de cuenta: nombre, usuario, correo, teléfono y contraseña (almacenada de forma segura).
+• Datos de barbería: nombre comercial, servicios, horarios, barberos, inventario y ventas.
+• Datos de clientes: nombre, teléfono, historial de citas y preferencias registradas por la barbería.
+• Datos técnicos: tipo de dispositivo, sistema operativo, registros de uso y cookies (en la versión web).
+
+4. Finalidad del tratamiento
+Utilizamos los datos para: prestar el servicio; gestionar citas y ventas; enviar recordatorios; mejorar la plataforma; cumplir obligaciones legales; y ofrecer soporte técnico.
+
+5. Base legal
+El tratamiento se basa en la ejecución del contrato de servicio, el consentimiento del usuario cuando corresponda, el interés legítimo en mejorar la plataforma y el cumplimiento de obligaciones legales.
+
+6. Conservación
+Conservamos los datos mientras la cuenta esté activa o sea necesario para prestar el servicio. Tras la baja, algunos datos pueden conservarse el tiempo exigido por ley o por motivos de seguridad y resolución de disputas.
+
+7. Compartición con terceros
+No vendemos datos personales. Podemos compartir información con proveedores de infraestructura (hosting, bases de datos), procesadores de pago y servicios de mensajería, siempre bajo acuerdos de confidencialidad y solo para las finalidades descritas.
+
+8. Cookies (versión web)
+Utilizamos cookies y almacenamiento local para mantener la sesión, recordar preferencias y mejorar la experiencia. Puedes gestionar las cookies desde la configuración de tu navegador.
+
+9. Seguridad
+Aplicamos medidas técnicas y organizativas para proteger los datos contra acceso no autorizado, pérdida o alteración. Ningún sistema es 100 % infalible; te recomendamos usar contraseñas robustas.
+
+10. Tus derechos
+Puedes solicitar acceso, rectificación, supresión, limitación u oposición al tratamiento de tus datos, así como portabilidad cuando aplique. Escríbenos a corona1985@iccdigitalgroup.com para ejercer tus derechos.
+
+11. Menores
+BarberShow no está dirigido a menores de 16 años. Si detectamos datos de menores sin consentimiento parental, procederemos a eliminarlos.
+
+12. Cambios
+Podemos actualizar esta política. Publicaremos la versión vigente en la aplicación con la fecha de actualización.
+
+13. Contacto
+corona1985@iccdigitalgroup.com`,
+  cookiePolicy: 'Utilizamos cookies esenciales para la sesión y preferencias, y cookies analíticas para mejorar la experiencia. Puedes aceptar o configurarlas desde tu navegador.',
   supportEmail: 'corona1985@iccdigitalgroup.com',
   maintenanceMode: false,
 };
