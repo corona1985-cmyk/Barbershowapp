@@ -20,6 +20,11 @@ export interface PointOfSale {
     city?: string;
     /** Barrio, colonia o zona dentro de la ciudad */
     barrio?: string;
+    /** Coordenadas geográficas de la sede para búsqueda por cercanía */
+    lat?: number;
+    lng?: number;
+    /** Última actualización de coordenadas (ISO string) */
+    locationUpdatedAt?: string;
     ownerId: string; // Username of the owner
     isActive: boolean;
     /** Plan de suscripción; solo 'pro' habilita campana de notificaciones de citas para el barbero */

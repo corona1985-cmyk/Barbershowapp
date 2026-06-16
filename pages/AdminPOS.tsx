@@ -3,13 +3,16 @@ import { DataService } from '../services/data';
 import { getFreeSignupTierAndPlan } from '../config/app';
 import { PointOfSale, SystemUser, AccountTier } from '../types';
 import { getDisplayPlanName } from '../utils/planDisplay';
-import { MapPin, Plus, Edit2, Trash2, X, Save, User } from 'lucide-react';
+import { requestUserLocationWithPermission } from '../utils/geolocation';
+import { MapPin, Plus, Edit2, Trash2, X, Save, User, Loader2, Navigation } from 'lucide-react';
 
 const AdminPOS: React.FC = () => {
     const [posList, setPosList] = useState<PointOfSale[]>([]);
     const [users, setUsers] = useState<SystemUser[]>([]);
     const [showModal, setShowModal] = useState(false);
     const [currentPos, setCurrentPos] = useState<Partial<PointOfSale>>({ name: '', address: '', ownerId: '' });
+    const [detectingLocation, setDetectingLocation] = useState(false);
+    const [locationMessage, setLocationMessage] = useState('');
 
     useEffect(() => {
         loadData();
@@ -29,13 +32,24 @@ const AdminPOS: React.FC = () => {
         const tier = currentPos.tier ?? 'solo';
         const plan = (tier === 'solo' || tier === 'gratuito') ? 'basic' : 'pro';
         const ownerId = (currentPos.ownerId ?? '').trim() || undefined;
-        const toSave = { ...currentPos, tier, plan, ownerId: ownerId ?? '' } as PointOfSale;
+        const lat = typeof currentPos.lat === 'number' && Number.isFinite(currentPos.lat) ? currentPos.lat : undefined;
+        const lng = typeof currentPos.lng === 'number' && Number.isFinite(currentPos.lng) ? currentPos.lng : undefined;
+        const toSave = {
+            ...currentPos,
+            lat,
+            lng,
+            locationUpdatedAt: lat != null && lng != null ? (currentPos.locationUpdatedAt || new Date().toISOString()) : undefined,
+            tier,
+            plan,
+            ownerId: ownerId ?? '',
+        } as PointOfSale;
         if (currentPos.id) {
             await DataService.updatePointOfSale(toSave);
         } else {
             await DataService.addPointOfSale(toSave as any);
         }
         setShowModal(false);
+        setLocationMessage('');
         await loadData();
     };
 
@@ -52,7 +66,28 @@ const AdminPOS: React.FC = () => {
         } else {
             setCurrentPos({ name: '', address: '', ownerId: '', isActive: true, tier: getFreeSignupTierAndPlan().tier });
         }
+        setLocationMessage('');
         setShowModal(true);
+    };
+
+    const handleDetectPosLocation = async () => {
+        setDetectingLocation(true);
+        setLocationMessage('');
+        const result = await requestUserLocationWithPermission();
+        setDetectingLocation(false);
+        if (result.status === 'success') {
+            setCurrentPos((prev) => ({
+                ...prev,
+                lat: result.lat,
+                lng: result.lng,
+                locationUpdatedAt: new Date().toISOString(),
+                country: prev.country || result.countryCode,
+                city: prev.city || result.city,
+            }));
+            setLocationMessage(`Ubicación detectada: ${result.displayLabel}`);
+            return;
+        }
+        setLocationMessage(result.message);
     };
 
     const owners = users.filter(u => ['admin', 'dueno', 'superadmin', 'platform_owner', 'barbero', 'empleado'].includes(u.role ?? ''));
@@ -155,6 +190,36 @@ const AdminPOS: React.FC = () => {
                                     onChange={e => setCurrentPos({...currentPos, address: e.target.value})}
                                     placeholder="Ej: Av. Principal 123"
                                 />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Coordenadas del local</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#ffd427]"
+                                        value={currentPos.lat ?? ''}
+                                        onChange={e => setCurrentPos({ ...currentPos, lat: e.target.value === '' ? undefined : Number(e.target.value) })}
+                                        placeholder="Latitud"
+                                    />
+                                    <input
+                                        type="number"
+                                        step="any"
+                                        className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-[#ffd427]"
+                                        value={currentPos.lng ?? ''}
+                                        onChange={e => setCurrentPos({ ...currentPos, lng: e.target.value === '' ? undefined : Number(e.target.value) })}
+                                        placeholder="Longitud"
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleDetectPosLocation}
+                                    disabled={detectingLocation}
+                                    className="mt-2 inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                                >
+                                    {detectingLocation ? <><Loader2 size={14} className="animate-spin" /> Detectando...</> : <><Navigation size={14} /> Usar ubicación actual</>}
+                                </button>
+                                {locationMessage && <p className="text-xs text-slate-500 mt-1">{locationMessage}</p>}
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Dueño Asignado</label>

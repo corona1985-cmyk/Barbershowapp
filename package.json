@@ -32,6 +32,7 @@
     "@capacitor/ios": "^6.2.1",
     "@capacitor/cli": "^6.2.1",
     "@capacitor/core": "^6.2.1",
+    "@capacitor/local-notifications": "^6.1.0",
     "@capacitor/splash-screen": "^6.0.4",
     "@squareetlabs/capacitor-subscriptions": "^1.0.25",
     "firebase": "^12.9.0",

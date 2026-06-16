@@ -116,6 +116,8 @@ export interface CompleteSelfSignupFreeParams {
   country: string;
   city: string;
   barrio: string;
+  lat?: number;
+  lng?: number;
 }
 
 /** Completa el autoregistro con plan gratuito: crea usuario y barbería en Realtime Database (sin Cloud Functions). */
@@ -133,6 +135,8 @@ export interface CreatePendingBarberSignupParams {
   email?: string;
   barbershopName: string;
   address: string;
+  lat?: number;
+  lng?: number;
   plan: 'solo' | 'barberia' | 'multisede';
   ciclo: 'mensual' | 'anual';
 }

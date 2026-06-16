@@ -6,7 +6,12 @@ interface UseDeactivateAccountOptions {
 }
 
 function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
+  if (error instanceof Error) {
+    if (error.message.includes('timed out')) {
+      return 'La eliminación tardó demasiado en responder. Revisa tu conexión e inténtalo de nuevo.';
+    }
+    return error.message;
+  }
   return 'No se pudo eliminar la cuenta. Intenta de nuevo.';
 }
 

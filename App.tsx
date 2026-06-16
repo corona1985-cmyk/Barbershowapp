@@ -34,6 +34,7 @@ import { DataService } from './services/data';
 import { isAccountDeactivated } from './services/data';
 import { APP_VERSION, authenticateMasterWithPassword } from './services/firebase';
 import { initPlayBilling, isPlayBillingAvailable } from './services/playBilling';
+import { initLocalNotifications, syncAppointmentNotifications, stopAppointmentNotifications } from './services/notifications';
 import LegalDocumentPage from './pages/LegalDocumentPage';
 import { getLegalDocumentFromUrl, navigateToLegal, LegalDocumentType } from './utils/legal';
 import { GLOBAL_FREE_MODE } from './config/app';
@@ -172,6 +173,46 @@ const App: React.FC = () => {
     useEffect(() => {
         if (!GLOBAL_FREE_MODE && isPlayBillingAvailable()) initPlayBilling();
     }, []);
+
+    // Notificaciones locales de citas (solo nativo): recordatorio 30 min antes y aviso de cita nueva.
+    useEffect(() => {
+        if (!isNativeApp || !isAuthenticated) return;
+        if (userRole === 'platform_owner') return;
+
+        let cancelled = false;
+        let intervalId: ReturnType<typeof setInterval> | null = null;
+
+        const buildContext = () => ({
+            role: userRole,
+            posId: currentPosId,
+            barberId: DataService.getCurrentBarberId(),
+            clientId: DataService.getCurrentUser()?.clientId ?? null,
+        });
+
+        const runSync = () => {
+            syncAppointmentNotifications(buildContext()).catch((err) => {
+                console.warn('[notifications] sync error:', err);
+            });
+        };
+
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') runSync();
+        };
+
+        (async () => {
+            const granted = await initLocalNotifications();
+            if (cancelled || !granted) return;
+            runSync();
+            intervalId = setInterval(runSync, 60_000);
+            document.addEventListener('visibilitychange', onVisibility);
+        })();
+
+        return () => {
+            cancelled = true;
+            if (intervalId) clearInterval(intervalId);
+            document.removeEventListener('visibilitychange', onVisibility);
+        };
+    }, [isNativeApp, isAuthenticated, userRole, currentPosId, username]);
 
     // Plan Gratuito: no tiene acceso al Dashboard; redirigir a Agenda (superadmin puede ver todo)
     useEffect(() => {
@@ -529,6 +570,7 @@ const App: React.FC = () => {
     };
 
     const handleLogout = () => {
+        stopAppointmentNotifications().catch(() => {});
         localStorage.removeItem('currentUser');
         setIsAuthenticated(false);
         setUsername('');

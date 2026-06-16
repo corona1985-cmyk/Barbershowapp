@@ -8,6 +8,7 @@ import { AccountDeactivationFeedback, DeactivationReason, SystemUser } from '../
 
 const ROOT = 'barbershow';
 const MAX_REASON_LENGTH = 2000;
+const ACCOUNT_DELETE_TIMEOUT_MS = 15000;
 
 export const DEACTIVATION_REASON_OPTIONS: Array<{ value: DeactivationReason; label: string }> = [
   { value: 'no_longer_need_app', label: 'Ya no necesito la aplicación' },
@@ -53,6 +54,15 @@ function validatePayload(payload: DeactivateAccountPayload): void {
   }
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, operation: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${operation} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 /**
  * Elimina permanentemente la cuenta del usuario (Guideline 5.1.1(v) App Store).
  */
@@ -66,7 +76,11 @@ export async function deactivateCurrentAccount(payload: DeactivateAccountPayload
   }
 
   const username = current.username.trim().toLowerCase();
-  const snap = await get(ref(db, `${ROOT}/users/${username}`));
+  const snap = await withTimeout(
+    get(ref(db, `${ROOT}/users/${username}`)),
+    ACCOUNT_DELETE_TIMEOUT_MS,
+    'loadUserForDeactivation'
+  );
   if (!snap.exists()) throw new Error('Usuario no encontrado.');
 
   const freshUser = snap.val() as SystemUser;
@@ -85,7 +99,7 @@ export async function deactivateCurrentAccount(payload: DeactivateAccountPayload
     throw new Error('La contraseña es incorrecta.');
   }
 
-  await ensureAnonymousAuth();
+  await withTimeout(ensureAnonymousAuth(), ACCOUNT_DELETE_TIMEOUT_MS, 'ensureAnonymousAuth');
 
   const reason = payload.reason;
   const customReason = normalizeOptionalText(payload.customReason);
@@ -103,9 +117,17 @@ export async function deactivateCurrentAccount(payload: DeactivateAccountPayload
     appVersion: APP_VERSION,
   };
 
-  await addDoc(collection(firestore, 'account_deactivation_feedback'), feedback);
+  await withTimeout(
+    addDoc(collection(firestore, 'account_deactivation_feedback'), feedback),
+    ACCOUNT_DELETE_TIMEOUT_MS,
+    'saveDeactivationFeedback'
+  );
 
-  await remove(ref(db, `${ROOT}/users/${username}`));
+  await withTimeout(
+    remove(ref(db, `${ROOT}/users/${username}`)),
+    ACCOUNT_DELETE_TIMEOUT_MS,
+    'removeUserAccount'
+  );
 
   await logAnalyticsEvent('account_deleted_permanently', {
     reason,

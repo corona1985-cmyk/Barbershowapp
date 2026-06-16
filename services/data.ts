@@ -644,7 +644,13 @@ export const DataService = {
   },
 
   addPointOfSale: async (pos: Omit<PointOfSale, 'id'>): Promise<PointOfSale> => {
-    const newPos = { ...pos, id: generateUniqueId(), isActive: true };
+    const hasCoords = typeof pos.lat === 'number' && Number.isFinite(pos.lat) && typeof pos.lng === 'number' && Number.isFinite(pos.lng);
+    const newPos: PointOfSale = {
+      ...pos,
+      id: generateUniqueId(),
+      isActive: true,
+      locationUpdatedAt: hasCoords ? (pos.locationUpdatedAt || new Date().toISOString()) : pos.locationUpdatedAt,
+    };
     await update(ref(db, ROOT + '/pointsOfSale/' + newPos.id), newPos);
     await set(ref(db, ROOT + '/settings/' + newPos.id), { ...DEFAULT_SETTINGS, posId: newPos.id, storeName: newPos.name });
     await DataService.logAuditAction('create_pos', 'master', `Created POS: ${newPos.name}`, newPos.id);
@@ -652,7 +658,13 @@ export const DataService = {
   },
 
   updatePointOfSale: async (pos: PointOfSale): Promise<void> => {
-    await set(ref(db, ROOT + '/pointsOfSale/' + pos.id), pos);
+    const hasCoords = typeof pos.lat === 'number' && Number.isFinite(pos.lat) && typeof pos.lng === 'number' && Number.isFinite(pos.lng);
+    const toWrite: Record<string, unknown> = {
+      ...pos,
+      locationUpdatedAt: hasCoords ? (pos.locationUpdatedAt || new Date().toISOString()) : pos.locationUpdatedAt,
+    };
+    Object.keys(toWrite).forEach((k) => { if (toWrite[k] === undefined) delete toWrite[k]; });
+    await set(ref(db, ROOT + '/pointsOfSale/' + pos.id), toWrite);
     await DataService.logAuditAction('update_pos', 'master', `Updated POS: ${pos.name}`, pos.id);
   },
 
@@ -710,6 +722,8 @@ export const DataService = {
     country: string;
     city: string;
     barrio: string;
+    lat?: number;
+    lng?: number;
   }): Promise<{ success: true }> => {
     const MIN_PHONE_DIGITS = 8;
     const username = String(params.username ?? '').trim().toLowerCase();
@@ -721,7 +735,10 @@ export const DataService = {
     const address = String(params.address ?? '').trim();
     const country = String(params.country ?? '').trim().toUpperCase();
     const city = String(params.city ?? '').trim();
-    const barrio = String(params.barrio ?? '').trim();
+    const barrioInput = String(params.barrio ?? '').trim();
+    const barrio = barrioInput || city;
+    const lat = typeof params.lat === 'number' && Number.isFinite(params.lat) ? params.lat : undefined;
+    const lng = typeof params.lng === 'number' && Number.isFinite(params.lng) ? params.lng : undefined;
 
     if (!username) throw new Error('El nombre de usuario es obligatorio.');
     if (!password || password.length < 6) throw new Error('La contraseña es obligatoria (mín. 6 caracteres).');
@@ -730,7 +747,7 @@ export const DataService = {
     if (!barbershopName) throw new Error('El nombre de la barbería es obligatorio.');
     if (!country) throw new Error('El país es obligatorio.');
     if (!city) throw new Error('La ciudad es obligatoria.');
-    if (!barrio) throw new Error('El barrio o zona es obligatorio.');
+    if (!barrio) throw new Error('Debes indicar una ciudad o zona para la sede.');
 
     if (await DataService.isUsernameTaken(username)) {
       throw new Error('Ese nombre de usuario ya existe. Elige otro.');
@@ -740,35 +757,77 @@ export const DataService = {
     const hashedPassword = await hashPassword(password);
     const { tier: signupTier, plan: signupPlan } = getFreeSignupTierAndPlan();
 
-    const pointsOfSaleRef = ref(db, ROOT + '/pointsOfSale/' + posId);
-    await set(pointsOfSaleRef, {
+    const isNative = Capacitor.isNativePlatform();
+    const posPayload: Record<string, unknown> = {
       id: posId,
       name: barbershopName,
       address,
       country,
       city,
       barrio,
+      lat,
+      lng,
+      locationUpdatedAt: lat != null && lng != null ? new Date().toISOString() : undefined,
       ownerId: username,
       isActive: true,
       tier: signupTier,
       plan: signupPlan,
-    });
+    };
+    Object.keys(posPayload).forEach((k) => { if (posPayload[k] === undefined) delete posPayload[k]; });
+    if (isNative) {
+      await nativeRtdbSet(`${ROOT}/pointsOfSale/${posId}`, posPayload, 'completeSelfSignupFree.pointsOfSale');
+    } else {
+      await withTimeout(
+        set(ref(db, ROOT + '/pointsOfSale/' + posId), posPayload),
+        FIREBASE_TIMEOUT_MS,
+        'completeSelfSignupFree.pointsOfSale'
+      );
+    }
 
-    const settingsRef = ref(db, ROOT + '/settings/' + posId);
-    await set(settingsRef, { ...DEFAULT_SETTINGS, posId, storeName: barbershopName });
+    const settingsPayload = { ...DEFAULT_SETTINGS, posId, storeName: barbershopName };
+    if (isNative) {
+      await nativeRtdbSet(`${ROOT}/settings/${posId}`, settingsPayload, 'completeSelfSignupFree.settings');
+    } else {
+      await withTimeout(
+        set(ref(db, ROOT + '/settings/' + posId), settingsPayload),
+        FIREBASE_TIMEOUT_MS,
+        'completeSelfSignupFree.settings'
+      );
+    }
+
+    // El dueño que crea su barbería queda también como barbero de la sede (para que aparezca en la agenda).
+    const barberId = generateUniqueId();
+    const barberPayload = { id: barberId, posId, name, specialty: 'Barbero', active: true };
+    if (isNative) {
+      await nativeRtdbSet(`${ROOT}/barbers/${barberId}`, barberPayload, 'completeSelfSignupFree.barber');
+    } else {
+      await withTimeout(
+        set(ref(db, ROOT + '/barbers/' + barberId), barberPayload),
+        FIREBASE_TIMEOUT_MS,
+        'completeSelfSignupFree.barber'
+      );
+    }
 
     const newUser: Record<string, unknown> = {
       username,
       role: 'admin',
       name,
       posId,
+      barberId,
       password: hashedPassword,
       status: 'active',
       loginAttempts: 0,
     };
     if (email) newUser.email = email;
-    const usersRef = ref(db, ROOT + '/users/' + username);
-    await set(usersRef, newUser);
+    if (isNative) {
+      await nativeRtdbSet(`${ROOT}/users/${username}`, newUser, 'completeSelfSignupFree.user');
+    } else {
+      await withTimeout(
+        set(ref(db, ROOT + '/users/' + username), newUser),
+        FIREBASE_TIMEOUT_MS,
+        'completeSelfSignupFree.user'
+      );
+    }
 
     return { success: true };
   },
@@ -1328,8 +1387,12 @@ export const DataService = {
   addBarber: async (barber: Omit<Barber, 'id' | 'posId'>): Promise<Barber> => {
     requireRole(['admin', 'superadmin']);
     if (ACTIVE_POS_ID == null) throw new Error('No Active POS');
-    const newBarber = { ...barber, id: generateUniqueId(), posId: ACTIVE_POS_ID } as Barber;
-    await set(ref(db, ROOT + '/barbers/' + newBarber.id), newBarber);
+    const newBarber = JSON.parse(JSON.stringify({ ...barber, id: generateUniqueId(), posId: ACTIVE_POS_ID })) as Barber;
+    if (Capacitor.isNativePlatform()) {
+      await nativeRtdbSet(`${ROOT}/barbers/${newBarber.id}`, newBarber, 'addBarber');
+    } else {
+      await withTimeout(set(ref(db, ROOT + '/barbers/' + newBarber.id), newBarber), FIREBASE_TIMEOUT_MS, 'addBarber');
+    }
     cacheInvalidate('barbers');
     await DataService.logAuditAction('create_barber', 'admin', `Created barber: ${barber.name}`, ACTIVE_POS_ID);
     return newBarber;
@@ -1338,7 +1401,11 @@ export const DataService = {
   updateBarber: async (barber: Barber): Promise<void> => {
     requireRole(['admin', 'superadmin']);
     const sanitized = JSON.parse(JSON.stringify(barber)) as Barber;
-    await set(ref(db, ROOT + '/barbers/' + barber.id), sanitized);
+    if (Capacitor.isNativePlatform()) {
+      await nativeRtdbSet(`${ROOT}/barbers/${barber.id}`, sanitized, 'updateBarber');
+    } else {
+      await withTimeout(set(ref(db, ROOT + '/barbers/' + barber.id), sanitized), FIREBASE_TIMEOUT_MS, 'updateBarber');
+    }
     cacheInvalidate('barbers');
   },
 

@@ -6,9 +6,10 @@ import { DataService } from '../services/data';
 import { completeSelfSignupFree, createPendingBarberSignupMobile, activatePlanFromPlay } from '../services/firebase';
 import { SUPPORTED_COUNTRIES } from '../constants/regions';
 import { formatSignupAddress, getBarriosForCity, getCitiesForCountry } from '../utils/posLocation';
+import { requestUserLocationWithPermission } from '../utils/geolocation';
 import { isPlayBillingAvailable, initPlayBilling, purchasePlan, addPlayPurchaseListener, getPlayProductId, getActivePlayTransactions } from '../services/playBilling';
 import { navigateToLegal } from '../utils/legal';
-import { GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER } from '../config/app';
+import { ALLOW_NATIVE_BARBER_SIGNUP, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER } from '../config/app';
 
 const TIER_OPTIONS: { value: AccountTier; label: string; description: string; price: number }[] = [
   { value: 'gratuito', label: 'Plan Gratuito', description: 'Solo ver y gestionar citas. Hasta 100 citas al mes.', price: 0 },
@@ -53,9 +54,14 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const [city, setCity] = useState('');
   const [barrio, setBarrio] = useState('');
   const [streetAddress, setStreetAddress] = useState('');
+  const [shopLat, setShopLat] = useState<number | null>(null);
+  const [shopLng, setShopLng] = useState<number | null>(null);
+  const [shopLocationLoading, setShopLocationLoading] = useState(false);
+  const [shopLocationMessage, setShopLocationMessage] = useState<string>('');
   const [selectedPlan, setSelectedPlan] = useState<AccountTier>(GLOBAL_FREE_MODE ? 'barberia' : 'gratuito');
   const cityOptions = country ? getCitiesForCountry(country) : [];
   const barrioOptions = country && city ? getBarriosForCity(country, city) : [];
+  const requiresBarrio = barrioOptions.length > 0;
 
   // Step 3
   const [cicloPago, setCicloPago] = useState<'mensual' | 'anual'>('mensual');
@@ -63,9 +69,20 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
 
   const planOption = TIER_OPTIONS.find((o) => o.value === selectedPlan);
   const isFree = GLOBAL_FREE_MODE ? selectedPlan === PROMOTIONAL_FREE_TIER : selectedPlan === 'gratuito';
-  const signupTierOptions = GLOBAL_FREE_MODE
-    ? TIER_OPTIONS.filter((o) => o.value !== 'gratuito')
-    : TIER_OPTIONS;
+  const isWeb = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'web';
+  const isNativeMobile = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform();
+  const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'android';
+  const isIOS = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'ios';
+
+  const signupTierOptions = (() => {
+    let options = GLOBAL_FREE_MODE
+      ? TIER_OPTIONS.filter((o) => o.value !== 'gratuito')
+      : TIER_OPTIONS;
+    if (isNativeMobile && ALLOW_NATIVE_BARBER_SIGNUP) {
+      options = options.filter((o) => o.value === PROMOTIONAL_FREE_TIER);
+    }
+    return options;
+  })();
 
   const formatPlanPrice = (opt: (typeof TIER_OPTIONS)[number]) => {
     if (GLOBAL_FREE_MODE && opt.value === PROMOTIONAL_FREE_TIER) return 'Gratis';
@@ -103,7 +120,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
     (barbershopName || '').trim().length > 0 &&
     (country || '').trim().length > 0 &&
     (city || '').trim().length > 0 &&
-    (barrio || '').trim().length > 0 &&
+    (!requiresBarrio || (barrio || '').trim().length > 0) &&
     selectedPlan != null;
 
   const step3Valid = isFree || acceptTerms;
@@ -122,6 +139,23 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
     setStep(3);
   };
 
+  const handleDetectShopLocation = async () => {
+    setShopLocationLoading(true);
+    setShopLocationMessage('');
+    const result = await requestUserLocationWithPermission();
+    setShopLocationLoading(false);
+    if (result.status === 'success') {
+      setShopLat(result.lat);
+      setShopLng(result.lng);
+      setCountry(result.countryCode);
+      setCity(result.city);
+      setBarrio('');
+      setShopLocationMessage(`Ubicación detectada: ${result.displayLabel}`);
+      return;
+    }
+    setShopLocationMessage(result.message);
+  };
+
   const handleSubmitFree = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -138,7 +172,9 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
         address: formatSignupAddress(streetAddress, barrio, city, country),
         country: country.trim(),
         city: city.trim(),
-        barrio: barrio.trim(),
+        barrio: (barrio || city).trim(),
+        lat: shopLat ?? undefined,
+        lng: shopLng ?? undefined,
       });
       onSuccess(username.trim().toLowerCase(), password);
     } catch (err: unknown) {
@@ -148,11 +184,6 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
       setLoading(false);
     }
   };
-
-  const isWeb = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'web';
-  const isNativeMobile = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform();
-  const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'android';
-  const isIOS = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'ios';
 
   const pendingMobileRef = useRef<{ username: string; password: string; plan: AccountTier; cycle: 'mensual' | 'anual' } | null>(null);
 
@@ -208,6 +239,8 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
         email: email.trim() || undefined,
         barbershopName: barbershopName.trim(),
         address: formatSignupAddress(streetAddress, barrio, city, country),
+        lat: shopLat ?? undefined,
+        lng: shopLng ?? undefined,
         plan: selectedPlan,
         ciclo: cicloPago,
       });
@@ -239,7 +272,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
 
   const primary = '#F5B301';
 
-  if (isNativeMobile) {
+  if (isNativeMobile && !ALLOW_NATIVE_BARBER_SIGNUP) {
     return (
       <div className="h-[100dvh] min-h-0 max-h-[100dvh] relative flex flex-col items-center justify-center px-6 font-sans">
         <div className="absolute inset-0 bg-slate-900" aria-hidden />
@@ -537,18 +570,32 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">Barrio / Zona</label>
-                      <select
-                        required
-                        value={barrio}
-                        onChange={(e) => setBarrio(e.target.value)}
-                        disabled={!city}
-                        className="input-modern w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] bg-white disabled:bg-slate-100 disabled:text-slate-400"
-                      >
-                        <option value="">{city ? 'Selecciona barrio o zona' : 'Primero elige la ciudad'}</option>
-                        {barrioOptions.map((b) => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                      </select>
+                      {requiresBarrio ? (
+                        <select
+                          required
+                          value={barrio}
+                          onChange={(e) => setBarrio(e.target.value)}
+                          disabled={!city}
+                          className="input-modern w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] bg-white disabled:bg-slate-100 disabled:text-slate-400"
+                        >
+                          <option value="">{city ? 'Selecciona barrio o zona' : 'Primero elige la ciudad'}</option>
+                          {barrioOptions.map((b) => (
+                            <option key={b} value={b}>{b}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={barrio}
+                          onChange={(e) => setBarrio(e.target.value)}
+                          disabled={!city}
+                          placeholder={city ? 'Opcional (ej: Centro, Ensanche, Zona Norte)' : 'Primero elige la ciudad'}
+                          className="input-modern w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] bg-white disabled:bg-slate-100 disabled:text-slate-400"
+                        />
+                      )}
+                      {!requiresBarrio && city && (
+                        <p className="mt-1 text-xs text-slate-500">Si lo dejas vacío, usaremos la ciudad como zona principal.</p>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -563,6 +610,25 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                         className="input-modern w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] transition-all duration-200"
                       />
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Ubicación exacta del local (recomendado)</label>
+                    <button
+                      type="button"
+                      onClick={handleDetectShopLocation}
+                      disabled={shopLocationLoading}
+                      className="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      {shopLocationLoading ? <><Loader2 size={16} className="animate-spin" /> Detectando ubicación...</> : <><MapPin size={16} /> Usar ubicación de este local</>}
+                    </button>
+                    {shopLocationMessage && (
+                      <p className="mt-2 text-xs text-slate-600">{shopLocationMessage}</p>
+                    )}
+                    {shopLat != null && shopLng != null && (
+                      <p className="mt-1 text-xs text-emerald-700 font-medium">
+                        Coordenadas guardadas: {shopLat.toFixed(5)}, {shopLng.toFixed(5)}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Plan</label>

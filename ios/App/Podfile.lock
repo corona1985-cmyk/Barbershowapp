@@ -5,6 +5,8 @@ PODS:
     - Capacitor
     - Google-Mobile-Ads-SDK (= 11.3.0)
   - CapacitorCordova (6.2.1)
+  - CapacitorLocalNotifications (6.1.3):
+    - Capacitor
   - CapacitorSplashScreen (6.0.4):
     - Capacitor
   - Google-Mobile-Ads-SDK (11.3.0):
@@ -17,6 +19,7 @@ DEPENDENCIES:
   - "Capacitor (from `../../node_modules/@capacitor/ios`)"
   - "CapacitorCommunityAdmob (from `../../node_modules/@capacitor-community/admob`)"
   - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
+  - "CapacitorLocalNotifications (from `../../node_modules/@capacitor/local-notifications`)"
   - "CapacitorSplashScreen (from `../../node_modules/@capacitor/splash-screen`)"
   - GoogleUserMessagingPlatform (~> 2.6)
   - "SquareetlabsCapacitorSubscriptions (from `../../node_modules/@squareetlabs/capacitor-subscriptions`)"
@@ -33,6 +36,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capacitor-community/admob"
   CapacitorCordova:
     :path: "../../node_modules/@capacitor/ios"
+  CapacitorLocalNotifications:
+    :path: "../../node_modules/@capacitor/local-notifications"
   CapacitorSplashScreen:
     :path: "../../node_modules/@capacitor/splash-screen"
   SquareetlabsCapacitorSubscriptions:
@@ -42,11 +47,12 @@ SPEC CHECKSUMS:
   Capacitor: c95400d761e376be9da6be5a05f226c0e865cebf
   CapacitorCommunityAdmob: 52a6ebbec5e4c277d2694657becd42bcadbe369a
   CapacitorCordova: 8d93e14982f440181be7304aa9559ca631d77fff
+  CapacitorLocalNotifications: 801867e687c42dd2b33c1e22e08f48e6738d2f72
   CapacitorSplashScreen: ef140a8b1ea7244e0c245ce2dd4ce5251e7ab86a
   Google-Mobile-Ads-SDK: 301a16c461c331ba34ff4dab40a22ab7c147af61
   GoogleUserMessagingPlatform: a8b56893477f67212fbc8411c139e61d463349f5
   SquareetlabsCapacitorSubscriptions: 9ebfcd67efe366bdd10f1e7b5ff15e50aa5cb548
 
-PODFILE CHECKSUM: 225ab18bda7c2f077bb30da13e29bfddac591f9c
+PODFILE CHECKSUM: f82b3be501b35d430056e5b5312c1075d0329c99
 
 COCOAPODS: 1.16.2

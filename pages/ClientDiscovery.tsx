@@ -17,6 +17,7 @@ import {
     countShopsInCity,
 } from '../utils/posLocation';
 import { requestUserLocationWithPermission } from '../utils/geolocation';
+import { haversineKm, isWithinRadius } from '../utils/distance';
 
 const LOAD_TIMEOUT_MS = 18000;
 
@@ -45,6 +46,8 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
     const [geoLoading, setGeoLoading] = useState(false);
     const [geoMessage, setGeoMessage] = useState<string | null>(null);
     const [geoSuccess, setGeoSuccess] = useState(false);
+    const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+    const [radiusKm, setRadiusKm] = useState(10);
 
     const cityOptions = useMemo(() => (selectedCountry ? getCitiesForCountry(selectedCountry) : []), [selectedCountry]);
     const barrioOptions = useMemo(
@@ -78,15 +81,53 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
         loadBarberias();
     }, [loadBarberias]);
 
-    const filtered = useMemo(
-        () => posList.filter((p) => posMatchesLocationFilters(p, selectedCountry, selectedCity, selectedBarrio, searchTerm)),
-        [posList, selectedCountry, selectedCity, selectedBarrio, searchTerm]
-    );
+    const distanceByPosId = useMemo(() => {
+        if (!userCoords) return {} as Record<number, number | null>;
+        const out: Record<number, number | null> = {};
+        posList.forEach((p) => {
+            if (typeof p.lat === 'number' && Number.isFinite(p.lat) && typeof p.lng === 'number' && Number.isFinite(p.lng)) {
+                out[p.id] = haversineKm(userCoords.lat, userCoords.lng, p.lat, p.lng);
+            } else {
+                out[p.id] = null;
+            }
+        });
+        return out;
+    }, [posList, userCoords]);
+
+    const filtered = useMemo(() => {
+        const base = posList.filter((p) => posMatchesLocationFilters(p, selectedCountry, selectedCity, selectedBarrio, searchTerm));
+        if (!userCoords) return base;
+        const withDistance: PointOfSale[] = [];
+        const withoutDistance: PointOfSale[] = [];
+        base.forEach((p) => {
+            const d = distanceByPosId[p.id] ?? null;
+            if (d == null) {
+                withoutDistance.push(p);
+                return;
+            }
+            if (isWithinRadius(d, radiusKm)) withDistance.push(p);
+        });
+        return [...withDistance, ...withoutDistance];
+    }, [posList, selectedCountry, selectedCity, selectedBarrio, searchTerm, userCoords, distanceByPosId, radiusKm]);
 
     const sorted = useMemo(() => {
-        if (preferredPosId == null || guestMode) return filtered;
-        return [...filtered].sort((a, b) => (a.id === preferredPosId ? -1 : b.id === preferredPosId ? 1 : 0));
-    }, [filtered, preferredPosId, guestMode]);
+        const arr = [...filtered];
+        arr.sort((a, b) => {
+            if (userCoords) {
+                const da = distanceByPosId[a.id] ?? null;
+                const db = distanceByPosId[b.id] ?? null;
+                if (da == null && db != null) return 1;
+                if (da != null && db == null) return -1;
+                if (da != null && db != null && da !== db) return da - db;
+            }
+            if (preferredPosId != null && !guestMode) {
+                if (a.id === preferredPosId) return -1;
+                if (b.id === preferredPosId) return 1;
+            }
+            return 0;
+        });
+        return arr;
+    }, [filtered, preferredPosId, guestMode, userCoords, distanceByPosId]);
 
     const countriesWithShops = useMemo(() => {
         const set = new Set<string>();
@@ -97,13 +138,15 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
         return set.size;
     }, [posList]);
 
-    const hasActiveFilters = Boolean(selectedCountry || selectedCity || selectedBarrio || searchTerm.trim());
+    const hasActiveFilters = Boolean(selectedCountry || selectedCity || selectedBarrio || searchTerm.trim() || userCoords);
 
     const clearFilters = () => {
         setSelectedCountry('');
         setSelectedCity('');
         setSelectedBarrio('');
         setSearchTerm('');
+        setUserCoords(null);
+        setRadiusKm(10);
         setGeoMessage(null);
         setGeoSuccess(false);
     };
@@ -127,6 +170,7 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
         setGeoLoading(false);
 
         if (result.status === 'success') {
+            setUserCoords({ lat: result.lat, lng: result.lng });
             setSelectedCountry(result.countryCode);
             setSelectedCity(result.city);
             setSelectedBarrio('');
@@ -143,6 +187,14 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
         } else {
             setGeoMessage(result.message);
         }
+    };
+
+    const openPosInMaps = (pos: PointOfSale) => {
+        const hasCoords = typeof pos.lat === 'number' && Number.isFinite(pos.lat) && typeof pos.lng === 'number' && Number.isFinite(pos.lng);
+        const url = hasCoords
+            ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${pos.lat},${pos.lng}`)}`
+            : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formatPosLocationLabel(pos) || pos.address || pos.name)}`;
+        window.open(url, '_blank', 'noopener,noreferrer');
     };
 
     if (loading) {
@@ -353,6 +405,26 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
                     </div>
                 </div>
 
+                {userCoords && (
+                    <div className="mt-4">
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Radio de cercanía</label>
+                        <div className="flex flex-wrap gap-2">
+                            {[3, 5, 10, 20, 50].map((km) => (
+                                <button
+                                    key={km}
+                                    type="button"
+                                    onClick={() => setRadiusKm(km)}
+                                    className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                                        radiusKm === km ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                    }`}
+                                >
+                                    {km} km
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-6 pt-6 border-t border-slate-100">
                     <p className="text-slate-700 font-medium">
                         <span className="text-[#ffd427] font-black text-2xl">{sorted.length}</span>
@@ -362,6 +434,9 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
                                 en {getCountryName(selectedCountry)}
                                 {selectedCity ? ` · ${selectedCity}` : ''}
                             </span>
+                        )}
+                        {userCoords && (
+                            <span className="text-slate-500 text-sm ml-2">· Radio {radiusKm} km</span>
                         )}
                     </p>
                     {hasActiveFilters && (
@@ -397,6 +472,7 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
                     {sorted.map((pos) => {
                         const isFavorite = !guestMode && preferredPosId != null && pos.id === preferredPosId;
                         const { country, city, barrio } = resolvePosLocation(pos);
+                        const distanceKm = userCoords ? (distanceByPosId[pos.id] ?? null) : null;
 
                         return (
                             <article
@@ -428,6 +504,15 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
                                         {pos.name}
                                     </h3>
                                     <div className="flex flex-wrap gap-2 mb-4">
+                                        {distanceKm != null ? (
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 text-xs font-bold border border-emerald-200">
+                                                <Navigation size={11} /> {distanceKm.toFixed(distanceKm < 10 ? 1 : 0)} km
+                                            </span>
+                                        ) : userCoords ? (
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold">
+                                                Distancia no disponible
+                                            </span>
+                                        ) : null}
                                         {country && (
                                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold">
                                                 {SUPPORTED_COUNTRIES.find((c) => c.code === country)?.flag} {getCountryName(country)}
@@ -464,6 +549,14 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
                                                 <StarOff size={16} /> Quitar favorito
                                             </button>
                                         )}
+                                        <button
+                                            type="button"
+                                            onClick={() => openPosInMaps(pos)}
+                                            className="w-full py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                        >
+                                            <MapPin size={15} />
+                                            Abrir en mapa
+                                        </button>
                                         <button
                                             type="button"
                                             onClick={() => onSwitchPos(pos.id)}
