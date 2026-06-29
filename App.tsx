@@ -38,6 +38,7 @@ import { initLocalNotifications, syncAppointmentNotifications, stopAppointmentNo
 import LegalDocumentPage from './pages/LegalDocumentPage';
 import { getLegalDocumentFromUrl, navigateToLegal, LegalDocumentType } from './utils/legal';
 import { GLOBAL_FREE_MODE } from './config/app';
+import { isIOSPlatform, openWebsiteSignup } from './utils/platform';
 
 const ViewFallback = () => (
     <div className="flex items-center justify-center min-h-[200px]">
@@ -81,6 +82,8 @@ const App: React.FC = () => {
     const [isLoadingSession, setIsLoadingSession] = useState(true);
     /** Si false, se muestra primero la bienvenida (tipo de barbería + contacto). Si true, el formulario de login. */
     const [showLoginScreen, setShowLoginScreen] = useState(false);
+    /** iOS: login abierto desde "Barbero" — muestra enlace al registro web (Guideline 3.1.1). */
+    const [showBarberWebSignupHint, setShowBarberWebSignupHint] = useState(false);
     /** Landing page de marketing; nunca en iOS/Android nativo (Guideline 4.2). */
     const [showLandingPage, setShowLandingPage] = useState(() => !isNativeApp);
     /** Cliente sin cuenta que quiere ver barberías: muestra lista para elegir una y registrarse ahí. */
@@ -167,6 +170,31 @@ const App: React.FC = () => {
                 SplashScreen.hide().catch(() => {});
             }
         }
+    }, [isLoadingSession]);
+
+    // App Tracking Transparency (iOS): el plugin AdMob enlaza el framework ATT, por lo que
+    // Apple exige mostrar el diálogo de permiso aunque el banner nativo esté desactivado.
+    // Lo solicitamos al arrancar (una vez cargada la sesión y con la app en primer plano),
+    // independientemente de si se muestran anuncios. Sin esto, App Review rechaza la app con
+    // "permission request not found".
+    useEffect(() => {
+        if (Capacitor.getPlatform() !== 'ios' || isLoadingSession) return;
+
+        let cancelled = false;
+        // iOS solo presenta el diálogo ATT con la app en estado activo; un pequeño retraso
+        // tras ocultar el splash garantiza que la app esté en primer plano.
+        const timeoutId = setTimeout(() => {
+            import('./services/att')
+                .then(({ ensureAppTrackingAuthorization }) => {
+                    if (!cancelled) ensureAppTrackingAuthorization();
+                })
+                .catch((err) => console.warn('[ATT] No se pudo solicitar autorización:', err));
+        }, 800);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timeoutId);
+        };
     }, [isLoadingSession]);
 
     // Google Play Billing solo cuando no estamos en modo promocional global (App Store / Play Store).
@@ -783,7 +811,8 @@ const App: React.FC = () => {
                 <>
                     <AdMobBanner showAds={true} />
                     <WelcomePlanSelector
-                        onGoToLogin={() => { setShowLoginScreen(true); setIsRegistering(false); }}
+                        onGoToLogin={() => { setShowBarberWebSignupHint(false); setShowLoginScreen(true); setIsRegistering(false); }}
+                        onGoToBarberLogin={() => { setShowBarberWebSignupHint(true); setShowLoginScreen(true); setIsRegistering(false); }}
                         onGoToBarberias={() => setShowBarberiasGuest(true)}
                         onGoToClientRegister={() => openClientRegistration(true)}
                         onBackToLanding={isNativeApp ? undefined : () => setShowLandingPage(true)}
@@ -801,6 +830,7 @@ const App: React.FC = () => {
                         type="button"
                         onClick={() => {
                             setShowLoginScreen(false);
+                            setShowBarberWebSignupHint(false);
                             if (!isNativeApp) setShowLandingPage(true);
                         }}
                         className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center justify-center gap-1.5 min-h-[44px] pl-2 pr-3 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 active:bg-slate-200 text-sm"
@@ -915,6 +945,23 @@ const App: React.FC = () => {
                                 <button type="submit" disabled={loginLoading} className="w-full min-h-[48px] py-3 rounded-xl font-bold transition-colors shadow-lg shadow-yellow-500/30 mt-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.98] bg-[#ffd427] text-slate-900 hover:bg-[#e6be23]">
                                     {loginLoading ? (<><Loader2 size={20} className="animate-spin" /> Iniciando sesión...</>) : 'Iniciar Sesión'}
                                 </button>
+
+                                {isIOSPlatform() && showBarberWebSignupHint && (
+                                    <div className="mt-5 pt-5 border-t border-slate-100 space-y-3 text-center">
+                                        <p className="text-sm text-slate-600 leading-relaxed">
+                                            ¿No tienes una barbería registrada?
+                                            <br />
+                                            Crea tu cuenta desde nuestro sitio web y luego inicia sesión desde la aplicación.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={openWebsiteSignup}
+                                            className="w-full min-h-[44px] py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium text-sm hover:bg-slate-100 transition-colors"
+                                        >
+                                            Crear barbería en la web
+                                        </button>
+                                    </div>
+                                )}
 
                                 <div className="pt-4 border-t border-slate-100 mt-4">
                                     <button type="button" onClick={() => setIsRegistering(true)} className="w-full min-h-[44px] flex items-center justify-center text-slate-600 font-medium hover:underline hover:text-[#e6be23] rounded-lg active:bg-slate-50">

@@ -9,7 +9,10 @@ interface AdMobBannerProps {
 
 /**
  * Gestiona el banner de AdMob en web/PWA.
- * En compilación nativa (iOS/Android) no se cargan anuncios ni ATT (Guideline 2.1).
+ * En compilación nativa (iOS/Android) no se cargan anuncios (Guideline 2.1).
+ * El diálogo ATT de iOS NO se solicita aquí: se dispara al arrancar la app
+ * (ver el efecto de App Tracking Transparency en App.tsx), porque el framework
+ * ATT queda enlazado por el plugin AdMob aunque el banner nativo esté desactivado.
  */
 const AdMobBanner: React.FC<AdMobBannerProps> = ({ showAds }) => {
   const bannerShown = useRef(false);

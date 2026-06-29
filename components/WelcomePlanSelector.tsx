@@ -18,12 +18,15 @@ import { SUPPORTED_COUNTRIES } from '../constants/regions';
 import { formatSignupAddress, getBarriosForCity, getCitiesForCountry } from '../utils/posLocation';
 import { navigateToLegal } from '../utils/legal';
 import { ALLOW_NATIVE_BARBER_SIGNUP } from '../config/app';
+import { isIOSPlatform } from '../utils/platform';
 
 type Step = 'who' | 'barber_plan' | 'barber_registered' | 'barber_contact' | 'client_registered' | 'client_new';
 type UserType = 'barbero' | 'cliente';
 
 interface WelcomePlanSelectorProps {
     onGoToLogin: () => void;
+    /** iOS: abre login para barberos existentes (sin autoregistro). */
+    onGoToBarberLogin?: () => void;
     /** Cliente nuevo: ir al listado de barberías para elegir una y registrarse o agendar. */
     onGoToBarberias?: () => void;
     /** Abre el formulario de registro de cliente (sin elegir barbería). */
@@ -34,8 +37,9 @@ interface WelcomePlanSelectorProps {
     onBackToLanding?: () => void;
 }
 
-const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, onGoToBarberias, onGoToClientRegister, onBarberSignupSuccess, onBackToLanding }) => {
+const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, onGoToBarberLogin, onGoToBarberias, onGoToClientRegister, onBarberSignupSuccess, onBackToLanding }) => {
     const isNativeMobile = Capacitor.isNativePlatform();
+    const canSelfSignupBarber = !isIOSPlatform() && (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP);
     const [step, setStep] = useState<Step>('who');
     const [userType, setUserType] = useState<UserType | null>(null);
     const [showSelfSignup, setShowSelfSignup] = useState(false);
@@ -113,6 +117,19 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
     /** Enlace de contacto genérico para la pantalla de inicio (sin plan seleccionado) */
     const homeContactWhatsAppHref = `https://wa.me/${CONTACT.whatsapp}?text=${encodeURIComponent('Hola, tengo una consulta sobre BarberShow.')}`;
     const homeContactEmailHref = `mailto:${supportEmail}?subject=${encodeURIComponent('Consulta BarberShow')}`;
+
+    const handleBarberoClick = () => {
+        setUserType('barbero');
+        if (isIOSPlatform()) {
+            onGoToBarberLogin?.();
+            return;
+        }
+        if (canSelfSignupBarber) {
+            setShowSelfSignup(true);
+            return;
+        }
+        onGoToLogin();
+    };
 
     const goBack = () => {
         if (step === 'barber_plan' || step === 'client_registered') {
@@ -475,7 +492,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
     }
 
     /* Cuando se muestra el signup, ocupar toda la ventana y evitar doble scroll */
-    if (showSelfSignup && (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP)) {
+    if (showSelfSignup && canSelfSignupBarber) {
         return (
             <div className="h-[100dvh] max-h-[100dvh] overflow-hidden flex flex-col">
                 <SelfServiceBarberSignup
@@ -522,8 +539,8 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                 </div>
 
 
-                {/* Paso 1: ¿Barbero o Cliente? — en nativo sin autoregistro solo login + cliente (Guideline 3.1.1) */}
-                {!showSelfSignup && step === 'who' && isNativeMobile && !ALLOW_NATIVE_BARBER_SIGNUP && (
+                {/* Paso 1: ¿Barbero o Cliente? — Android sin autoregistro: solo login + cliente */}
+                {!showSelfSignup && step === 'who' && isNativeMobile && !isIOSPlatform() && !ALLOW_NATIVE_BARBER_SIGNUP && (
                     <div className="max-w-lg mx-auto space-y-4">
                         <p className="text-white text-center text-lg font-semibold mb-2">Bienvenido a BarberShow</p>
                         <p className="text-slate-400 text-center text-sm mb-6">Inicia sesión o regístrate como cliente para reservar citas.</p>
@@ -549,20 +566,22 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                     </div>
                 )}
 
-                {!showSelfSignup && step === 'who' && (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && (
+                {!showSelfSignup && step === 'who' && (!isNativeMobile || isIOSPlatform() || ALLOW_NATIVE_BARBER_SIGNUP) && (
                     <>
                         <p className="text-white text-center text-lg font-semibold mb-5">¿Eres Barbero o Cliente?</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 max-w-lg mx-auto">
                             <button
                                 type="button"
-                                onClick={() => { setUserType('barbero'); setShowSelfSignup(true); }}
+                                onClick={handleBarberoClick}
                                 className="flex flex-col items-center gap-3 min-h-[120px] py-5 px-5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 transition-colors group active:bg-white/20"
                             >
                                 <div className="w-11 h-11 rounded-lg bg-[#ffd427]/20 flex items-center justify-center group-hover:bg-[#ffd427]/30">
                                     <Scissors size={22} className="text-[#ffd427]" strokeWidth={2} />
                                 </div>
                                 <span className="font-semibold text-white text-base">Barbero</span>
-                                <span className="text-slate-400 text-sm text-center leading-snug">Crear mi barbería o acceder</span>
+                                <span className="text-slate-400 text-sm text-center leading-snug">
+                                    {isIOSPlatform() ? 'Iniciar sesión en tu barbería' : 'Crear mi barbería o acceder'}
+                                </span>
                             </button>
                             <button
                                 type="button"
@@ -576,6 +595,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 <span className="text-slate-400 text-sm text-center leading-snug">Quiero reservar o comprar</span>
                             </button>
                         </div>
+                        {!isIOSPlatform() && (
                         <p className="text-center">
                             <button
                                 type="button"
@@ -585,6 +605,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 <CreditCard size={16} /> Ver planes y precios
                             </button>
                         </p>
+                        )}
                         <div className="mt-6 max-w-lg mx-auto rounded-xl border border-white/15 bg-white/5 p-4 sm:p-5">
                             <p className="text-center text-white text-sm font-medium mb-1">¿Dudas o soporte?</p>
                             <p className="text-center text-slate-400 text-xs mb-4">Escríbenos y te respondemos pronto.</p>
@@ -752,7 +773,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                 )}
 
                 {/* Enlace a login en paso "who" */}
-                {!showSelfSignup && step === 'who' && (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && (
+                {!showSelfSignup && step === 'who' && (!isNativeMobile || isIOSPlatform() || ALLOW_NATIVE_BARBER_SIGNUP) && (
                     <div className="max-w-lg mx-auto pt-6 border-t border-white/10">
                         <button type="button" onClick={onGoToLogin} className="w-full flex items-center justify-center gap-2 py-3 text-slate-400 hover:text-[#ffd427] text-sm font-medium transition-colors">
                             <LogIn size={18} /> Ya tengo cuenta – Iniciar sesión

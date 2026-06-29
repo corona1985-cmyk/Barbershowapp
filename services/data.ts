@@ -3,6 +3,7 @@ import { db } from './firebase';
 import { hashPassword, verifyPassword, isStoredHash } from './passwordHash';
 import { Capacitor } from '@capacitor/core';
 import { getFreeSignupTierAndPlan, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER } from '../config/app';
+import { isIOSPlatform } from '../utils/platform';
 import {
   Client,
   Product,
@@ -725,6 +726,9 @@ export const DataService = {
     lat?: number;
     lng?: number;
   }): Promise<{ success: true }> => {
+    if (isIOSPlatform()) {
+      throw new Error('El registro de barberías no está disponible en iOS. Crea tu cuenta desde la web.');
+    }
     const MIN_PHONE_DIGITS = 8;
     const username = String(params.username ?? '').trim().toLowerCase();
     const password = params.password ?? '';

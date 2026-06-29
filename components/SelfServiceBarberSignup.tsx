@@ -10,6 +10,7 @@ import { requestUserLocationWithPermission } from '../utils/geolocation';
 import { isPlayBillingAvailable, initPlayBilling, purchasePlan, addPlayPurchaseListener, getPlayProductId, getActivePlayTransactions } from '../services/playBilling';
 import { navigateToLegal } from '../utils/legal';
 import { ALLOW_NATIVE_BARBER_SIGNUP, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER } from '../config/app';
+import { isIOSPlatform } from '../utils/platform';
 
 const TIER_OPTIONS: { value: AccountTier; label: string; description: string; price: number }[] = [
   { value: 'gratuito', label: 'Plan Gratuito', description: 'Solo ver y gestionar citas. Hasta 100 citas al mes.', price: 0 },
@@ -72,13 +73,13 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const isWeb = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'web';
   const isNativeMobile = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform();
   const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'android';
-  const isIOS = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'ios';
+  const canSelfSignupBarber = !isIOSPlatform() && (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP);
 
   const signupTierOptions = (() => {
     let options = GLOBAL_FREE_MODE
       ? TIER_OPTIONS.filter((o) => o.value !== 'gratuito')
       : TIER_OPTIONS;
-    if (isNativeMobile && ALLOW_NATIVE_BARBER_SIGNUP) {
+    if (isNativeMobile && ALLOW_NATIVE_BARBER_SIGNUP && !isIOSPlatform()) {
       options = options.filter((o) => o.value === PROMOTIONAL_FREE_TIER);
     }
     return options;
@@ -159,6 +160,10 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const handleSubmitFree = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (isIOSPlatform()) {
+      setError('El registro de barberías no está disponible en iOS. Crea tu cuenta desde la web.');
+      return;
+    }
     if (!step1Valid || !step2Valid || !isFree) return;
     setLoading(true);
     try {
@@ -228,6 +233,10 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const handlePayWithMobile = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (isIOSPlatform()) {
+      setError('El registro de barberías no está disponible en iOS. Crea tu cuenta desde la web.');
+      return;
+    }
     if (!step1Valid || !step2Valid || isFree || !acceptTerms || !isNativeMobile) return;
     setLoading(true);
     try {
@@ -272,7 +281,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
 
   const primary = '#F5B301';
 
-  if (isNativeMobile && !ALLOW_NATIVE_BARBER_SIGNUP) {
+  if (!canSelfSignupBarber) {
     return (
       <div className="h-[100dvh] min-h-0 max-h-[100dvh] relative flex flex-col items-center justify-center px-6 font-sans">
         <div className="absolute inset-0 bg-slate-900" aria-hidden />
@@ -282,7 +291,9 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
           </div>
           <h1 className="text-xl font-bold text-white">Acceso para barberos</h1>
           <p className="text-slate-400 text-sm leading-relaxed">
-            El registro de barberías no está disponible en la app móvil. Si ya tienes cuenta, inicia sesión. Si eres nuevo, visita nuestra plataforma web.
+            {isIOSPlatform()
+              ? 'El registro de barberías no está disponible en la app de iOS. Crea tu cuenta desde la web e inicia sesión aquí.'
+              : 'El registro de barberías no está disponible en la app móvil. Si ya tienes cuenta, inicia sesión. Si eres nuevo, visita nuestra plataforma web.'}
           </p>
           <button
             type="button"

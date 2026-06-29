@@ -14,7 +14,7 @@ export const DEFAULT_PUBLIC_APP_URL = 'https://barbershow.net';
  */
 export const GLOBAL_FREE_MODE = true;
 
-/** Permite el autoregistro de barberías en apps nativas (iOS/Android) sin IAP. */
+/** Permite el autoregistro de barberías en Android nativo sin IAP. iOS siempre bloqueado (Guideline 3.1.1). */
 export const ALLOW_NATIVE_BARBER_SIGNUP = GLOBAL_FREE_MODE;
 
 /**

@@ -1,9 +1,11 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
 import { getAuth, signInAnonymously } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 import { getAnalytics, isSupported, logEvent } from 'firebase/analytics';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { Capacitor } from '@capacitor/core';
+import { isIOSPlatform } from '../utils/platform';
 const firebaseConfig = {
   apiKey: "AIzaSyDDHc3BVRBU8CE2SRPhIzqK0aLQ_gcgAhA",
   authDomain: "gen-lang-client-0624135070.firebaseapp.com",
@@ -18,7 +20,14 @@ const firebaseConfig = {
 const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
 export const db = getDatabase(app);
 export const auth = getAuth(app);
-export const firestore = getFirestore(app);
+// En WebViews nativos (Capacitor/iOS) el transporte WebChannel de Firestore suele quedarse
+// colgado; forzamos long-polling para evitar timeouts. En web usamos autodetección.
+export const firestore = initializeFirestore(
+  app,
+  Capacitor.isNativePlatform()
+    ? { experimentalForceLongPolling: true }
+    : { experimentalAutoDetectLongPolling: true }
+);
 
 export const APP_VERSION = '1.0.10';
 
@@ -122,6 +131,9 @@ export interface CompleteSelfSignupFreeParams {
 
 /** Completa el autoregistro con plan gratuito: crea usuario y barbería en Realtime Database (sin Cloud Functions). */
 export async function completeSelfSignupFree(params: CompleteSelfSignupFreeParams): Promise<{ success: true }> {
+  if (isIOSPlatform()) {
+    throw new Error('El registro de barberías no está disponible en iOS. Crea tu cuenta desde la web.');
+  }
   const { DataService } = await import('./data');
   return DataService.completeSelfSignupFree(params);
 }
@@ -151,6 +163,9 @@ export async function createPendingBarberSignup(params: CreatePendingBarberSignu
 
 /** Crea usuario y POS en estado pendiente para pago en app (Apple Pay / Google Wallet). No redirige a Stripe. */
 export async function createPendingBarberSignupMobile(params: CreatePendingBarberSignupParams): Promise<{ success: true }> {
+  if (isIOSPlatform()) {
+    throw new Error('El registro de barberías no está disponible en iOS. Crea tu cuenta desde la web.');
+  }
   const functions = getFunctions(app, FUNCTIONS_REGION);
   const fn = httpsCallable<CreatePendingBarberSignupParams, { success: true }>(functions, 'createPendingBarberSignupMobile');
   const result = await fn(params);

@@ -87,12 +87,15 @@ La app usa **Capacitor + React** con `@capacitor-community/admob`. El flujo ATT 
 
 | Archivo | Función |
 |---------|---------|
-| `services/att.ts` | Solicita el popup ATT en iOS antes de anuncios |
-| `services/adMob.ts` | ATT → UMP (GDPR) → `AdMob.initialize()` → banner |
-| `components/AdMobBanner.tsx` | Monta anuncios solo cuando `showAds` es true |
+| `services/att.ts` | Lógica del popup ATT (`ensureAppTrackingAuthorization`) |
+| `App.tsx` | **Dispara ATT al arrancar en iOS** (tras cargar la sesión), aunque no se muestren anuncios |
+| `services/adMob.ts` | ATT → UMP (GDPR) → `AdMob.initialize()` → banner (solo si se usan anuncios) |
+| `components/AdMobBanner.tsx` | En nativo no carga anuncios (Guideline 2.1) |
 | `ios/App/App/Info.plist` | `NSUserTrackingUsageDescription` (obligatorio) |
 
-**Orden en iOS:** popup ATT → consentimiento UMP (si aplica) → inicializar AdMob → cargar banner.
+**Importante:** el plugin `@capacitor-community/admob` enlaza el framework `AppTrackingTransparency` en el proyecto iOS. Apple exige que, si el framework está enlazado, la app **muestre** el diálogo ATT. Por eso `App.tsx` solicita ATT al arrancar en iOS, independientemente de si el banner nativo está activo. Sin esto, App Review rechaza la app con *"we couldn't find the App Tracking Transparency permission request"*.
+
+**Orden en iOS:** popup ATT (al arrancar) → consentimiento UMP (si aplica) → inicializar AdMob → cargar banner (si se usan anuncios).
 
 ### Probar ATT en dispositivo real
 
@@ -109,7 +112,7 @@ El simulador a veces no muestra el diálogo ATT de forma fiable. Usa un **iPhone
    ```
    En Xcode, elige tu iPhone y pulsa Run.
 
-3. **Cuándo aparece el popup:** al abrir la pantalla de bienvenida (plan gratuito) o al entrar como cliente/plan gratuito, porque ahí `AdMobBanner` tiene `showAds={true}`.
+3. **Cuándo aparece el popup:** poco después de abrir la app (al terminar de cargar la sesión), porque `App.tsx` solicita ATT al arrancar en iOS. No depende de entrar en ninguna pantalla concreta ni de que se muestren anuncios.
 
 4. **Logs en Xcode:** filtra por `[ATT]` o `[AdMob]` en la consola.
 
@@ -117,7 +120,7 @@ El simulador a veces no muestra el diálogo ATT de forma fiable. Usa un **iPhone
 
 | Rechazo | Causa | Solución en este proyecto |
 |---------|--------|---------------------------|
-| *permission request not found* | Framework ATT enlazado pero nunca se llama `requestTrackingAuthorization` | `services/att.ts` llama `AdMob.requestTrackingAuthorization()` |
+| *permission request not found* | Framework ATT enlazado pero nunca se llama `requestTrackingAuthorization` (p. ej. al desactivar anuncios nativos se perdió el único disparador) | `App.tsx` llama `ensureAppTrackingAuthorization()` al arrancar en iOS, independientemente de los anuncios |
 | Falta descripción de uso | Sin `NSUserTrackingUsageDescription` | Ya en `Info.plist` |
 | Anuncios antes de ATT | `GADMobileAds.start()` antes del popup | `initAdMob()` espera ATT en iOS |
 | Rastreo global desactivado | Usuario tiene desactivado “Permitir que las apps soliciten rastreo” | El popup no aparece; la app sigue con anuncios no personalizados (`npa`) |
