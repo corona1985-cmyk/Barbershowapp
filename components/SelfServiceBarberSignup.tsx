@@ -13,10 +13,10 @@ import { ALLOW_NATIVE_BARBER_SIGNUP, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER } f
 import { isIOSPlatform } from '../utils/platform';
 
 const TIER_OPTIONS: { value: AccountTier; label: string; description: string; price: number }[] = [
-  { value: 'gratuito', label: 'Plan Gratuito', description: 'Solo ver y gestionar citas. Hasta 100 citas al mes.', price: 0 },
-  { value: 'solo', label: 'Plan Solo', description: 'Una persona, un local.', price: 14.95 },
-  { value: 'barberia', label: 'Plan Barbería', description: 'Varios barberos, una sede.', price: 19.95 },
-  { value: 'multisede', label: 'Plan Multi-Sede', description: 'Varias ubicaciones o cadena.', price: 29.95 },
+  { value: 'gratuito', label: 'Perfil básico', description: 'Gestiona citas y servicios desde tu cuenta.', price: 0 },
+  { value: 'solo', label: 'Perfil individual', description: 'Una persona, un local.', price: 14.95 },
+  { value: 'barberia', label: 'Perfil profesional', description: 'Perfil para gestionar servicios y agenda.', price: 19.95 },
+  { value: 'multisede', label: 'Perfil avanzado', description: 'Varias ubicaciones o equipo ampliado.', price: 29.95 },
 ];
 
 type WizardStep = 1 | 2 | 3;
@@ -73,21 +73,21 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const isWeb = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'web';
   const isNativeMobile = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform();
   const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'android';
-  const canSelfSignupBarber = !isIOSPlatform() && (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP);
+  const canSelfSignupBarber = !isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP;
 
   const signupTierOptions = (() => {
     let options = GLOBAL_FREE_MODE
       ? TIER_OPTIONS.filter((o) => o.value !== 'gratuito')
       : TIER_OPTIONS;
-    if (isNativeMobile && ALLOW_NATIVE_BARBER_SIGNUP && !isIOSPlatform()) {
+    if (isNativeMobile && ALLOW_NATIVE_BARBER_SIGNUP) {
       options = options.filter((o) => o.value === PROMOTIONAL_FREE_TIER);
     }
     return options;
   })();
 
   const formatPlanPrice = (opt: (typeof TIER_OPTIONS)[number]) => {
-    if (GLOBAL_FREE_MODE && opt.value === PROMOTIONAL_FREE_TIER) return 'Gratis';
-    return opt.price === 0 ? 'Gratis' : `$${opt.price}/mes`;
+    if (GLOBAL_FREE_MODE && opt.value === PROMOTIONAL_FREE_TIER) return 'Incluido';
+    return opt.price === 0 ? 'Incluido' : `$${opt.price}/mes`;
   };
 
   const checkUsername = async () => {
@@ -160,10 +160,6 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const handleSubmitFree = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (isIOSPlatform()) {
-      setError('El registro de barberías no está disponible en iOS. Crea tu cuenta desde la web.');
-      return;
-    }
     if (!step1Valid || !step2Valid || !isFree) return;
     setLoading(true);
     try {
@@ -234,7 +230,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
     e.preventDefault();
     setError('');
     if (isIOSPlatform()) {
-      setError('El registro de barberías no está disponible en iOS. Crea tu cuenta desde la web.');
+      setError('El registro de negocios no está disponible en iOS. Crea tu cuenta desde la web.');
       return;
     }
     if (!step1Valid || !step2Valid || isFree || !acceptTerms || !isNativeMobile) return;
@@ -292,8 +288,8 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
           <h1 className="text-xl font-bold text-white">Acceso para barberos</h1>
           <p className="text-slate-400 text-sm leading-relaxed">
             {isIOSPlatform()
-              ? 'El registro de barberías no está disponible en la app de iOS. Crea tu cuenta desde la web e inicia sesión aquí.'
-              : 'El registro de barberías no está disponible en la app móvil. Si ya tienes cuenta, inicia sesión. Si eres nuevo, visita nuestra plataforma web.'}
+              ? 'El registro de negocios no está disponible en la app de iOS. Crea tu cuenta desde la web e inicia sesión aquí.'
+              : 'El registro de negocios no está disponible en la app móvil. Si ya tienes cuenta, inicia sesión. Si eres nuevo, visita nuestra plataforma web.'}
           </p>
           <button
             type="button"
@@ -360,8 +356,8 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                     <Scissors size={24} className="text-slate-900 sm:w-7 sm:h-7" strokeWidth={2.2} />
                   </div>
                   <div className="min-w-0">
-                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Crear mi barbería</h1>
-                    <p className="text-slate-500 text-sm mt-0.5">Cuenta → Barbería → Pago</p>
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Crear mi negocio</h1>
+                    <p className="text-slate-500 text-sm mt-0.5">Cuenta → Perfil → Confirmación</p>
                   </div>
                 </div>
               </div>
@@ -423,7 +419,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                             setUsernameTouched(true);
                             if ((username || '').trim()) checkUsername();
                           }}
-                          placeholder="Ej: mibarberia"
+                          placeholder="Ej: micuenta"
                           className="input-modern w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] transition-all duration-200"
                         />
                       </div>
@@ -528,14 +524,14 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
               </form>
             )}
 
-            {/* Step 2: Barbería - 2 columnas en desktop */}
+            {/* Step 2: negocio - 2 columnas en desktop */}
             {step === 2 && (
               <form id="wizard-step2" onSubmit={handleNextFrom2} className="space-y-4 transition-opacity duration-300 ease-out">
-                <h2 className="text-base sm:text-lg font-semibold text-slate-800">Paso 2 – Tu barbería</h2>
+                <h2 className="text-base sm:text-lg font-semibold text-slate-800">Paso 2 – Tu perfil</h2>
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Nombre de la barbería</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Nombre del perfil profesional</label>
                       <div className="relative">
                         <Building2 size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         <input
@@ -642,7 +638,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Plan</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Tipo de perfil</label>
                     <div className="space-y-2">
                       {signupTierOptions.map((opt) => (
                         <label
@@ -661,14 +657,11 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                           />
                           <div className="flex-1 min-w-0">
                             <span className="font-medium text-slate-800">
-                              {GLOBAL_FREE_MODE && opt.value === PROMOTIONAL_FREE_TIER ? 'Plan Barbería (Promoción)' : opt.label}
+                              {GLOBAL_FREE_MODE && opt.value === PROMOTIONAL_FREE_TIER ? 'Perfil profesional' : opt.label}
                             </span>
                             <span className="ml-2 font-bold" style={{ color: primary }}>
                               {formatPlanPrice(opt)}
                             </span>
-                            {GLOBAL_FREE_MODE && opt.value === PROMOTIONAL_FREE_TIER && (
-                              <p className="text-xs text-emerald-600 font-medium mt-0.5">Acceso completo sin costo por tiempo limitado</p>
-                            )}
                             <p className="text-xs text-slate-500 mt-0.5">{opt.description}</p>
                           </div>
                         </label>
@@ -685,8 +678,8 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                 <h2 className="text-base sm:text-lg font-semibold text-slate-800">Paso 3 – Confirmación</h2>
                 <div className="bg-slate-50/80 rounded-xl p-4 space-y-2 text-sm border border-slate-100">
                   <p><span className="text-slate-500">Usuario:</span> <strong>{username.trim().toLowerCase()}</strong></p>
-                  <p><span className="text-slate-500">Barbería:</span> <strong>{barbershopName}</strong></p>
-                  <p><span className="text-slate-500">Plan:</span> <strong>{planOption?.label ?? selectedPlan}</strong></p>
+                  <p><span className="text-slate-500">Perfil:</span> <strong>{barbershopName}</strong></p>
+                  <p><span className="text-slate-500">Tipo de perfil:</span> <strong>{planOption?.label ?? selectedPlan}</strong></p>
                   {!isFree && (
                     <p className="pt-2">
                       <span className="text-slate-500">Ciclo:</span>{' '}
@@ -825,7 +818,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                         className="btn-primary min-h-[48px] flex-1 py-3 text-slate-900 font-semibold rounded-xl transition-all duration-200 disabled:opacity-70 flex items-center justify-center gap-2"
                         style={{ backgroundColor: primary }}
                       >
-                        {loading ? <><Loader2 size={20} className="animate-spin" /> Creando...</> : <>Crear mi cuenta y barbería</>}
+                        {loading ? <><Loader2 size={20} className="animate-spin" /> Creando...</> : <>Crear mi cuenta y negocio</>}
                       </button>
                     ) : (
                       <button

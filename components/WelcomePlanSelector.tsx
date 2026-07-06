@@ -18,7 +18,6 @@ import { SUPPORTED_COUNTRIES } from '../constants/regions';
 import { formatSignupAddress, getBarriosForCity, getCitiesForCountry } from '../utils/posLocation';
 import { navigateToLegal } from '../utils/legal';
 import { ALLOW_NATIVE_BARBER_SIGNUP } from '../config/app';
-import { isIOSPlatform } from '../utils/platform';
 
 type Step = 'who' | 'barber_plan' | 'barber_registered' | 'barber_contact' | 'client_registered' | 'client_new';
 type UserType = 'barbero' | 'cliente';
@@ -27,9 +26,9 @@ interface WelcomePlanSelectorProps {
     onGoToLogin: () => void;
     /** iOS: abre login para barberos existentes (sin autoregistro). */
     onGoToBarberLogin?: () => void;
-    /** Cliente nuevo: ir al listado de barberías para elegir una y registrarse o agendar. */
+    /** Cliente nuevo: ir al listado de negocios para elegir uno y registrarse o agendar. */
     onGoToBarberias?: () => void;
-    /** Abre el formulario de registro de cliente (sin elegir barbería). */
+    /** Abre el formulario de registro de cliente (sin elegir negocio). */
     onGoToClientRegister?: () => void;
     /** Cuando el barbero completa el autoregistro (plan gratuito), hacer login con estas credenciales. */
     onBarberSignupSuccess?: (username: string, password: string) => void;
@@ -39,7 +38,7 @@ interface WelcomePlanSelectorProps {
 
 const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, onGoToBarberLogin, onGoToBarberias, onGoToClientRegister, onBarberSignupSuccess, onBackToLanding }) => {
     const isNativeMobile = Capacitor.isNativePlatform();
-    const canSelfSignupBarber = !isIOSPlatform() && (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP);
+    const canSelfSignupBarber = !isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP;
     const [step, setStep] = useState<Step>('who');
     const [userType, setUserType] = useState<UserType | null>(null);
     const [showSelfSignup, setShowSelfSignup] = useState(false);
@@ -120,14 +119,6 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
 
     const handleBarberoClick = () => {
         setUserType('barbero');
-        if (isIOSPlatform()) {
-            onGoToBarberLogin?.();
-            return;
-        }
-        if (canSelfSignupBarber) {
-            setShowSelfSignup(true);
-            return;
-        }
         onGoToLogin();
     };
 
@@ -147,7 +138,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
             `Plan solicitado: ${plan?.label ?? selectedPlan}`,
             '',
             `Nombre: ${formNombre}`,
-            `Negocio/Barbería: ${formNegocio}`,
+            `Negocio: ${formNegocio}`,
             `País: ${formPais || '(No indicado)'}`,
             `Ciudad: ${formCiudad || '(No indicada)'}`,
             `Barrio/Zona: ${formBarrio || '(No indicado)'}`,
@@ -266,7 +257,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             </div>
                             <div>
                                 <h1 className="text-xl font-semibold text-white">BarberShow</h1>
-                                <p className="text-slate-400 text-sm">Sistema para barberías</p>
+                                <p className="text-slate-400 text-sm">Sistema para barberos</p>
                             </div>
                         </div>
                         <h2 className="text-2xl lg:text-3xl font-bold text-white mb-3">Solicitud de acceso</h2>
@@ -348,12 +339,12 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del negocio / Barbería</label>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del negocio</label>
                                 <input
                                     type="text"
                                     value={formNegocio}
                                     onChange={(e) => setFormNegocio(e.target.value)}
-                                    placeholder="Ej: Barbería El Corte"
+                                    placeholder="Ej: El Corte"
                                     className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#ffd427] focus:border-[#ffd427] text-slate-800"
                                 />
                             </div>
@@ -506,7 +497,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
 
     return (
         <div className="min-h-screen min-h-[100dvh] relative flex flex-col items-center justify-center p-3 sm:p-4 overflow-y-auto overflow-x-hidden">
-            {/* Imagen de fondo de barbería difuminada */}
+            {/* Imagen de fondo difuminada */}
             <div
                 className="absolute inset-0 bg-cover bg-center scale-110"
                 style={{
@@ -534,13 +525,13 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                         <Scissors size={28} className="text-slate-900" />
                     </div>
                     <h1 className="text-2xl font-semibold text-white">BarberShow</h1>
-                    <p className="text-slate-400 mt-1 text-sm">Sistema para barberías</p>
+                    <p className="text-slate-400 mt-1 text-sm">Sistema para barberos</p>
                     <p className="text-slate-500 text-xs mt-0.5">v1.0.10</p>
                 </div>
 
 
-                {/* Paso 1: ¿Barbero o Cliente? — Android sin autoregistro: solo login + cliente */}
-                {!showSelfSignup && step === 'who' && isNativeMobile && !isIOSPlatform() && !ALLOW_NATIVE_BARBER_SIGNUP && (
+                {/* Paso 1: ¿Barbero o Cliente? — móvil sin autoregistro: solo login + cliente */}
+                {!showSelfSignup && step === 'who' && isNativeMobile && !ALLOW_NATIVE_BARBER_SIGNUP && (
                     <div className="max-w-lg mx-auto space-y-4">
                         <p className="text-white text-center text-lg font-semibold mb-2">Bienvenido a BarberShow</p>
                         <p className="text-slate-400 text-center text-sm mb-6">Inicia sesión o regístrate como cliente para reservar citas.</p>
@@ -561,12 +552,12 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             Registrarme como cliente
                         </button>
                         <p className="text-xs text-slate-500 text-center mt-4 px-2 leading-relaxed">
-                            ¿Eres dueño de una barbería y quieres unirte? Visita nuestra plataforma web.
+                            ¿Eres dueño de un negocio y quieres unirte? Visita nuestra plataforma web.
                         </p>
                     </div>
                 )}
 
-                {!showSelfSignup && step === 'who' && (!isNativeMobile || isIOSPlatform() || ALLOW_NATIVE_BARBER_SIGNUP) && (
+                {!showSelfSignup && step === 'who' && (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && (
                     <>
                         <p className="text-white text-center text-lg font-semibold mb-5">¿Eres Barbero o Cliente?</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 max-w-lg mx-auto">
@@ -580,7 +571,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 </div>
                                 <span className="font-semibold text-white text-base">Barbero</span>
                                 <span className="text-slate-400 text-sm text-center leading-snug">
-                                    {isIOSPlatform() ? 'Iniciar sesión en tu barbería' : 'Crear mi barbería o acceder'}
+                                    Iniciar sesión
                                 </span>
                             </button>
                             <button
@@ -595,7 +586,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 <span className="text-slate-400 text-sm text-center leading-snug">Quiero reservar o comprar</span>
                             </button>
                         </div>
-                        {!isIOSPlatform() && (
+                        {(!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && (
                         <p className="text-center">
                             <button
                                 type="button"
@@ -631,13 +622,13 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                     </>
                 )}
 
-                {/* Barbero: ¿Qué tipo de barbería? — solo web */}
+                {/* Barbero: ¿Qué tipo de negocio? — solo web */}
                 {step === 'barber_plan' && !isNativeMobile && (
                     <>
                         <button type="button" onClick={goBack} className="flex items-center gap-1.5 min-h-[44px] text-slate-400 hover:text-white text-sm mb-3 rounded-lg w-fit px-2 -ml-2 active:bg-white/10">
                             <ArrowLeft size={16} /> Volver
                         </button>
-                        <p className="text-white text-center text-base font-semibold mb-1">¿Qué tipo de barbería tienes?</p>
+                        <p className="text-white text-center text-base font-semibold mb-1">¿Qué tipo de negocio tienes?</p>
                         <p className="text-slate-400 text-center text-sm mb-1">Elige el plan que mejor describe tu negocio.</p>
                         <p className="text-slate-500 text-center text-xs mb-4">Haz clic sobre un plan para elegirlo.</p>
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
@@ -730,13 +721,13 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                     </div>
                 )}
 
-                {/* Cliente nuevo: ver barberías — mismo equilibrio */}
+                {/* Cliente nuevo: ver negocios — mismo equilibrio */}
                 {step === 'client_new' && (
                     <div className="max-w-lg mx-auto">
                         <button type="button" onClick={goBack} className="flex items-center gap-1.5 min-h-[44px] text-slate-400 hover:text-white text-sm mb-4 rounded-lg w-fit px-2 -ml-2 active:bg-white/10">
                             <ArrowLeft size={16} /> Volver
                         </button>
-                        <p className="text-white text-center text-lg font-semibold mb-5">¿No tienes barbería aún?</p>
+                        <p className="text-white text-center text-lg font-semibold mb-5">¿No tienes negocio elegido aún?</p>
                         {onGoToClientRegister && (
                             <button
                                 type="button"
@@ -752,13 +743,13 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 onClick={onGoToBarberias}
                                 className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-base transition-colors mb-4 active:bg-white/20"
                             >
-                                <Store size={20} /> Ver barberías – elegir una y agendar cita
+                                <Store size={20} /> Ver negocios – elegir uno y agendar cita
                             </button>
                         )}
                         <div className="bg-white/10 rounded-lg border border-white/20 p-5 mb-5">
-                            <p className="text-white font-medium text-sm mb-2">O regístrate en una barbería específica:</p>
+                            <p className="text-white font-medium text-sm mb-2">O regístrate en un negocio específico:</p>
                             <p className="text-slate-400 text-sm">
-                                Visita la barbería donde quieres reservar y escanea el código QR o pide el enlace.
+                                Visita el negocio donde quieres reservar y escanea el código QR o pide el enlace.
                             </p>
                             <p className="text-slate-500 text-sm mt-2">Si ya te registraste, inicia sesión abajo.</p>
                         </div>
@@ -773,7 +764,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                 )}
 
                 {/* Enlace a login en paso "who" */}
-                {!showSelfSignup && step === 'who' && (!isNativeMobile || isIOSPlatform() || ALLOW_NATIVE_BARBER_SIGNUP) && (
+                {!showSelfSignup && step === 'who' && (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && (
                     <div className="max-w-lg mx-auto pt-6 border-t border-white/10">
                         <button type="button" onClick={onGoToLogin} className="w-full flex items-center justify-center gap-2 py-3 text-slate-400 hover:text-[#ffd427] text-sm font-medium transition-colors">
                             <LogIn size={18} /> Ya tengo cuenta – Iniciar sesión
@@ -829,7 +820,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 ))}
                             </div>
                             <div className="p-4 border-t border-slate-200 bg-slate-50">
-                                <p className="text-sm text-slate-600 text-center mb-2">Elige <strong>Barbero</strong> para crear tu barbería con el plan que prefieras.</p>
+                                <p className="text-sm text-slate-600 text-center mb-2">Elige <strong>Barbero</strong> para crear tu negocio con el plan que prefieras.</p>
                                 <button type="button" onClick={() => { setShowPlansModal(false); }} className="w-full py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium text-sm">
                                     Cerrar
                                 </button>

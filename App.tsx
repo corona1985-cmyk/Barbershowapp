@@ -23,6 +23,7 @@ const Finance = lazy(() => import('./pages/InventoryClientsFinance').then(m => (
 import { Scissors, Cookie, MapPin, Globe, LogOut, Menu, UserPlus, CheckCircle, ArrowLeft, Shield, Loader2 } from 'lucide-react';
 import BarberNotificationBell from './components/BarberNotificationBell';
 import WelcomePlanSelector from './components/WelcomePlanSelector';
+import SelfServiceBarberSignup from './components/SelfServiceBarberSignup';
 import LandingPage from './components/landing/LandingPage';
 import GuestBookingView from './components/GuestBookingView';
 import AdMobBanner from './components/AdMobBanner';
@@ -82,6 +83,8 @@ const App: React.FC = () => {
     const [isLoadingSession, setIsLoadingSession] = useState(true);
     /** Si false, se muestra primero la bienvenida (tipo de barbería + contacto). Si true, el formulario de login. */
     const [showLoginScreen, setShowLoginScreen] = useState(false);
+    /** Registro de perfil de barbero abierto desde la pantalla de login. */
+    const [isBarberRegistering, setIsBarberRegistering] = useState(false);
     /** iOS: login abierto desde "Barbero" — muestra enlace al registro web (Guideline 3.1.1). */
     const [showBarberWebSignupHint, setShowBarberWebSignupHint] = useState(false);
     /** Landing page de marketing; nunca en iOS/Android nativo (Guideline 4.2). */
@@ -806,6 +809,21 @@ const App: React.FC = () => {
 
     // 6. BIENVENIDA (tipo de barbería + contacto) o LOGIN
     if (!isAuthenticated) {
+        if (isBarberRegistering) {
+            return (
+                <>
+                    <AdMobBanner showAds={true} />
+                    <SelfServiceBarberSignup
+                        onSuccess={(username, password) => {
+                            setIsBarberRegistering(false);
+                            handleLogin({ preventDefault: () => {} } as React.FormEvent, { username, password });
+                        }}
+                        onGoToLogin={() => setIsBarberRegistering(false)}
+                        onGoBack={() => setIsBarberRegistering(false)}
+                    />
+                </>
+            );
+        }
         if (!showLoginScreen) {
             return (
                 <>
@@ -854,7 +872,6 @@ const App: React.FC = () => {
                             <Scissors size={32} className="text-slate-900" />
                         </div>
                         <h1 className="text-2xl font-bold text-slate-900">BarberShow</h1>
-                        <p className="text-slate-500">Sistema Multi-Sede</p>
                         <p className="text-slate-400 text-xs mt-1">v{APP_VERSION}</p>
                     </div>
 
@@ -949,7 +966,7 @@ const App: React.FC = () => {
                                 {isIOSPlatform() && showBarberWebSignupHint && (
                                     <div className="mt-5 pt-5 border-t border-slate-100 space-y-3 text-center">
                                         <p className="text-sm text-slate-600 leading-relaxed">
-                                            ¿No tienes una barbería registrada?
+                                            ¿No tienes un barbero registrado?
                                             <br />
                                             Crea tu cuenta desde nuestro sitio web y luego inicia sesión desde la aplicación.
                                         </p>
@@ -958,14 +975,26 @@ const App: React.FC = () => {
                                             onClick={openWebsiteSignup}
                                             className="w-full min-h-[44px] py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium text-sm hover:bg-slate-100 transition-colors"
                                         >
-                                            Crear barbería en la web
+                                            Crear barbero en la web
                                         </button>
                                     </div>
                                 )}
 
-                                <div className="pt-4 border-t border-slate-100 mt-4">
+                                <div className="pt-4 border-t border-slate-100 mt-4 space-y-2">
                                     <button type="button" onClick={() => setIsRegistering(true)} className="w-full min-h-[44px] flex items-center justify-center text-slate-600 font-medium hover:underline hover:text-[#e6be23] rounded-lg active:bg-slate-50">
                                         <UserPlus size={18} className="mr-2" /> ¿Eres cliente? Crear cuenta gratis
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setIsBarberRegistering(true);
+                                            setIsRegistering(false);
+                                            setShowBarberWebSignupHint(false);
+                                            setLoginError('');
+                                        }}
+                                        className="w-full min-h-[44px] flex items-center justify-center text-slate-600 font-medium hover:underline hover:text-[#e6be23] rounded-lg active:bg-slate-50"
+                                    >
+                                        <Scissors size={18} className="mr-2" /> Crear perfil de barbero
                                     </button>
                                 </div>
 
