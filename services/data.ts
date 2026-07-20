@@ -21,6 +21,7 @@ import {
   NotificationLog,
   AuditLog,
   GlobalSettings,
+  UserRole,
 } from '../types';
 
 const ROOT = 'barbershow';
@@ -739,8 +740,10 @@ export const DataService = {
   getUsers: async (): Promise<SystemUser[]> => {
     const raw = await readNode<Record<string, SystemUser>>(`${ROOT}/users`, 'getUsers');
     const users = snapshotToUsers(raw);
-    if (ACTIVE_POS_ID) return users.filter((u) => u.posId === ACTIVE_POS_ID || u.role === 'superadmin');
-    return users;
+    const sedeRoles: UserRole[] = ['admin', 'dueno', 'barbero', 'empleado', 'cliente'];
+    const isSedeStaff = (u: SystemUser) => sedeRoles.includes(u.role) && u.posId === ACTIVE_POS_ID;
+    if (ACTIVE_POS_ID) return users.filter(isSedeStaff);
+    return users.filter((u) => sedeRoles.includes(u.role));
   },
 
   getAllUsersGlobal: async (): Promise<SystemUser[]> => {
