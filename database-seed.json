@@ -37,13 +37,13 @@
   },
   "settings": {
     "1": {
-      "taxRate": 0.16,
+      "taxRate": 0,
       "storeName": "Corte & Estilo",
       "currencySymbol": "$",
       "posId": 1
     },
     "2": {
-      "taxRate": 0.16,
+      "taxRate": 0,
       "storeName": "La Barba",
       "currencySymbol": "$",
       "posId": 2

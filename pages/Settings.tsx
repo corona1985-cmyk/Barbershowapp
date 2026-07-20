@@ -23,7 +23,7 @@ interface SettingsProps {
 
 const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccountDeactivated }) => {
     const [activeTab, setActiveTab] = useState<SettingsTab>('general');
-    const [settings, setSettings] = useState<AppSettings>({ taxRate: 0.16, storeName: '', currencySymbol: '$' });
+    const [settings, setSettings] = useState<AppSettings>({ taxRate: 0, storeName: '', currencySymbol: '$' });
     const [users, setUsers] = useState<SystemUser[]>([]);
     const [services, setServices] = useState<Service[]>([]);
     const [barbers, setBarbers] = useState<Barber[]>([]);
@@ -228,7 +228,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
             ? DEFAULT_PUBLIC_APP_URL
             : (window.location.origin + (window.location.pathname || '').replace(/\/+$/, '') || window.location.origin);
     const getRegistrationUrl = () => `${baseUrl}?ref_pos=${activePosId}`;
-    const getRegistrationUrlForPos = (posId: number) => `${baseUrl}?ref_pos=${posId}`;
+    const activePos = activePosId != null ? pointsOfSale.find((p) => p.id === activePosId) : null;
 
     const handlePrintQR = (title: string, qrImageUrl: string) => {
         if (Capacitor.isNativePlatform()) {
@@ -422,80 +422,42 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
                             </button>
                         </div>
 
-                        {/* QR Code Banner Section */}
+                        {/* QR de la barbería activa (solo sede actual) */}
+                        {activePosId != null ? (
                         <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center text-center">
+                            <p className="font-bold text-slate-800 mb-1">{activePos?.name || settings.storeName || 'Mi barbería'}</p>
+                            {activePos?.address && <p className="text-xs text-slate-500 mb-4">{activePos.address}</p>}
                             <div className="bg-white p-4 rounded-xl shadow-sm mb-4">
                                 <img 
                                     src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getRegistrationUrl())}`} 
                                     alt="QR de Registro" 
-                                    className="w-48 h-48 rounded-full object-cover"
+                                    className="w-48 h-48 object-contain"
                                 />
                             </div>
                             <h3 className="text-xl font-bold text-slate-900 mb-1">Escanea para Registrarte</h3>
-                            <p className="text-slate-500 text-sm mb-4">Coloca este código en la entrada para que los clientes se registren automáticamente en esta sede.</p>
+                            <p className="text-slate-500 text-sm mb-4">Coloca este código en la entrada para que los clientes se registren automáticamente en esta barbería.</p>
                             
                             <div className="flex space-x-2">
                                 <a 
                                     href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(getRegistrationUrl())}`}
-                                    download="BarberShow_QR.png"
+                                    download={`BarberShow_QR_${(activePos?.name || 'barberia').replace(/\s+/g, '_')}.png`}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="flex items-center px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 font-medium text-sm"
                                 >
-                                    <Download size={16} className="mr-2" /> Descargar PNG
+                                    <Download size={16} className="mr-2" /> Descargar
                                 </a>
                                 <button 
                                     type="button"
-                                    onClick={() => handlePrintQR(settings.storeName || 'BarberShow - Registro', `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(getRegistrationUrl())}`)}
+                                    onClick={() => handlePrintQR(activePos?.name || settings.storeName || 'BarberShow - Registro', `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(getRegistrationUrl())}`)}
                                     className="flex items-center px-4 py-2 bg-[#ffd427] text-slate-900 rounded-lg hover:bg-[#e6be23] font-bold text-sm"
                                 >
-                                    <Printer size={16} className="mr-2" /> Imprimir Bajante
+                                    <Printer size={16} className="mr-2" /> Imprimir
                                 </button>
                             </div>
                         </div>
-
-                        {/* QR por barbería (admin/superadmin): un QR por cada sede */}
-                        {!isBarber && pointsOfSale.length > 0 && (
-                            <div className="mt-8 pt-8 border-t border-slate-200">
-                                <h3 className="text-lg font-bold text-slate-800 mb-2 flex items-center">
-                                    <QrCode size={20} className="mr-2" /> Códigos QR por barbería
-                                </h3>
-                                <p className="text-sm text-slate-500 mb-4">Cada código lleva al registro o login con esa sede preseleccionada. Descarga o imprime el que corresponda a cada local.</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {pointsOfSale.filter((pos) => pos.isActive !== false).map((pos) => {
-                                        const qrUrl = getRegistrationUrlForPos(pos.id);
-                                        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`;
-                                        const downloadFilename = `BarberShow_QR_${(pos.name || `sede-${pos.id}`).replace(/\s+/g, '_')}.png`;
-                                        return (
-                                            <div key={pos.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col items-center text-center">
-                                                <p className="font-bold text-slate-800 mb-1">{pos.name}</p>
-                                                {pos.address && <p className="text-xs text-slate-500 mb-3">{pos.address}</p>}
-                                                <div className="bg-white p-2 rounded-lg shadow-sm mb-3">
-                                                    <img src={qrImageUrl} alt={`QR ${pos.name}`} className="w-36 h-36 object-contain" />
-                                                </div>
-                                                <div className="flex flex-wrap gap-2 justify-center">
-                                                    <a
-                                                        href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(qrUrl)}`}
-                                                        download={downloadFilename}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="flex items-center px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 text-sm font-medium"
-                                                    >
-                                                        <Download size={14} className="mr-1.5" /> Descargar
-                                                    </a>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handlePrintQR(pos.name || `Sede ${pos.id}`, qrImageUrl.replace('200x200', '400x400'))}
-                                                        className="flex items-center px-3 py-1.5 bg-[#ffd427] text-slate-900 rounded-lg hover:bg-[#e6be23] text-sm font-bold"
-                                                    >
-                                                        <Printer size={14} className="mr-1.5" /> Imprimir
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+                        ) : (
+                            <p className="text-slate-500 py-6">No hay barbería seleccionada. Selecciona una sede para ver su código QR.</p>
                         )}
                     </div>
                 )}
@@ -513,8 +475,11 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
                                 min={0}
                                 max={1}
                                 className="w-full border border-slate-300 rounded-lg p-2.5"
-                                value={settings.taxRate}
-                                onChange={e => setSettings({ ...settings, taxRate: Number(e.target.value) })}
+                                value={settings.taxRate === 0 ? '' : settings.taxRate}
+                                onChange={e => {
+                                    const v = e.target.value;
+                                    setSettings({ ...settings, taxRate: v === '' ? 0 : Number(v) });
+                                }}
                             />
                             <p className="text-xs text-slate-500 mt-1">Ejemplo: 0.16 para 16%</p>
                         </div>

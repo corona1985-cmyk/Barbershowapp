@@ -19,7 +19,7 @@ const Sales: React.FC<SalesProps> = ({ salesFromAppointment = null, onClearSales
     const [loadingCatalog, setLoadingCatalog] = useState(true);
     
     // Config
-    const [taxRate, setTaxRate] = useState(0.16);
+    const [taxRate, setTaxRate] = useState(0);
     const [storeName, setStoreName] = useState('BarberShow');
     const [currencySymbol, setCurrencySymbol] = useState('$');
 

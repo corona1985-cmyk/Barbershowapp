@@ -49,7 +49,7 @@ function generateUniqueId() {
     return Date.now() * 1000 + Math.floor(Math.random() * 1000);
 }
 const DEFAULT_SETTINGS = {
-    taxRate: 0.16,
+    taxRate: 0,
     storeName: "BarberShow",
     currencySymbol: "$",
 };

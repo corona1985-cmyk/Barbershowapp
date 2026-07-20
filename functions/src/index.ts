@@ -36,7 +36,7 @@ function generateUniqueId(): number {
 }
 
 const DEFAULT_SETTINGS = {
-  taxRate: 0.16,
+  taxRate: 0,
   storeName: "BarberShow",
   currencySymbol: "$",
 };

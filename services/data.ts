@@ -185,7 +185,7 @@ const INITIAL_USERS_MINIMAL: SystemUser[] = [
 ];
 
 const DEFAULT_SETTINGS: AppSettings = {
-  taxRate: 0.16,
+  taxRate: 0,
   storeName: 'BarberShow',
   currencySymbol: '$',
 };
