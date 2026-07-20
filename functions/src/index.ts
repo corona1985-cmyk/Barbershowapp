@@ -148,7 +148,7 @@ const MIN_PHONE_DIGITS = 8;
 const PAID_PLANS = ["solo", "barberia", "multisede"] as const;
 
 /** Sincronizar con config/app.ts del frontend */
-const GLOBAL_FREE_MODE = true;
+const GLOBAL_FREE_MODE = false;
 const PROMOTIONAL_FREE_TIER = "barberia" as const;
 
 function getFreeSignupTierAndPlan(): { tier: string; plan: string } {
@@ -162,6 +162,35 @@ const PLAN_PRICES: Record<string, number> = {
   barberia: 19.95,
   multisede: 29.95,
 };
+
+/** Product IDs IAP → tier y plan interno. Fase iOS: solo barbería. */
+const PRODUCT_ID_TO_TIER: Record<string, { tier: string; plan: string }> = {
+  plan_barberia_monthly: { tier: "barberia", plan: "pro" },
+  plan_barberia_yearly: { tier: "barberia", plan: "pro" },
+  plan_solo_monthly: { tier: "solo", plan: "basic" },
+  plan_solo_yearly: { tier: "solo", plan: "basic" },
+  plan_multisede_monthly: { tier: "multisede", plan: "pro" },
+  plan_multisede_yearly: { tier: "multisede", plan: "pro" },
+};
+
+function resolveTierFromProductId(productId: string): { tier: string; plan: string } | null {
+  if (PRODUCT_ID_TO_TIER[productId]) return PRODUCT_ID_TO_TIER[productId];
+  for (const [id, meta] of Object.entries(PRODUCT_ID_TO_TIER)) {
+    if (productId.includes(id) || id.includes(productId)) return meta;
+  }
+  if (productId.includes("barberia")) return { tier: "barberia", plan: "pro" };
+  if (productId.includes("solo")) return { tier: "solo", plan: "basic" };
+  if (productId.includes("multisede")) return { tier: "multisede", plan: "pro" };
+  return null;
+}
+
+function computeFallbackExpiry(productId: string): string {
+  const isYearly = productId.includes("yearly") || productId.includes("anual");
+  const now = new Date();
+  return isYearly
+    ? new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()).toISOString()
+    : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()).toISOString();
+}
 
 type CompleteSelfSignupFreeData = {
   username?: string;
@@ -399,7 +428,7 @@ export const createPendingBarberSignup = onCall(
 );
 
 /**
- * Crea usuario y POS en estado pendiente para pago en app móvil (Apple Pay / Google Wallet).
+ * Crea usuario y POS en estado pendiente para pago en app móvil (App Store / Google Play).
  * No crea sesión Stripe; la app abrirá el flujo nativo y luego llamará a activatePlanFromPlay.
  */
 export const createPendingBarberSignupMobile = onCall(
@@ -482,11 +511,12 @@ type ActivatePlanFromPlayData = {
   nombreNegocio?: string;
   nombreRepresentante?: string;
   username?: string;
+  expiryDate?: string;
 };
 
 /**
  * Activa el plan tras una compra en Google Play o App Store.
- * Si se pasa username, activa ese usuario y su POS pendiente (subscriptionExpiresAt según ciclo).
+ * Si se pasa username, activa ese usuario y su POS (subscriptionExpiresAt según Apple/Google o ciclo).
  * En producción debería verificarse el token con Google/Apple API.
  */
 export const activatePlanFromPlay = onCall(
@@ -494,10 +524,19 @@ export const activatePlanFromPlay = onCall(
   async (request): Promise<{ success: boolean; message?: string }> => {
     const data = request.data as ActivatePlanFromPlayData | undefined;
     const username = data?.username ? String(data.username).trim().toLowerCase() : undefined;
-    const productId = data?.productId ?? "";
+    const productId = String(data?.productId ?? "").trim();
+    const expiryDateRaw = data?.expiryDate ? String(data.expiryDate).trim() : undefined;
 
     if (!username) {
       return { success: false, message: "Falta username del signup pendiente." };
+    }
+    if (!productId) {
+      return { success: false, message: "Falta productId de la compra." };
+    }
+
+    const tierMeta = resolveTierFromProductId(productId);
+    if (!tierMeta) {
+      return { success: false, message: "Product ID no reconocido: " + productId };
     }
 
     const userSnap = await db.ref(ROOT + "/users/" + username).get();
@@ -511,14 +550,21 @@ export const activatePlanFromPlay = onCall(
       return { success: false, message: "Usuario sin barbería asignada." };
     }
 
-    const isYearly = productId.includes("yearly") || productId.includes("anual");
-    const now = new Date();
-    const expiresAt = isYearly
-      ? new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()).toISOString()
-      : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()).toISOString();
+    let expiresAt: string;
+    if (expiryDateRaw) {
+      const parsed = new Date(expiryDateRaw);
+      if (Number.isNaN(parsed.getTime())) {
+        return { success: false, message: "Fecha de vencimiento inválida." };
+      }
+      expiresAt = parsed.toISOString();
+    } else {
+      expiresAt = computeFallbackExpiry(productId);
+    }
 
     await db.ref(ROOT + "/pointsOfSale/" + posId).update({
       isActive: true,
+      tier: tierMeta.tier,
+      plan: tierMeta.plan,
       subscriptionExpiresAt: expiresAt,
     });
     await db.ref(ROOT + "/users/" + username).update({

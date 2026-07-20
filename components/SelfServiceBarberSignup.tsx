@@ -7,9 +7,9 @@ import { completeSelfSignupFree, createPendingBarberSignupMobile, activatePlanFr
 import { SUPPORTED_COUNTRIES } from '../constants/regions';
 import { formatSignupAddress, getBarriosForCity, getCitiesForCountry } from '../utils/posLocation';
 import { requestUserLocationWithPermission } from '../utils/geolocation';
-import { isPlayBillingAvailable, initPlayBilling, purchasePlan, addPlayPurchaseListener, getPlayProductId, getActivePlayTransactions } from '../services/playBilling';
+import { initPlayBilling, purchasePlan, addPlayPurchaseListener, getActivePlayTransactions, isPlanAvailableForPurchase, isTransactionActivatable, getTransactionForPlan, isNativePaymentAvailable } from '../services/playBilling';
 import { navigateToLegal } from '../utils/legal';
-import { ALLOW_NATIVE_BARBER_SIGNUP, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER } from '../config/app';
+import { ALLOW_NATIVE_BARBER_SIGNUP, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER, IOS_IAP_TIERS } from '../config/app';
 import { isIOSPlatform } from '../utils/platform';
 
 const TIER_OPTIONS: { value: AccountTier; label: string; description: string; price: number }[] = [
@@ -73,17 +73,24 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const isWeb = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'web';
   const isNativeMobile = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform();
   const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'android';
+  const isIOS = isIOSPlatform();
   const canSelfSignupBarber = !isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP;
+
+  const isPlanComingSoonOnIOS = (tier: AccountTier) =>
+    isIOS && tier !== 'gratuito' && !IOS_IAP_TIERS.includes(tier);
 
   const signupTierOptions = (() => {
     let options = GLOBAL_FREE_MODE
       ? TIER_OPTIONS.filter((o) => o.value !== 'gratuito')
       : TIER_OPTIONS;
-    if (isNativeMobile && ALLOW_NATIVE_BARBER_SIGNUP) {
+    if (isNativeMobile && GLOBAL_FREE_MODE && ALLOW_NATIVE_BARBER_SIGNUP) {
       options = options.filter((o) => o.value === PROMOTIONAL_FREE_TIER);
     }
+    options = options.filter((o) => !isPlanComingSoonOnIOS(o.value));
     return options;
   })();
+
+  const canPurchaseSelectedPlan = !isFree && isNativeMobile && isPlanAvailableForPurchase(selectedPlan);
 
   const formatPlanPrice = (opt: (typeof TIER_OPTIONS)[number]) => {
     if (GLOBAL_FREE_MODE && opt.value === PROMOTIONAL_FREE_TIER) return 'Incluido';
@@ -189,7 +196,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const pendingMobileRef = useRef<{ username: string; password: string; plan: AccountTier; cycle: 'mensual' | 'anual' } | null>(null);
 
   useEffect(() => {
-    if (isPlayBillingAvailable()) initPlayBilling();
+    if (isNativePaymentAvailable()) initPlayBilling();
   }, []);
 
   useEffect(() => {
@@ -198,17 +205,16 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
       const pending = pendingMobileRef.current;
       if (!pending) return;
       try {
-        const transactions = await getActivePlayTransactions();
-        const productId = getPlayProductId(pending.plan, pending.cycle);
-        const tx = transactions.find((t) => t.productIdentifier === productId) ?? transactions[0];
-        if (!tx?.purchaseToken) {
+        const tx = await getTransactionForPlan(pending.plan, pending.cycle);
+        if (!isTransactionActivatable(tx)) {
           setError('Compra recibida. Si no se activa, contacta a soporte.');
           pendingMobileRef.current = null;
           return;
         }
         const result = await activatePlanFromPlay({
-          purchaseToken: tx.purchaseToken,
-          productId: tx.productIdentifier,
+          purchaseToken: tx!.purchaseToken,
+          productId: tx!.productIdentifier,
+          expiryDate: tx!.expiryDate,
           email: email.trim() || username.trim() + '@barbershow.app',
           nombreNegocio: barbershopName.trim(),
           nombreRepresentante: name.trim(),
@@ -229,11 +235,11 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const handlePayWithMobile = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (isIOSPlatform()) {
-      setError('El registro de negocios no está disponible en iOS. Crea tu cuenta desde la web.');
+    if (!step1Valid || !step2Valid || isFree || !acceptTerms || !isNativeMobile) return;
+    if (!isPlanAvailableForPurchase(selectedPlan)) {
+      setError('Este plan no está disponible para compra in-app en tu dispositivo.');
       return;
     }
-    if (!step1Valid || !step2Valid || isFree || !acceptTerms || !isNativeMobile) return;
     setLoading(true);
     try {
       await createPendingBarberSignupMobile({
@@ -244,6 +250,9 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
         email: email.trim() || undefined,
         barbershopName: barbershopName.trim(),
         address: formatSignupAddress(streetAddress, barrio, city, country),
+        country,
+        city,
+        barrio: barrio || city,
         lat: shopLat ?? undefined,
         lng: shopLng ?? undefined,
         plan: selectedPlan,
@@ -275,6 +284,56 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
     }
   };
 
+  const handleRestorePurchases = async () => {
+    if (!step1Valid || !step2Valid || isFree || !isIOS) return;
+    setError('');
+    setLoading(true);
+    try {
+      const transactions = await getActivePlayTransactions();
+      const barberiaTx = transactions.find((t) => t.productIdentifier.includes('barberia')) ?? transactions[0];
+      if (!isTransactionActivatable(barberiaTx)) {
+        setError('No se encontraron compras activas para restaurar.');
+        return;
+      }
+      const u = username.trim().toLowerCase();
+      const exists = await DataService.isUsernameTaken(u);
+      if (!exists) {
+        await createPendingBarberSignupMobile({
+          username: u,
+          password,
+          name: name.trim(),
+          phone: phone.trim(),
+          email: email.trim() || undefined,
+          barbershopName: barbershopName.trim(),
+          address: formatSignupAddress(streetAddress, barrio, city, country),
+          country,
+          city,
+          barrio: barrio || city,
+          lat: shopLat ?? undefined,
+          lng: shopLng ?? undefined,
+          plan: 'barberia',
+          ciclo: barberiaTx!.productIdentifier.includes('yearly') ? 'anual' : 'mensual',
+        });
+      }
+      const result = await activatePlanFromPlay({
+        purchaseToken: barberiaTx!.purchaseToken,
+        productId: barberiaTx!.productIdentifier,
+        expiryDate: barberiaTx!.expiryDate,
+        email: email.trim() || u + '@barbershow.app',
+        username: u,
+      });
+      if (result.success) onSuccess(u, password);
+      else setError(result.message || 'No se pudo restaurar la compra.');
+    } catch (err: unknown) {
+      const msg = err && typeof (err as { message?: string }).message === 'string'
+        ? (err as { message: string }).message
+        : 'Error al restaurar compras.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const primary = '#F5B301';
 
   if (!canSelfSignupBarber) {
@@ -287,9 +346,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
           </div>
           <h1 className="text-xl font-bold text-white">Acceso para barberos</h1>
           <p className="text-slate-400 text-sm leading-relaxed">
-            {isIOSPlatform()
-              ? 'El registro de negocios no está disponible en la app de iOS. Crea tu cuenta desde la web e inicia sesión aquí.'
-              : 'El registro de negocios no está disponible en la app móvil. Si ya tienes cuenta, inicia sesión. Si eres nuevo, visita nuestra plataforma web.'}
+            El registro de negocios no está disponible en la app móvil. Si ya tienes cuenta, inicia sesión.
           </p>
           <button
             type="button"
@@ -643,8 +700,10 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                       {signupTierOptions.map((opt) => (
                         <label
                           key={opt.value}
-                          className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
-                            selectedPlan === opt.value ? 'border-[#F5B301] bg-amber-50/60 shadow-sm' : 'border-slate-200 hover:border-slate-300'
+                          className={`flex items-start gap-3 p-3 rounded-xl border-2 transition-all duration-200 ${
+                            selectedPlan === opt.value
+                              ? 'border-[#F5B301] bg-amber-50/60 shadow-sm cursor-pointer'
+                              : 'border-slate-200 hover:border-slate-300 cursor-pointer'
                           }`}
                         >
                           <input
@@ -740,7 +799,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                       Pago solo en la app móvil
                     </p>
                     <p className="text-sm text-slate-600">
-                      Para contratar un plan de pago usa la app en tu móvil: <strong>Apple Pay</strong> en iPhone o <strong>Google Wallet</strong> en Android.
+                      Para contratar un plan de pago usa la app en tu móvil: <strong>App Store</strong> en iPhone o <strong>Google Play</strong> en Android.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <a
@@ -809,7 +868,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
               )}
               {step === 3 && (
                 <>
-                  {(isFree || isNativeMobile) && (
+                  {(isFree || canPurchaseSelectedPlan) && (
                     isFree ? (
                       <button
                         type="button"
@@ -828,9 +887,24 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                         className="btn-primary min-h-[48px] flex-1 py-3 text-slate-900 font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         style={{ backgroundColor: primary }}
                       >
-                        {loading ? <><Loader2 size={20} className="animate-spin" /> Abriendo...</> : isAndroid ? <>Pagar con Google Wallet</> : <>Pagar con Apple Pay</>}
+                        {loading ? <><Loader2 size={20} className="animate-spin" /> Abriendo...</> : isAndroid ? <>Pagar con Google Play</> : <>Pagar con App Store</>}
                       </button>
                     )
+                  )}
+                  {!isFree && isPlanComingSoonOnIOS(selectedPlan) && (
+                    <p className="flex-1 text-sm text-slate-500 text-center py-3">
+                      Este plan estará disponible pronto en iOS. Elige Plan Barbería o Plan Gratuito.
+                    </p>
+                  )}
+                  {!isFree && isIOS && canPurchaseSelectedPlan && (
+                    <button
+                      type="button"
+                      onClick={handleRestorePurchases}
+                      disabled={loading || !step1Valid || !step2Valid}
+                      className="min-h-[44px] px-4 py-2.5 text-sm text-slate-600 hover:text-slate-800 underline disabled:opacity-50"
+                    >
+                      Restaurar compras
+                    </button>
                   )}
                   <button
                     type="button"

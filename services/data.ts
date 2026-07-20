@@ -2,8 +2,7 @@ import { ref, get, set, update, remove, query, orderByChild, equalTo } from 'fir
 import { db } from './firebase';
 import { hashPassword, verifyPassword, isStoredHash } from './passwordHash';
 import { Capacitor } from '@capacitor/core';
-import { getFreeSignupTierAndPlan, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER } from '../config/app';
-import { isIOSPlatform } from '../utils/platform';
+import { getFreeSignupTierAndPlan, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER, PROMO_GRACE_PERIOD_DAYS } from '../config/app';
 import {
   Client,
   Product,
@@ -140,6 +139,21 @@ async function nativeRtdbSet(path: string, value: unknown, operation: string): P
     }),
     FIREBASE_TIMEOUT_MS,
     `${operation}.nativeSet`
+  );
+  if (!response.ok) {
+    throw new Error(`${operation} HTTP ${response.status}`);
+  }
+}
+
+async function nativeRtdbUpdate(path: string, value: Record<string, unknown>, operation: string): Promise<void> {
+  const response = await withTimeout(
+    fetch(`${RTDB_BASE_URL}/${path}.json`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(value),
+    }),
+    FIREBASE_TIMEOUT_MS,
+    `${operation}.nativePatch`
   );
   if (!response.ok) {
     throw new Error(`${operation} HTTP ${response.status}`);
@@ -284,7 +298,7 @@ BarberShow se reserva el derecho de modificar precios, límites o funciones de c
 El plan gratuito puede activarse sin pago, sujeto a verificación de datos y a los límites descritos. BarberShow puede solicitar información adicional antes de aprobar una cuenta.
 
 6.2 Planes de pago
-Los planes de pago requieren suscripción activa. En aplicación móvil (Android/iOS), el pago se procesa exclusivamente a través de Google Play o App Store / Apple Pay, según corresponda. En la versión web, la contratación de planes de pago puede requerir completar el proceso en la app móvil.
+Los planes de pago requieren suscripción activa. En aplicación móvil (Android/iOS), el pago se procesa exclusivamente a través de Google Play o App Store, según corresponda. En la versión web, la contratación de planes de pago puede requerir completar el proceso en la app móvil.
 
 6.3 Renovación y vencimiento
 Las suscripciones tienen una fecha de vencimiento (subscriptionExpiresAt). Si la suscripción vence y no se renueva, el acceso a funciones de pago puede bloquearse hasta regularizar el pago. El plan gratuito no requiere pago pero sigue sujeto a sus límites.
@@ -603,6 +617,53 @@ export const DataService = {
     };
   },
 
+  /**
+   * Asigna periodo de gracia (30 días) a sedes Barbería sin subscriptionExpiresAt
+   * (usuarios del periodo promocional al activar cobro Apple).
+   */
+  migratePromoBarberiaGracePeriod: async (): Promise<{ updated: number; posIds: number[]; message: string }> => {
+    if (GLOBAL_FREE_MODE) {
+      return { updated: 0, posIds: [], message: 'El modo promocional sigue activo (GLOBAL_FREE_MODE = true).' };
+    }
+
+    const snap = await get(ref(db, ROOT + '/pointsOfSale'));
+    if (!snap.exists()) {
+      return { updated: 0, posIds: [], message: 'No hay sedes registradas.' };
+    }
+
+    const raw = snap.val() as Record<string, PointOfSale>;
+    const posIds: number[] = [];
+    const flatUpdates: Record<string, unknown> = {};
+    const graceEnd = new Date();
+    graceEnd.setDate(graceEnd.getDate() + PROMO_GRACE_PERIOD_DAYS);
+    const graceIso = graceEnd.toISOString();
+
+    for (const [id, pos] of Object.entries(raw)) {
+      const posData = pos as PointOfSale;
+      if (posData.tier !== 'barberia') continue;
+      if (posData.subscriptionExpiresAt) continue;
+      const numericId = Number(id);
+      posIds.push(numericId);
+      flatUpdates[`${ROOT}/pointsOfSale/${id}/subscriptionExpiresAt`] = graceIso;
+    }
+
+    if (posIds.length === 0) {
+      return { updated: 0, posIds: [], message: 'No hay sedes Barbería sin fecha de vencimiento.' };
+    }
+
+    await update(ref(db), flatUpdates);
+    cacheInvalidate('pointsOfSale');
+
+    const details = `Gracia promocional: ${posIds.length} sede(s) Barbería con vencimiento ${graceIso}. IDs: ${posIds.join(', ')}`;
+    await DataService.logAuditAction('migration_promo_grace', 'system', details).catch(() => {});
+
+    return {
+      updated: posIds.length,
+      posIds,
+      message: `${posIds.length} sede(s) Barbería con ${PROMO_GRACE_PERIOD_DAYS} días de gracia.`,
+    };
+  },
+
   setActivePosId: (id: number | null) => { ACTIVE_POS_ID = id; },
   getActivePosId: () => ACTIVE_POS_ID,
 
@@ -726,9 +787,6 @@ export const DataService = {
     lat?: number;
     lng?: number;
   }): Promise<{ success: true }> => {
-    if (isIOSPlatform()) {
-      throw new Error('El registro de barberías no está disponible en iOS. Crea tu cuenta desde la web.');
-    }
     const MIN_PHONE_DIGITS = 8;
     const username = String(params.username ?? '').trim().toLowerCase();
     const password = params.password ?? '';
@@ -833,6 +891,180 @@ export const DataService = {
       );
     }
 
+    return { success: true };
+  },
+
+  /**
+   * Crea usuario y POS pendientes de pago in-app (sin Cloud Functions).
+   * Tras la compra en App Store / Google Play, llamar activatePlanFromPlay.
+   */
+  createPendingBarberSignupMobile: async (params: {
+    username: string;
+    password: string;
+    name: string;
+    phone: string;
+    email?: string;
+    barbershopName: string;
+    address: string;
+    country?: string;
+    city?: string;
+    barrio?: string;
+    lat?: number;
+    lng?: number;
+    plan: 'solo' | 'barberia' | 'multisede';
+  }): Promise<{ success: true }> => {
+    const MIN_PHONE_DIGITS = 8;
+    const username = String(params.username ?? '').trim().toLowerCase();
+    const password = params.password ?? '';
+    const name = String(params.name ?? '').trim();
+    const phone = String(params.phone ?? '').trim().replace(/\D/g, '');
+    const email = params.email != null ? String(params.email).trim() || undefined : undefined;
+    const barbershopName = String(params.barbershopName ?? '').trim();
+    const address = String(params.address ?? '').trim();
+    const plan = params.plan;
+    const country = params.country?.trim().toUpperCase();
+    const city = params.city?.trim();
+    const barrio = params.barrio?.trim();
+    const lat = typeof params.lat === 'number' && Number.isFinite(params.lat) ? params.lat : undefined;
+    const lng = typeof params.lng === 'number' && Number.isFinite(params.lng) ? params.lng : undefined;
+
+    if (!username) throw new Error('El nombre de usuario es obligatorio.');
+    if (!password || password.length < 6) throw new Error('La contraseña es obligatoria (mín. 6 caracteres).');
+    if (!name) throw new Error('El nombre completo es obligatorio.');
+    if (phone.length < MIN_PHONE_DIGITS) throw new Error(`El teléfono debe tener al menos ${MIN_PHONE_DIGITS} dígitos.`);
+    if (!barbershopName) throw new Error('El nombre de la barbería es obligatorio.');
+    if (!address) throw new Error('La dirección es obligatoria.');
+    if (!['solo', 'barberia', 'multisede'].includes(plan)) throw new Error('Plan de pago no válido.');
+
+    if (await DataService.isUsernameTaken(username)) {
+      throw new Error('Ese nombre de usuario ya existe. Elige otro.');
+    }
+
+    const posId = generateUniqueId();
+    const hashedPassword = await hashPassword(password);
+    const isNative = Capacitor.isNativePlatform();
+
+    const posPayload: Record<string, unknown> = {
+      id: posId,
+      name: barbershopName,
+      address,
+      country,
+      city,
+      barrio,
+      lat,
+      lng,
+      locationUpdatedAt: lat != null && lng != null ? new Date().toISOString() : undefined,
+      ownerId: username,
+      isActive: false,
+      tier: plan,
+      plan: plan === 'solo' ? 'basic' : 'pro',
+    };
+    Object.keys(posPayload).forEach((k) => { if (posPayload[k] === undefined) delete posPayload[k]; });
+
+    if (isNative) {
+      await nativeRtdbSet(`${ROOT}/pointsOfSale/${posId}`, posPayload, 'createPendingBarberSignupMobile.pos');
+    } else {
+      await withTimeout(
+        set(ref(db, ROOT + '/pointsOfSale/' + posId), posPayload),
+        FIREBASE_TIMEOUT_MS,
+        'createPendingBarberSignupMobile.pos'
+      );
+    }
+
+    const barberId = generateUniqueId();
+    const barberPayload = { id: barberId, posId, name, specialty: 'Barbero', active: true };
+    if (isNative) {
+      await nativeRtdbSet(`${ROOT}/barbers/${barberId}`, barberPayload, 'createPendingBarberSignupMobile.barber');
+    } else {
+      await withTimeout(
+        set(ref(db, ROOT + '/barbers/' + barberId), barberPayload),
+        FIREBASE_TIMEOUT_MS,
+        'createPendingBarberSignupMobile.barber'
+      );
+    }
+
+    const newUser: Record<string, unknown> = {
+      username,
+      role: 'admin',
+      name,
+      posId,
+      barberId,
+      password: hashedPassword,
+      status: 'pending_payment',
+      loginAttempts: 0,
+    };
+    if (email) newUser.email = email;
+    if (isNative) {
+      await nativeRtdbSet(`${ROOT}/users/${username}`, newUser, 'createPendingBarberSignupMobile.user');
+    } else {
+      await withTimeout(
+        set(ref(db, ROOT + '/users/' + username), newUser),
+        FIREBASE_TIMEOUT_MS,
+        'createPendingBarberSignupMobile.user'
+      );
+    }
+
+    return { success: true };
+  },
+
+  /**
+   * Activa el plan tras compra in-app (sin Cloud Functions).
+   * Actualiza POS y usuario con tier, plan y subscriptionExpiresAt.
+   */
+  activatePlanFromPlay: async (params: {
+    productId: string;
+    expiryDate?: string;
+    username: string;
+  }): Promise<{ success: boolean; message?: string }> => {
+    const username = String(params.username ?? '').trim().toLowerCase();
+    const productId = String(params.productId ?? '').trim();
+    const expiryDateRaw = params.expiryDate?.trim();
+
+    if (!username) return { success: false, message: 'Falta username.' };
+    if (!productId) return { success: false, message: 'Falta productId de la compra.' };
+
+    const { getTierFromProductId, computeFallbackExpiry } = await import('./playBilling');
+    const tierMeta = getTierFromProductId(productId);
+    if (!tierMeta) return { success: false, message: 'Product ID no reconocido: ' + productId };
+
+    const dbKey = await resolveUsernameKey(username);
+    if (!dbKey) return { success: false, message: 'Usuario no encontrado.' };
+
+    const userSnap = await withTimeout(get(ref(db, ROOT + '/users/' + dbKey)), FIREBASE_TIMEOUT_MS, 'activatePlanFromPlay.user');
+    if (!userSnap.exists()) return { success: false, message: 'Usuario no encontrado.' };
+
+    const userData = userSnap.val() as { posId?: number };
+    const posId = userData.posId;
+    if (posId == null) return { success: false, message: 'Usuario sin barbería asignada.' };
+
+    let expiresAt: string;
+    if (expiryDateRaw) {
+      const parsed = new Date(expiryDateRaw);
+      if (Number.isNaN(parsed.getTime())) return { success: false, message: 'Fecha de vencimiento inválida.' };
+      expiresAt = parsed.toISOString();
+    } else {
+      expiresAt = computeFallbackExpiry(productId);
+    }
+
+    const posUpdates = {
+      isActive: true,
+      tier: tierMeta.tier,
+      plan: tierMeta.plan,
+      subscriptionExpiresAt: expiresAt,
+    };
+    const userUpdates = { status: 'active' as const };
+
+    const isNative = Capacitor.isNativePlatform();
+    if (isNative) {
+      await nativeRtdbUpdate(`${ROOT}/pointsOfSale/${posId}`, posUpdates, 'activatePlanFromPlay.pos');
+      await nativeRtdbUpdate(`${ROOT}/users/${dbKey}`, userUpdates, 'activatePlanFromPlay.user');
+    } else {
+      await withTimeout(update(ref(db, ROOT + '/pointsOfSale/' + posId), posUpdates), FIREBASE_TIMEOUT_MS, 'activatePlanFromPlay.pos');
+      await withTimeout(update(ref(db, ROOT + '/users/' + dbKey), userUpdates), FIREBASE_TIMEOUT_MS, 'activatePlanFromPlay.user');
+    }
+
+    cacheInvalidate('pointsOfSale');
+    invalidateUsernameKeysCache();
     return { success: true };
   },
 

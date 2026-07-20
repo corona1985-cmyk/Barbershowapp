@@ -29,6 +29,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
     const [migrationLoading, setMigrationLoading] = useState(false);
 
     const gratuitoSedeCount = sedes.filter((s) => s.tier === 'gratuito').length;
+    const barberiaGraceCount = sedes.filter((s) => s.tier === 'barberia' && !s.subscriptionExpiresAt).length;
 
     const handlePromotionalMigration = async () => {
         if (!GLOBAL_FREE_MODE) {
@@ -47,6 +48,28 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
             await loadData();
         } catch (e) {
             alert(e instanceof Error ? e.message : 'Error al migrar sedes.');
+        } finally {
+            setMigrationLoading(false);
+        }
+    };
+
+    const handleGraceMigration = async () => {
+        if (GLOBAL_FREE_MODE) {
+            alert('Desactiva GLOBAL_FREE_MODE para aplicar el periodo de gracia.');
+            return;
+        }
+        if (barberiaGraceCount === 0) {
+            alert('No hay sedes Barbería sin fecha de vencimiento.');
+            return;
+        }
+        if (!confirm(`¿Asignar 30 días de gracia a ${barberiaGraceCount} sede(s) Barbería del periodo promocional?`)) return;
+        setMigrationLoading(true);
+        try {
+            const result = await DataService.migratePromoBarberiaGracePeriod();
+            alert(result.message);
+            await loadData();
+        } catch (e) {
+            alert(e instanceof Error ? e.message : 'Error al aplicar gracia.');
         } finally {
             setMigrationLoading(false);
         }
@@ -157,6 +180,27 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                              <p className="text-slate-400 text-xs">Todos los servicios funcionando correctamente.</p>
                          </div>
                      </div>
+                     {!GLOBAL_FREE_MODE && barberiaGraceCount > 0 && (
+                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-amber-900/20 border border-amber-900/50 rounded-lg">
+                             <div className="flex items-start gap-3">
+                                 <AlertTriangle className="text-amber-400 mr-1 flex-shrink-0 mt-0.5" size={20} />
+                                 <div>
+                                     <p className="text-amber-300 font-bold text-sm">Gracia Plan Barbería (Apple IAP)</p>
+                                     <p className="text-slate-400 text-xs">
+                                         {barberiaGraceCount} sede(s) Barbería sin vencimiento (periodo promocional). Asigna 30 días antes del cobro.
+                                     </p>
+                                 </div>
+                             </div>
+                             <button
+                                 type="button"
+                                 onClick={handleGraceMigration}
+                                 disabled={migrationLoading}
+                                 className="shrink-0 px-4 py-2 bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-bold text-sm rounded-lg disabled:opacity-60"
+                             >
+                                 {migrationLoading ? 'Aplicando…' : 'Aplicar gracia'}
+                             </button>
+                         </div>
+                     )}
                      {GLOBAL_FREE_MODE && gratuitoSedeCount > 0 && (
                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-amber-900/20 border border-amber-900/50 rounded-lg">
                              <div className="flex items-start gap-3">

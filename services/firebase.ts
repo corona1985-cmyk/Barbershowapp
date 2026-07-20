@@ -5,7 +5,6 @@ import { initializeFirestore } from 'firebase/firestore';
 import { getAnalytics, isSupported, logEvent } from 'firebase/analytics';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Capacitor } from '@capacitor/core';
-import { isIOSPlatform } from '../utils/platform';
 const firebaseConfig = {
   apiKey: "AIzaSyDDHc3BVRBU8CE2SRPhIzqK0aLQ_gcgAhA",
   authDomain: "gen-lang-client-0624135070.firebaseapp.com",
@@ -97,20 +96,25 @@ export async function createPlanCheckout(params: {
   return result.data;
 }
 
-/** Activa el plan en Firebase tras una compra en Google Play o Apple. Si se pasa username, activa ese signup pendiente. */
+/** Activa el plan en Firebase tras una compra in-app (App Store / Google Play). Sin Cloud Functions. */
 export async function activatePlanFromPlay(params: {
-  purchaseToken: string;
+  purchaseToken?: string;
   productId: string;
-  email: string;
+  email?: string;
   nombreNegocio?: string;
   nombreRepresentante?: string;
-  /** Usuario creado en signup pendiente (móvil); si se envía, se activa ese usuario y su POS. */
+  expiryDate?: string;
   username?: string;
 }): Promise<{ success: boolean; message?: string }> {
-  const functions = getFunctions(app, FUNCTIONS_REGION);
-  const fn = httpsCallable<typeof params, { success: boolean; message?: string }>(functions, 'activatePlanFromPlay');
-  const result = await fn(params);
-  return result.data;
+  if (!params.username?.trim()) {
+    return { success: false, message: 'Falta username.' };
+  }
+  const { DataService } = await import('./data');
+  return DataService.activatePlanFromPlay({
+    productId: params.productId,
+    expiryDate: params.expiryDate,
+    username: params.username,
+  });
 }
 
 /** Payload para completar autoregistro gratuito (plan gratuito). */
@@ -131,9 +135,6 @@ export interface CompleteSelfSignupFreeParams {
 
 /** Completa el autoregistro con plan gratuito: crea usuario y barbería en Realtime Database (sin Cloud Functions). */
 export async function completeSelfSignupFree(params: CompleteSelfSignupFreeParams): Promise<{ success: true }> {
-  if (isIOSPlatform()) {
-    throw new Error('El registro de barberías no está disponible en iOS. Crea tu cuenta desde la web.');
-  }
   const { DataService } = await import('./data');
   return DataService.completeSelfSignupFree(params);
 }
@@ -147,6 +148,9 @@ export interface CreatePendingBarberSignupParams {
   email?: string;
   barbershopName: string;
   address: string;
+  country?: string;
+  city?: string;
+  barrio?: string;
   lat?: number;
   lng?: number;
   plan: 'solo' | 'barberia' | 'multisede';
@@ -161,13 +165,8 @@ export async function createPendingBarberSignup(params: CreatePendingBarberSignu
   return result.data;
 }
 
-/** Crea usuario y POS en estado pendiente para pago en app (Apple Pay / Google Wallet). No redirige a Stripe. */
+/** Crea usuario y POS en estado pendiente para pago in-app (App Store / Google Play). Sin Cloud Functions. */
 export async function createPendingBarberSignupMobile(params: CreatePendingBarberSignupParams): Promise<{ success: true }> {
-  if (isIOSPlatform()) {
-    throw new Error('El registro de barberías no está disponible en iOS. Crea tu cuenta desde la web.');
-  }
-  const functions = getFunctions(app, FUNCTIONS_REGION);
-  const fn = httpsCallable<CreatePendingBarberSignupParams, { success: true }>(functions, 'createPendingBarberSignupMobile');
-  const result = await fn(params);
-  return result.data;
+  const { DataService } = await import('./data');
+  return DataService.createPendingBarberSignupMobile(params);
 }

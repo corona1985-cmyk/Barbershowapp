@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import { ViewState, UserRole, PointOfSale, SystemUser, AppointmentForSale, AccountTier } from './types';
 
@@ -33,8 +33,16 @@ import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { DataService } from './services/data';
 import { isAccountDeactivated } from './services/data';
-import { APP_VERSION, authenticateMasterWithPassword } from './services/firebase';
-import { initPlayBilling, isPlayBillingAvailable } from './services/playBilling';
+import { APP_VERSION, authenticateMasterWithPassword, activatePlanFromPlay } from './services/firebase';
+import {
+    initPlayBilling,
+    isNativePaymentAvailable,
+    purchasePlan,
+    addPlayPurchaseListener,
+    getTransactionForPlan,
+    getActivePlayTransactions,
+    isTransactionActivatable,
+} from './services/playBilling';
 import { initLocalNotifications, syncAppointmentNotifications, stopAppointmentNotifications } from './services/notifications';
 import LegalDocumentPage from './pages/LegalDocumentPage';
 import { getLegalDocumentFromUrl, navigateToLegal, LegalDocumentType } from './utils/legal';
@@ -99,6 +107,9 @@ const App: React.FC = () => {
     const [isPlanPro, setIsPlanPro] = useState(false);
     /** Tier de negocio de la sede activa: solo / barberia / multisede (menú y límites) */
     const [accountTier, setAccountTier] = useState<AccountTier>('barberia');
+    const [renewalLoading, setRenewalLoading] = useState(false);
+    const [renewalError, setRenewalError] = useState('');
+    const pendingRenewalRef = useRef<{ username: string; cycle: 'mensual' | 'anual' } | null>(null);
     /** En plan Multi-Sede: sedes del mismo owner para mostrar selector (solo si hay más de una) */
     const [posListForOwner, setPosListForOwner] = useState<PointOfSale[]>([]);
     /** Solo cliente: barbería preferida (QR/favoritos). Al iniciar sesión se abre esa barbería. */
@@ -200,10 +211,47 @@ const App: React.FC = () => {
         };
     }, [isLoadingSession]);
 
-    // Google Play Billing solo cuando no estamos en modo promocional global (App Store / Play Store).
+    // Billing nativo cuando no estamos en modo promocional global (App Store / Play Store).
     useEffect(() => {
-        if (!GLOBAL_FREE_MODE && isPlayBillingAvailable()) initPlayBilling();
+        if (!GLOBAL_FREE_MODE && isNativePaymentAvailable()) initPlayBilling();
     }, []);
+
+    // Listener de compra para renovación de suscripción vencida.
+    useEffect(() => {
+        if (!isSubscriptionExpired || GLOBAL_FREE_MODE || !isNativePaymentAvailable()) return;
+        const remove = addPlayPurchaseListener(async () => {
+            const pending = pendingRenewalRef.current;
+            if (!pending || !currentPosId) return;
+            try {
+                const tx = await getTransactionForPlan('barberia', pending.cycle);
+                if (!isTransactionActivatable(tx)) {
+                    setRenewalError('Compra recibida. Si no se reactiva, contacta a soporte.');
+                    pendingRenewalRef.current = null;
+                    return;
+                }
+                const result = await activatePlanFromPlay({
+                    purchaseToken: tx!.purchaseToken,
+                    productId: tx!.productIdentifier,
+                    expiryDate: tx!.expiryDate,
+                    username: pending.username,
+                });
+                pendingRenewalRef.current = null;
+                setRenewalLoading(false);
+                if (result.success) {
+                    setRenewalError('');
+                    await handleSwitchPos(currentPosId);
+                } else {
+                    setRenewalError(result.message || 'No se pudo reactivar la suscripción.');
+                }
+            } catch (e) {
+                console.error(e);
+                setRenewalError('Error al reactivar. Contacta a soporte.');
+                pendingRenewalRef.current = null;
+                setRenewalLoading(false);
+            }
+        });
+        return remove;
+    }, [isSubscriptionExpired, currentPosId, username]);
 
     // Notificaciones locales de citas (solo nativo): recordatorio 30 min antes y aviso de cita nueva.
     useEffect(() => {
@@ -607,11 +655,59 @@ const App: React.FC = () => {
         setUsername('');
         setPassword('');
         setLoginError('');
+        setRenewalError('');
         setCurrentView('dashboard');
         DataService.setActivePosId(null);
         setCurrentPosId(null);
         setShowLoginScreen(false);
         setShowLandingPage(!isNativeApp);
+    };
+
+    const handleRenewSubscription = async () => {
+        if (!username.trim() || renewalLoading) return;
+        if (!isNativePaymentAvailable()) {
+            setRenewalError('Renueva desde la app móvil (App Store o Google Play).');
+            return;
+        }
+        setRenewalError('');
+        setRenewalLoading(true);
+        pendingRenewalRef.current = { username: username.trim().toLowerCase(), cycle: 'mensual' };
+        const result = await purchasePlan('barberia', 'mensual');
+        if (!result.success) {
+            pendingRenewalRef.current = null;
+            setRenewalLoading(false);
+            setRenewalError(result.message || 'No se pudo abrir la tienda.');
+        }
+    };
+
+    const handleRestoreSubscription = async () => {
+        if (!username.trim() || renewalLoading) return;
+        setRenewalError('');
+        setRenewalLoading(true);
+        try {
+            const transactions = await getActivePlayTransactions();
+            const barberiaTx = transactions.find((t) => t.productIdentifier.includes('barberia')) ?? transactions[0];
+            if (!isTransactionActivatable(barberiaTx)) {
+                setRenewalError('No se encontraron compras activas para restaurar.');
+                return;
+            }
+            const result = await activatePlanFromPlay({
+                purchaseToken: barberiaTx!.purchaseToken,
+                productId: barberiaTx!.productIdentifier,
+                expiryDate: barberiaTx!.expiryDate,
+                username: username.trim().toLowerCase(),
+            });
+            if (result.success && currentPosId) {
+                await handleSwitchPos(currentPosId);
+            } else {
+                setRenewalError(result.message || 'No se pudo restaurar la suscripción.');
+            }
+        } catch (e) {
+            console.error(e);
+            setRenewalError('Error al restaurar compras.');
+        } finally {
+            setRenewalLoading(false);
+        }
     };
 
     const handleAccountDeactivated = () => {
@@ -698,14 +794,28 @@ const App: React.FC = () => {
                     <p className="text-slate-300">
                         La suscripción de <strong className="text-white">{currentPosName || currentPos.name}</strong> venció{expiryDate ? ` el ${expiryDate}` : ''}. Renueva para seguir usando BarberShow.
                     </p>
-                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    {renewalError && (
+                        <p className="text-sm text-red-300 bg-red-900/30 rounded-lg px-3 py-2">{renewalError}</p>
+                    )}
+                    <div className="flex flex-col gap-3 justify-center">
                         <button
                             type="button"
-                            onClick={() => { setIsAuthenticated(false); setShowLoginScreen(false); setUsername(''); setPassword(''); }}
-                            className="px-6 py-3 bg-[#ffd427] text-slate-900 font-semibold rounded-xl hover:bg-amber-400 transition-colors"
+                            onClick={handleRenewSubscription}
+                            disabled={renewalLoading}
+                            className="px-6 py-3 bg-[#ffd427] text-slate-900 font-semibold rounded-xl hover:bg-amber-400 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
                         >
-                            Renovar ahora
+                            {renewalLoading ? <><Loader2 size={18} className="animate-spin" /> Procesando...</> : 'Renovar ahora'}
                         </button>
+                        {isNativePaymentAvailable() && isIOSPlatform() && (
+                            <button
+                                type="button"
+                                onClick={handleRestoreSubscription}
+                                disabled={renewalLoading}
+                                className="px-6 py-3 border border-slate-500 text-slate-300 rounded-xl hover:bg-slate-700/50 transition-colors disabled:opacity-60"
+                            >
+                                Restaurar compras
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={handleLogout}

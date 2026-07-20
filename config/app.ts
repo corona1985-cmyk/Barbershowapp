@@ -9,19 +9,24 @@ export const DEFAULT_PUBLIC_APP_URL = 'https://barbershow.net';
 
 /**
  * Modo promocional global: evita pantallas de suscripción vencida y bloqueos por plan.
- * Requerido para cumplir Guideline 3.1.1 en App Store mientras no se use IAP de Apple.
- * Cambiar a false cuando se integre In-App Purchase nativo y se cobren planes.
+ * Desactivado: Plan Barbería se cobra vía App Store / Google Play.
  */
-export const GLOBAL_FREE_MODE = true;
+export const GLOBAL_FREE_MODE = false;
 
-/** Permite el autoregistro de barberías en móvil nativo mientras el modo gratis global esté activo. */
-export const ALLOW_NATIVE_BARBER_SIGNUP = GLOBAL_FREE_MODE;
+/** Permite autoregistro de barberías en app móvil nativa (con IAP cuando aplique). */
+export const ALLOW_NATIVE_BARBER_SIGNUP = true;
 
 /**
  * Tier otorgado sin pago mientras GLOBAL_FREE_MODE esté activo.
  * Plan Barbería: varios barberos, una sede, reportes por barbero, etc.
  */
 export const PROMOTIONAL_FREE_TIER: AccountTier = 'barberia';
+
+/** Planes disponibles para compra in-app en iOS (fase 1: solo barbería). */
+export const IOS_IAP_TIERS: AccountTier[] = ['barberia'];
+
+/** Días de gracia para sedes Barbería del periodo promocional al activar cobro. */
+export const PROMO_GRACE_PERIOD_DAYS = 30;
 
 export function tierToDefaultPlan(tier: AccountTier): PosPlan {
   return tier === 'gratuito' || tier === 'solo' ? 'basic' : 'pro';
@@ -37,4 +42,12 @@ export function getFreeSignupTierAndPlan(): { tier: AccountTier; plan: PosPlan }
 
 export function isPromotionalFreeTier(tier: AccountTier | null | undefined): boolean {
   return GLOBAL_FREE_MODE && tier === PROMOTIONAL_FREE_TIER;
+}
+
+/** Indica si un tier puede comprarse in-app en la plataforma actual. */
+export function isTierAvailableForIAP(tier: AccountTier, platform: 'ios' | 'android' | 'web'): boolean {
+  if (platform === 'web') return false;
+  if (tier === 'gratuito') return false;
+  if (platform === 'ios') return IOS_IAP_TIERS.includes(tier);
+  return tier === 'solo' || tier === 'barberia' || tier === 'multisede';
 }

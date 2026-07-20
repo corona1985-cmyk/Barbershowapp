@@ -6,12 +6,12 @@ import { DataService } from '../services/data';
 import { createPlanCheckout, activatePlanFromPlay, type PlanCheckoutProvider } from '../services/firebase';
 import SelfServiceBarberSignup from './SelfServiceBarberSignup';
 import {
-    isPlayBillingAvailable,
+    isNativePaymentAvailable,
     initPlayBilling,
     purchasePlan,
     addPlayPurchaseListener,
-    getPlayProductId,
-    getActivePlayTransactions,
+    getTransactionForPlan,
+    isTransactionActivatable,
 } from '../services/playBilling';
 import { CONTACT, TIER_OPTIONS } from '../constants/plans';
 import { SUPPORTED_COUNTRIES } from '../constants/regions';
@@ -69,7 +69,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
     }, []);
 
     useEffect(() => {
-        if (isPlayBillingAvailable()) initPlayBilling();
+        if (isNativePaymentAvailable()) initPlayBilling();
     }, []);
 
     useEffect(() => {
@@ -77,17 +77,16 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
             const pending = pendingPlayRef.current;
             if (!pending) return;
             try {
-                const transactions = await getActivePlayTransactions();
-                const productId = getPlayProductId(pending.plan, pending.cycle);
-                const tx = transactions.find((t) => t.productIdentifier === productId) ?? transactions[0];
-                if (!tx?.purchaseToken) {
+                const tx = await getTransactionForPlan(pending.plan, pending.cycle);
+                if (!isTransactionActivatable(tx)) {
                     alert('Compra recibida. Si no se activa tu plan, contacta a soporte con tu correo.');
                     pendingPlayRef.current = null;
                     return;
                 }
                 const result = await activatePlanFromPlay({
-                    purchaseToken: tx.purchaseToken,
-                    productId: tx.productIdentifier,
+                    purchaseToken: tx!.purchaseToken,
+                    productId: tx!.productIdentifier,
+                    expiryDate: tx!.expiryDate,
                     email: pending.email,
                     nombreNegocio: pending.nombreNegocio || undefined,
                     nombreRepresentante: pending.nombreRepresentante || undefined,
