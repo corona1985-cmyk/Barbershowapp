@@ -11,7 +11,7 @@ export const DEFAULT_PUBLIC_APP_URL = 'https://barbershow.net';
  * Modo promocional global: evita pantallas de suscripción vencida y bloqueos por plan.
  * Desactivado: Plan Barbería se cobra vía App Store / Google Play.
  */
-export const GLOBAL_FREE_MODE = false;
+export const GLOBAL_FREE_MODE = true;
 
 /** Permite autoregistro de barberías en app móvil nativa (con IAP cuando aplique). */
 export const ALLOW_NATIVE_BARBER_SIGNUP = true;

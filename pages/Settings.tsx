@@ -971,7 +971,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
                         <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">Planes disponibles</h3>
                         {GLOBAL_FREE_MODE && (
                             <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
-                                Promoción activa: las barberías nuevas reciben el <strong>Plan Barbería</strong> sin costo por tiempo limitado.
+                                Promoción activa: las barberías nuevas reciben el <strong>Plan Barbería</strong> incluido sin costo.
                             </p>
                         )}
                         <p className="text-sm text-slate-600">

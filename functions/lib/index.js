@@ -129,7 +129,7 @@ exports.sendWhatsAppMessage = (0, https_1.onCall)({ region: "us-central1" }, asy
 const MIN_PHONE_DIGITS = 8;
 const PAID_PLANS = ["solo", "barberia", "multisede"];
 /** Sincronizar con config/app.ts del frontend */
-const GLOBAL_FREE_MODE = false;
+const GLOBAL_FREE_MODE = true;
 const PROMOTIONAL_FREE_TIER = "barberia";
 function getFreeSignupTierAndPlan() {
     if (GLOBAL_FREE_MODE) {

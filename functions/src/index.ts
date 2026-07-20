@@ -148,7 +148,7 @@ const MIN_PHONE_DIGITS = 8;
 const PAID_PLANS = ["solo", "barberia", "multisede"] as const;
 
 /** Sincronizar con config/app.ts del frontend */
-const GLOBAL_FREE_MODE = false;
+const GLOBAL_FREE_MODE = true;
 const PROMOTIONAL_FREE_TIER = "barberia" as const;
 
 function getFreeSignupTierAndPlan(): { tier: string; plan: string } {

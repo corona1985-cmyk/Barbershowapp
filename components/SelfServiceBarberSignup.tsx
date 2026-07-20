@@ -893,7 +893,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                   )}
                   {!isFree && isPlanComingSoonOnIOS(selectedPlan) && (
                     <p className="flex-1 text-sm text-slate-500 text-center py-3">
-                      Este plan estará disponible pronto en iOS. Elige Plan Barbería o Plan Gratuito.
+                      Este plan estará disponible pronto en iOS. Elige el Perfil profesional incluido.
                     </p>
                   )}
                   {!isFree && isIOS && canPurchaseSelectedPlan && (
