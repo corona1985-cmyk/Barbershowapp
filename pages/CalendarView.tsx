@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { DataService } from '../services/data';
 import { Appointment, Barber, Client } from '../types';
 import { ChevronLeft, ChevronRight, User, MapPin, Loader2, X, CalendarDays, Clock, Scissors } from 'lucide-react';
-
-const DAY_NAMES_SHORT = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
-const DAY_NAMES_FULL = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+import { useTranslation } from '../i18n';
 
 const CalendarView: React.FC = () => {
+    const { t, formatDate } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [barbers, setBarbers] = useState<Barber[]>([]);
@@ -17,6 +16,21 @@ const CalendarView: React.FC = () => {
     const [selectedDay, setSelectedDay] = useState<string | null>(null);
     const currentBarberId = DataService.getCurrentBarberId();
     const isBarberoView = currentBarberId != null;
+
+    const weekdayLabels = useMemo(() => {
+        const sunday = new Date(2024, 0, 7);
+        return Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(sunday);
+            d.setDate(sunday.getDate() + i);
+            return {
+                short: formatDate(d, { weekday: 'narrow' }),
+                long: formatDate(d, { weekday: 'short' }),
+            };
+        });
+    }, [formatDate]);
+
+    const statusLabel = (estado: Appointment['estado']) =>
+        t(`appointments.status.${estado}` as 'appointments.status.pendiente');
 
     useEffect(() => {
         setLoading(true);
@@ -87,6 +101,7 @@ const CalendarView: React.FC = () => {
             const dayAppointments = getAppointmentsForDay(dateStr);
             const isToday = dateStr === todayStr;
             const hasCitas = dayAppointments.length > 0;
+            const countLabel = dayAppointments.length === 1 ? t('calendar.appointmentOne') : t('calendar.appointmentMany');
 
             days.push(
                 <button
@@ -101,12 +116,12 @@ const CalendarView: React.FC = () => {
                 >
                     <span className={`text-sm font-bold tabular-nums sm:text-base ${isToday ? 'text-amber-800' : 'text-slate-700'}`}>
                         {d}
-                        {isToday && <span className="ml-0.5 rounded bg-amber-200/60 px-1 text-[10px] font-semibold uppercase text-amber-800">hoy</span>}
+                        {isToday && <span className="ml-0.5 rounded bg-amber-200/60 px-1 text-[10px] font-semibold uppercase text-amber-800">{t('calendar.today')}</span>}
                     </span>
                     <div className="mt-1.5 flex min-w-0 max-w-full flex-wrap justify-center gap-0.5">
                         {hasCitas ? (
                             <>
-                                <span className="text-[10px] font-semibold text-slate-600">{dayAppointments.length} {dayAppointments.length === 1 ? 'cita' : 'citas'}</span>
+                                <span className="text-[10px] font-semibold text-slate-600">{dayAppointments.length} {countLabel}</span>
                                 <div className="mt-0.5 flex flex-wrap justify-center gap-0.5 md:hidden">
                                     {dayAppointments.slice(0, 5).map(app => (
                                         <span
@@ -115,7 +130,7 @@ const CalendarView: React.FC = () => {
                                                 app.estado === 'confirmada' ? 'bg-blue-500' :
                                                 app.estado === 'completada' ? 'bg-emerald-500' : 'bg-amber-500'
                                             }`}
-                                            title={`${app.hora} ${app.estado}`}
+                                            title={`${app.hora} ${statusLabel(app.estado)}`}
                                         />
                                     ))}
                                     {dayAppointments.length > 5 && <span className="text-[9px] text-slate-400">+{dayAppointments.length - 5}</span>}
@@ -125,7 +140,7 @@ const CalendarView: React.FC = () => {
                                         <span
                                             key={app.id}
                                             className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${getStatusStyle(app.estado)}`}
-                                            title={`${app.hora} · ${clients.find(c => c.id === app.clienteId)?.nombre ?? 'Cliente'} · ${app.estado}`}
+                                            title={`${app.hora} · ${clients.find(c => c.id === app.clienteId)?.nombre ?? t('calendar.unknownClient')} · ${statusLabel(app.estado)}`}
                                         >
                                             {app.hora}
                                         </span>
@@ -149,8 +164,8 @@ const CalendarView: React.FC = () => {
                 <div className="rounded-2xl bg-slate-100 p-6">
                     <Loader2 className="animate-spin text-[#ffd427]" size={44} strokeWidth={2.5} />
                 </div>
-                <p className="mt-4 font-semibold text-slate-700">Cargando calendario...</p>
-                <p className="mt-1 text-sm text-slate-500">Un momento</p>
+                <p className="mt-4 font-semibold text-slate-700">{t('calendar.loading')}</p>
+                <p className="mt-1 text-sm text-slate-500">{t('calendar.loadingHint')}</p>
             </div>
         );
     }
@@ -163,7 +178,7 @@ const CalendarView: React.FC = () => {
                         <MapPin size={20} className="text-amber-700" />
                     </div>
                     <div>
-                        <p className="text-xs font-medium uppercase tracking-wide text-amber-700/80">Sede activa</p>
+                        <p className="text-xs font-medium uppercase tracking-wide text-amber-700/80">{t('calendar.activeLocation')}</p>
                         <p className="font-semibold text-slate-800">{currentBarberiaName}</p>
                     </div>
                 </div>
@@ -175,8 +190,8 @@ const CalendarView: React.FC = () => {
                         <CalendarDays size={22} className="sm:w-6 sm:h-6" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold tracking-tight text-slate-800 sm:text-2xl">Calendario mensual</h2>
-                        <p className="text-sm text-slate-500">Toca un día para ver las citas</p>
+                        <h2 className="text-xl font-bold tracking-tight text-slate-800 sm:text-2xl">{t('calendar.title')}</h2>
+                        <p className="text-sm text-slate-500">{t('calendar.subtitle')}</p>
                     </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:gap-4 sm:px-4 sm:py-3">
@@ -188,7 +203,7 @@ const CalendarView: React.FC = () => {
                                 value={selectedBarber}
                                 onChange={(e) => setSelectedBarber(e.target.value === 'all' ? 'all' : Number(e.target.value))}
                             >
-                                <option value="all">Todos los barberos</option>
+                                <option value="all">{t('calendar.allBarbers')}</option>
                                 {barbers.map(b => (
                                     <option key={b.id} value={b.id}>{b.name}</option>
                                 ))}
@@ -197,7 +212,7 @@ const CalendarView: React.FC = () => {
                     ) : (
                         <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2">
                             <User size={18} className="text-slate-500 flex-shrink-0" />
-                            <span className="text-sm font-semibold text-slate-700">Mis citas</span>
+                            <span className="text-sm font-semibold text-slate-700">{t('calendar.myAppointments')}</span>
                             {barbers.find(b => b.id === currentBarberId) && (
                                 <span className="truncate text-xs text-slate-500 max-w-[90px] sm:max-w-none">({barbers.find(b => b.id === currentBarberId)?.name})</span>
                             )}
@@ -209,18 +224,18 @@ const CalendarView: React.FC = () => {
                             type="button"
                             onClick={() => changeMonth(-1)}
                             className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-white hover:shadow-sm active:bg-slate-100 sm:h-10 sm:w-10"
-                            aria-label="Mes anterior"
+                            aria-label={t('calendar.prevMonth')}
                         >
                             <ChevronLeft size={22} />
                         </button>
                         <span className="min-w-[110px] text-center text-sm font-bold capitalize text-slate-800 sm:min-w-[140px] sm:text-base">
-                            {currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
+                            {formatDate(currentDate, { month: 'long', year: 'numeric' })}
                         </span>
                         <button
                             type="button"
                             onClick={() => changeMonth(1)}
                             className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-white hover:shadow-sm active:bg-slate-100 sm:h-10 sm:w-10"
-                            aria-label="Mes siguiente"
+                            aria-label={t('calendar.nextMonth')}
                         >
                             <ChevronRight size={22} />
                         </button>
@@ -232,10 +247,10 @@ const CalendarView: React.FC = () => {
                 <div className="overflow-x-auto">
                     <div className="min-w-[280px]">
                         <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-100/80">
-                            {DAY_NAMES_FULL.map((long, i) => (
-                                <div key={long} className="py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-600 sm:py-3 sm:text-xs">
-                                    <span className="sm:hidden">{DAY_NAMES_SHORT[i]}</span>
-                                    <span className="hidden sm:inline">{long}</span>
+                            {weekdayLabels.map((day, i) => (
+                                <div key={i} className="py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-slate-600 sm:py-3 sm:text-xs">
+                                    <span className="sm:hidden">{day.short}</span>
+                                    <span className="hidden sm:inline">{day.long}</span>
                                 </div>
                             ))}
                         </div>
@@ -247,24 +262,23 @@ const CalendarView: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-3 sm:gap-6 sm:px-5">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Estados</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('calendar.statuses')}</span>
                 <div className="flex flex-wrap gap-4 sm:gap-6">
                     <div className="flex items-center gap-2">
                         <div className="h-3 w-3 rounded-full bg-blue-500 shadow-sm ring-2 ring-blue-200" aria-hidden />
-                        <span className="text-sm font-medium text-slate-700">Confirmada</span>
+                        <span className="text-sm font-medium text-slate-700">{t('appointments.status.confirmada')}</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="h-3 w-3 rounded-full bg-emerald-500 shadow-sm ring-2 ring-emerald-200" aria-hidden />
-                        <span className="text-sm font-medium text-slate-700">Completada</span>
+                        <span className="text-sm font-medium text-slate-700">{t('appointments.status.completada')}</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="h-3 w-3 rounded-full bg-amber-500 shadow-sm ring-2 ring-amber-200" aria-hidden />
-                        <span className="text-sm font-medium text-slate-700">Pendiente</span>
+                        <span className="text-sm font-medium text-slate-700">{t('appointments.status.pendiente')}</span>
                     </div>
                 </div>
             </div>
 
-            {/* Panel / modal al tocar un día: lista completa de citas */}
             {selectedDay != null && (
                 <>
                     <div
@@ -282,16 +296,16 @@ const CalendarView: React.FC = () => {
                         >
                             <div className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-4 min-w-0 sm:rounded-t-2xl">
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Citas del día</p>
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('calendar.dayAppointments')}</p>
                                     <h3 id="day-detail-title" className="truncate text-lg font-bold text-slate-800">
-                                        {selectedDay && new Date(selectedDay + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+                                        {selectedDay && formatDate(new Date(selectedDay + 'T12:00:00'), { weekday: 'long', day: 'numeric', month: 'long' })}
                                     </h3>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => setSelectedDay(null)}
                                     className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700"
-                                    aria-label="Cerrar"
+                                    aria-label={t('common.cancel')}
                                 >
                                     <X size={22} />
                                 </button>
@@ -302,8 +316,8 @@ const CalendarView: React.FC = () => {
                                         <div className="rounded-2xl bg-slate-100 p-5">
                                             <CalendarDays size={40} className="text-slate-400" />
                                         </div>
-                                        <p className="mt-4 font-medium text-slate-600">No hay citas este día</p>
-                                        <p className="mt-1 text-sm text-slate-500">Las citas aparecerán aquí al agendarlas</p>
+                                        <p className="mt-4 font-medium text-slate-600">{t('calendar.noAppointmentsDay')}</p>
+                                        <p className="mt-1 text-sm text-slate-500">{t('calendar.noAppointmentsHint')}</p>
                                     </div>
                                 ) : (
                                     selectedDayAppointments.map(app => {
@@ -320,12 +334,12 @@ const CalendarView: React.FC = () => {
                                                 <div className="min-w-0 flex-1">
                                                     <div className="flex flex-wrap items-center justify-between gap-2">
                                                         <span className="text-base font-bold text-slate-900">{app.hora}</span>
-                                                        <span className="rounded-full px-2 py-0.5 text-xs font-semibold uppercase">{app.estado}</span>
+                                                        <span className="rounded-full px-2 py-0.5 text-xs font-semibold uppercase">{statusLabel(app.estado)}</span>
                                                     </div>
-                                                    <p className="mt-1 font-medium text-slate-800">{client?.nombre ?? 'Cliente'}</p>
+                                                    <p className="mt-1 font-medium text-slate-800">{client?.nombre ?? t('calendar.unknownClient')}</p>
                                                     <p className="flex items-center gap-1.5 text-sm text-slate-600">
                                                         <Scissors size={14} className="flex-shrink-0" />
-                                                        {barber?.name ?? 'Barbero'}
+                                                        {barber?.name ?? t('common.barber')}
                                                     </p>
                                                     {app.servicios?.length > 0 && (
                                                         <p className="mt-2 text-xs text-slate-500">{app.servicios.map(s => s.name).join(', ')}</p>

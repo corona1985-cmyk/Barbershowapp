@@ -6,6 +6,8 @@ import { Capacitor } from '@capacitor/core';
 import { handlePrintQR as handlePrintQRNative } from '../utils/print';
 import { DEFAULT_PUBLIC_APP_URL, GLOBAL_FREE_MODE, isPromotionalFreeTier } from '../config/app';
 import DeactivateAccountSection from '../components/account/DeactivateAccountSection';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useTranslation } from '../i18n';
 
 type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'account' | 'barbers' | 'taxes' | 'qr' | 'planes';
 
@@ -22,6 +24,7 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccountDeactivated }) => {
+    const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<SettingsTab>('general');
     const [settings, setSettings] = useState<AppSettings>({ taxRate: 0, storeName: '', currencySymbol: '$' });
     const [users, setUsers] = useState<SystemUser[]>([]);
@@ -377,7 +380,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
                             onClick={() => setActiveTab('account')}
                             className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center whitespace-nowrap ${activeTab === 'account' ? 'bg-red-600 text-white' : 'text-red-600 hover:bg-red-50'}`}
                         >
-                            <Power size={16} className="mr-2" /> Cuenta
+                            <Power size={16} className="mr-2" /> {t('settings.accountTab')}
                         </button>
                     </>
                 )}
@@ -920,10 +923,11 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
 
                 {activeTab === 'account' && (
                     <div className="space-y-5">
+                        <LanguageSwitcher />
                         <div>
-                            <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">Ajustes de Cuenta</h3>
+                            <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">{t('settings.accountTitle')}</h3>
                             <p className="mt-2 text-sm text-slate-600">
-                                Puedes eliminar tu cuenta de forma permanente e irreversible desde aquí.
+                                {t('settings.accountDescription')}
                             </p>
                         </div>
                         <DeactivateAccountSection onDeactivated={onAccountDeactivated} />

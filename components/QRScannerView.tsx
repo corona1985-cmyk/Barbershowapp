@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import jsQR from 'jsqr';
 import { ArrowLeft, Camera, AlertCircle } from 'lucide-react';
+import { useTranslation } from '../i18n';
 
 interface QRScannerViewProps {
     onBack: () => void;
@@ -8,6 +9,7 @@ interface QRScannerViewProps {
 }
 
 export const QRScannerView: React.FC<QRScannerViewProps> = ({ onBack, onScan }) => {
+    const { t } = useTranslation();
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
@@ -36,7 +38,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ onBack, onScan }) 
                 requestTick();
             } catch (e) {
                 if (mounted) {
-                    setError('No se pudo acceder a la cámara. Revisa los permisos del navegador.');
+                    setError(t('qrScanner.cameraError'));
                 }
             }
         };
@@ -81,7 +83,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ onBack, onScan }) 
             streamRef.current?.getTracks().forEach(t => t.stop());
             streamRef.current = null;
         };
-    }, [onScan]);
+    }, [onScan, t]);
 
     return (
         <div className="min-h-screen bg-slate-900 flex flex-col">
@@ -91,17 +93,17 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ onBack, onScan }) 
                     onClick={onBack}
                     className="flex items-center gap-2 text-slate-300 hover:text-white font-medium"
                 >
-                    <ArrowLeft size={20} /> Volver
+                    <ArrowLeft size={20} /> {t('common.back')}
                 </button>
                 <h1 className="text-lg font-bold text-[#ffd427] flex items-center gap-2">
-                    <Camera size={22} /> Escanear QR
+                    <Camera size={22} /> {t('qrScanner.title')}
                 </h1>
                 <div className="w-20" />
             </header>
 
             <div className="flex-1 flex flex-col items-center justify-center p-4">
                 <p className="text-slate-400 text-sm text-center mb-4">
-                    Apunta la cámara al código QR de la barbería para entrar directo a agendar.
+                    {t('qrScanner.subtitle')}
                 </p>
 
                 {error ? (
@@ -113,7 +115,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ onBack, onScan }) 
                             onClick={onBack}
                             className="px-4 py-2 bg-[#ffd427] text-slate-900 font-bold rounded-lg hover:bg-[#e6be23]"
                         >
-                            Volver
+                            {t('common.back')}
                         </button>
                     </div>
                 ) : (

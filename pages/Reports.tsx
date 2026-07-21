@@ -4,6 +4,7 @@ import { Sale, Appointment, Product, Client, Barber, AccountTier, PointOfSale } 
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { TrendingUp, Users, Calendar, ShoppingBag, Printer, Scissors, MapPin, Loader2 } from 'lucide-react';
 import { handlePrint } from '../utils/print';
+import { useTranslation } from '../i18n';
 
 const COLORS = ['#ffd427', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
@@ -13,6 +14,7 @@ interface ReportsProps {
 }
 
 const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner = [] }) => {
+    const { t, formatDate, formatDateTime } = useTranslation();
     const [sales, setSales] = useState<Sale[]>([]);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
@@ -47,10 +49,10 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
                 setActivePosId(DataService.getActivePosId());
             })
             .catch((err) => {
-                setLoadError(err instanceof Error ? err.message : 'No se pudieron cargar los reportes.');
+                setLoadError(err instanceof Error ? err.message : t('reportsPage.loadFailed'));
             })
             .finally(() => setLoading(false));
-    }, []);
+    }, [t]);
 
     useEffect(() => {
         loadMainData();
@@ -100,9 +102,9 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
 
     // 2. Appointments Status
     const appointmentStats = [
-        { name: 'Completadas', value: appointments.filter(a => a.estado === 'completada').length },
-        { name: 'Canceladas', value: appointments.filter(a => a.estado === 'cancelada').length },
-        { name: 'Pendientes', value: appointments.filter(a => a.estado === 'confirmada' || a.estado === 'pendiente').length },
+        { name: t('reportsPage.statusCompleted'), value: appointments.filter(a => a.estado === 'completada').length },
+        { name: t('reportsPage.statusCancelled'), value: appointments.filter(a => a.estado === 'cancelada').length },
+        { name: t('reportsPage.statusPending'), value: appointments.filter(a => a.estado === 'confirmada' || a.estado === 'pendiente').length },
     ];
     const hasAppointmentData = appointmentStats.some((s) => s.value > 0);
 
@@ -136,17 +138,17 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
         return (
             <div className="flex flex-col items-center justify-center py-24 text-slate-500">
                 <Loader2 className="animate-spin mb-4" size={48} />
-                <p className="font-medium">Cargando reportes...</p>
+                <p className="font-medium">{t('reportsPage.loading')}</p>
             </div>
         );
     }
     if (loadError) {
         return (
             <div className="flex flex-col items-center justify-center py-24 text-slate-600 max-w-md mx-auto text-center px-4">
-                <p className="font-medium mb-2">No se pudieron cargar los reportes.</p>
+                <p className="font-medium mb-2">{t('reportsPage.loadFailed')}</p>
                 <p className="text-sm text-slate-500 mb-6">{loadError}</p>
                 <button type="button" onClick={loadMainData} className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 font-semibold px-6 py-3 rounded-xl transition-colors">
-                    Reintentar
+                    {t('common.retry')}
                 </button>
             </div>
         );
@@ -155,30 +157,30 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
     return (
         <div className="space-y-6 print-container">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 no-print">
-                <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Reportes y Estadísticas</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-slate-800">{t('reportsPage.title')}</h2>
                 <button 
                     onClick={() => handlePrint({
-                        name: 'Reporte',
+                        name: t('reportsPage.reportName'),
                         shareText: noSedeActiva
-                            ? 'Reporte BarberShow – Sin sede seleccionada.'
-                            : `Reporte BarberShow – ${new Date().toLocaleDateString('es-ES')}\nVentas del periodo, citas por estado, productos más vendidos. (Abre en navegador para imprimir completo.)`,
+                            ? t('reportsPage.printShareNoLocation')
+                            : t('reportsPage.printShareBody', { date: formatDate(new Date()) }),
                     })}
                     className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors shadow-sm"
                 >
                     <Printer size={18} />
-                    <span>Imprimir Reporte</span>
+                    <span>{t('reportsPage.printReport')}</span>
                 </button>
             </div>
 
             <div className="print-header hidden">
-                <h1 className="text-3xl font-bold text-slate-800 mb-2">BarberShow - Reporte General</h1>
-                <p className="text-slate-500 mb-6">Generado el: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</p>
+                <h1 className="text-3xl font-bold text-slate-800 mb-2">{t('reportsPage.printHeader')}</h1>
+                <p className="text-slate-500 mb-6">{t('reportsPage.generatedOn')} {formatDateTime(new Date())}</p>
             </div>
 
             {noSedeActiva && (
                 <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl mb-4 no-print">
-                    <p className="font-medium">No hay sede seleccionada</p>
-                    <p className="text-sm mt-1">Selecciona una sede en el menú superior para ver ventas, citas y reportes de esa ubicación.</p>
+                    <p className="font-medium">{t('reportsPage.noLocationTitle')}</p>
+                    <p className="text-sm mt-1">{t('reportsPage.noLocationHint')}</p>
                 </div>
             )}
 
@@ -187,7 +189,7 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                     <div className="flex items-center space-x-3 text-slate-500 mb-2">
                         <TrendingUp size={20} />
-                        <span className="font-medium">Ventas Totales</span>
+                        <span className="font-medium">{t('reportsPage.totalSales')}</span>
                     </div>
                     <h3 className="text-2xl font-bold text-slate-800">
                         ${sales.reduce((acc, s) => acc + s.total, 0).toFixed(2)}
@@ -196,21 +198,21 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                     <div className="flex items-center space-x-3 text-slate-500 mb-2">
                         <Calendar size={20} />
-                        <span className="font-medium">Total Citas</span>
+                        <span className="font-medium">{t('reportsPage.totalAppointments')}</span>
                     </div>
                     <h3 className="text-2xl font-bold text-slate-800">{appointments.length}</h3>
                 </div>
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                     <div className="flex items-center space-x-3 text-slate-500 mb-2">
                         <Users size={20} />
-                        <span className="font-medium">Clientes Activos</span>
+                        <span className="font-medium">{t('reportsPage.activeClients')}</span>
                     </div>
                     <h3 className="text-2xl font-bold text-slate-800">{clients.length}</h3>
                 </div>
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                     <div className="flex items-center space-x-3 text-slate-500 mb-2">
                         <ShoppingBag size={20} />
-                        <span className="font-medium">Productos en Stock</span>
+                        <span className="font-medium">{t('reportsPage.productsInStock')}</span>
                     </div>
                     <h3 className="text-2xl font-bold text-slate-800">{products.reduce((acc, p) => acc + p.stock, 0)}</h3>
                 </div>
@@ -219,7 +221,7 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 print:grid-cols-1">
                 {/* Sales Chart */}
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col min-h-[320px] page-break-inside-avoid">
-                    <h3 className="font-bold text-slate-800 mb-4 flex-shrink-0">Tendencia de Ventas</h3>
+                    <h3 className="font-bold text-slate-800 mb-4 flex-shrink-0">{t('reportsPage.salesTrend')}</h3>
                     <div className="flex-1 min-h-[220px] w-full">
                         {salesData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
@@ -229,12 +231,12 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
                                     <YAxis tick={{ fontSize: 12 }} />
                                     <Tooltip />
                                     <Legend />
-                                    <Line type="monotone" dataKey="total" stroke="#ffd427" strokeWidth={2} name="Total" />
+                                    <Line type="monotone" dataKey="total" stroke="#ffd427" strokeWidth={2} name={t('reportsPage.chartTotal')} />
                                 </LineChart>
                             </ResponsiveContainer>
                         ) : (
                             <div className="h-full min-h-[220px] flex items-center justify-center text-slate-400 text-center px-4">
-                                {noSedeActiva ? 'Selecciona una sede para ver la tendencia de ventas.' : 'No hay ventas en el periodo para mostrar.'}
+                                {noSedeActiva ? t('reportsPage.noSalesTrendLocation') : t('reportsPage.noSalesTrendData')}
                             </div>
                         )}
                     </div>
@@ -242,7 +244,7 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
 
                 {/* Appointment Status */}
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col min-h-[320px] page-break-inside-avoid">
-                    <h3 className="font-bold text-slate-800 mb-4 flex-shrink-0">Estado de Citas</h3>
+                    <h3 className="font-bold text-slate-800 mb-4 flex-shrink-0">{t('reportsPage.appointmentStatus')}</h3>
                     <div className="flex-1 min-h-[220px] w-full">
                         {hasAppointmentData ? (
                             <ResponsiveContainer width="100%" height="100%">
@@ -267,7 +269,7 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
                             </ResponsiveContainer>
                         ) : (
                             <div className="h-full min-h-[220px] flex items-center justify-center text-slate-400 text-center px-4">
-                                Sin citas registradas para mostrar.
+                                {t('reportsPage.noAppointmentsData')}
                             </div>
                         )}
                     </div>
@@ -275,7 +277,7 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
 
                 {/* Top Products */}
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col min-h-[320px] page-break-inside-avoid lg:col-span-2">
-                    <h3 className="font-bold text-slate-800 mb-4 flex-shrink-0">Productos Populares</h3>
+                    <h3 className="font-bold text-slate-800 mb-4 flex-shrink-0">{t('reportsPage.popularProducts')}</h3>
                     <div className="flex-1 min-h-[220px] w-full">
                         {productSales.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
@@ -291,12 +293,12 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
                                     />
                                     <YAxis type="number" tick={{ fontSize: 12 }} />
                                     <Tooltip />
-                                    <Bar dataKey="sales" fill="#ffd427" radius={[4, 4, 0, 0]} name="Unidades vendidas" />
+                                    <Bar dataKey="sales" fill="#ffd427" radius={[4, 4, 0, 0]} name={t('reportsPage.unitsSold')} />
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
                             <div className="h-full min-h-[220px] flex items-center justify-center text-slate-400 text-center px-4">
-                                No hay ventas de productos en el periodo.
+                                {t('reportsPage.noProductSales')}
                             </div>
                         )}
                     </div>
@@ -307,15 +309,15 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
             {showPorBarbero && barberStats.length > 0 && (
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm page-break-inside-avoid">
                     <h3 className="font-bold text-slate-800 mb-4 flex items-center">
-                        <Scissors size={20} className="mr-2 text-[#ffd427]" /> Ventas y Citas por Barbero
+                        <Scissors size={20} className="mr-2 text-[#ffd427]" /> {t('reportsPage.byBarberTitle')}
                     </h3>
                     <div className="overflow-x-auto table-wrapper">
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="text-slate-500 text-sm border-b border-slate-200">
-                                    <th className="py-2">Barbero</th>
-                                    <th className="py-2 text-right">Ventas ($)</th>
-                                    <th className="py-2 text-right">Citas</th>
+                                    <th className="py-2">{t('reportsPage.barberColumn')}</th>
+                                    <th className="py-2 text-right">{t('reportsPage.salesColumn')}</th>
+                                    <th className="py-2 text-right">{t('reportsPage.appointmentsColumn')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -336,15 +338,15 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
             {showPorSede && salesByPos.length > 0 && (
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm page-break-inside-avoid">
                     <h3 className="font-bold text-slate-800 mb-4 flex items-center">
-                        <MapPin size={20} className="mr-2 text-[#ffd427]" /> Ventas por Sede
+                        <MapPin size={20} className="mr-2 text-[#ffd427]" /> {t('reportsPage.byLocationTitle')}
                     </h3>
                     <div className="overflow-x-auto table-wrapper">
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="text-slate-500 text-sm border-b border-slate-200">
-                                    <th className="py-2">Sede</th>
-                                    <th className="py-2 text-right">Total Ventas ($)</th>
-                                    <th className="py-2 text-right">Nº Ventas</th>
+                                    <th className="py-2">{t('reportsPage.locationColumn')}</th>
+                                    <th className="py-2 text-right">{t('reportsPage.totalSalesColumn')}</th>
+                                    <th className="py-2 text-right">{t('reportsPage.salesCountColumn')}</th>
                                 </tr>
                             </thead>
                             <tbody>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Capacitor } from '@capacitor/core';
 import {
     Scissors, ArrowRight, Shield, Headphones, RefreshCw, Sparkles,
@@ -6,70 +6,10 @@ import {
     Star, CheckCircle, Facebook, Instagram, Linkedin, Youtube, Phone, Mail, Menu, X,
     Zap, ChevronRight, UserCircle, Search, UserPlus,
 } from 'lucide-react';
-import { TIER_OPTIONS, CONTACT } from '../../constants/plans';
+import { CONTACT, getTierOptions } from '../../constants/plans';
 import HeroMockup from './HeroMockup';
 import { navigateToLegal } from '../../utils/legal';
-
-const NAV_LINKS = [
-    { id: 'inicio', label: 'Inicio' },
-    { id: 'para-clientes', label: 'Agendar cita' },
-    { id: 'funciones', label: 'Funciones' },
-    { id: 'planes', label: 'Planes' },
-    { id: 'como-funciona', label: 'Cómo funciona' },
-    { id: 'testimonios', label: 'Testimonios' },
-    { id: 'contacto', label: 'Contacto' },
-];
-
-const CLIENT_PERKS = [
-    'Barberías verificadas registradas en BarberShow',
-    'Reserva en línea de forma rápida y sencilla',
-    'Elige barbero, fecha y horario disponible',
-];
-
-const BENEFITS = [
-    { icon: Sparkles, label: 'Fácil de usar' },
-    { icon: Shield, label: 'Seguro y confiable' },
-    { icon: Headphones, label: 'Soporte 24/7' },
-    { icon: RefreshCw, label: 'Actualizaciones constantes' },
-];
-
-const FEATURES = [
-    { icon: Calendar, title: 'Agenda Inteligente', desc: 'Programa citas por barbero, evita conflictos y envía recordatorios.' },
-    { icon: Users, title: 'Clientes', desc: 'Historial, preferencias y fidelización en un solo lugar.' },
-    { icon: ShoppingBag, title: 'Ventas (POS)', desc: 'Cobra servicios y productos desde el mostrador.' },
-    { icon: Package, title: 'Inventario', desc: 'Control de stock y alertas de productos bajos.' },
-    { icon: BarChart3, title: 'Reportes', desc: 'Ventas, citas y rendimiento por barbero o sede.' },
-    { icon: MapPin, title: 'Multi-Sucursal', desc: 'Administra varias ubicaciones desde un panel central.' },
-    { icon: UserCheck, title: 'Barberos', desc: 'Alta de equipo, roles y agenda individual.' },
-    { icon: MessageCircle, title: 'WhatsApp', desc: 'Recordatorios y comunicación directa con tus clientes.' },
-];
-
-const STEPS = [
-    { num: '01', title: 'Crea tu barbería', desc: 'Regístrate en minutos y configura tu negocio.' },
-    { num: '02', title: 'Configura servicios', desc: 'Agrega barberos, servicios y horarios de atención.' },
-    { num: '03', title: 'Empieza a crecer', desc: 'Gestiona citas, ventas y clientes desde un solo lugar.' },
-];
-
-const TESTIMONIALS = [
-    {
-        quote: 'Desde que uso BarberShow, mis citas están organizadas y los clientes llegan a tiempo. Increíble.',
-        name: 'Juan Pérez',
-        shop: 'Barbería Clásica',
-        initials: 'JP',
-    },
-    {
-        quote: 'El POS integrado me ahorra horas. Vendo productos y servicios sin salir de la app.',
-        name: 'Carlos Méndez',
-        shop: 'Urban Cuts',
-        initials: 'CM',
-    },
-    {
-        quote: 'Con 3 barberos y 2 sedes, necesitaba algo robusto. BarberShow cumple y supera expectativas.',
-        name: 'Miguel Torres',
-        shop: 'MT Barbería',
-        initials: 'MT',
-    },
-];
+import { useTranslation } from '../../i18n';
 
 export interface LandingPageProps {
     onGetStarted: () => void;
@@ -86,16 +26,93 @@ const LandingPage: React.FC<LandingPageProps> = ({
     onGoToClientRegister,
     supportEmail = CONTACT.email,
 }) => {
+    const { t } = useTranslation();
     const isNativeMobile = Capacitor.isNativePlatform();
     const [activeNav, setActiveNav] = useState('inicio');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeTestimonial, setActiveTestimonial] = useState(1);
 
-    const waHref = `https://wa.me/${CONTACT.whatsapp}?text=${encodeURIComponent('Hola, tengo una consulta sobre BarberShow.')}`;
-    const emailHref = `mailto:${supportEmail}?subject=${encodeURIComponent('Consulta BarberShow')}`;
+    const navLinksData = useMemo(() => [
+        { id: 'inicio', label: t('landing.nav.home') },
+        { id: 'para-clientes', label: t('landing.nav.bookAppointment') },
+        { id: 'funciones', label: t('landing.nav.features') },
+        { id: 'planes', label: t('landing.nav.plans') },
+        { id: 'como-funciona', label: t('landing.nav.howItWorks') },
+        { id: 'testimonios', label: t('landing.nav.testimonials') },
+        { id: 'contacto', label: t('landing.nav.contact') },
+    ], [t]);
+
+    const clientPerks = useMemo(() => [
+        t('landing.clientPerks.0'),
+        t('landing.clientPerks.1'),
+        t('landing.clientPerks.2'),
+    ], [t]);
+
+    const benefits = useMemo(() => [
+        { icon: Sparkles, label: t('landing.benefits.0.label') },
+        { icon: Shield, label: t('landing.benefits.1.label') },
+        { icon: Headphones, label: t('landing.benefits.2.label') },
+        { icon: RefreshCw, label: t('landing.benefits.3.label') },
+    ], [t]);
+
+    const features = useMemo(() => [
+        { icon: Calendar, title: t('landing.features.0.title'), desc: t('landing.features.0.desc') },
+        { icon: Users, title: t('landing.features.1.title'), desc: t('landing.features.1.desc') },
+        { icon: ShoppingBag, title: t('landing.features.2.title'), desc: t('landing.features.2.desc') },
+        { icon: Package, title: t('landing.features.3.title'), desc: t('landing.features.3.desc') },
+        { icon: BarChart3, title: t('landing.features.4.title'), desc: t('landing.features.4.desc') },
+        { icon: MapPin, title: t('landing.features.5.title'), desc: t('landing.features.5.desc') },
+        { icon: UserCheck, title: t('landing.features.6.title'), desc: t('landing.features.6.desc') },
+        { icon: MessageCircle, title: t('landing.features.7.title'), desc: t('landing.features.7.desc') },
+    ], [t]);
+
+    const steps = useMemo(() => [
+        { num: '01', title: t('landing.steps.0.title'), desc: t('landing.steps.0.desc') },
+        { num: '02', title: t('landing.steps.1.title'), desc: t('landing.steps.1.desc') },
+        { num: '03', title: t('landing.steps.2.title'), desc: t('landing.steps.2.desc') },
+    ], [t]);
+
+    const testimonials = useMemo(() => [
+        {
+            quote: t('landing.testimonials.0.quote'),
+            name: t('landing.testimonials.0.name'),
+            shop: t('landing.testimonials.0.shop'),
+            initials: t('landing.testimonials.0.initials'),
+        },
+        {
+            quote: t('landing.testimonials.1.quote'),
+            name: t('landing.testimonials.1.name'),
+            shop: t('landing.testimonials.1.shop'),
+            initials: t('landing.testimonials.1.initials'),
+        },
+        {
+            quote: t('landing.testimonials.2.quote'),
+            name: t('landing.testimonials.2.name'),
+            shop: t('landing.testimonials.2.shop'),
+            initials: t('landing.testimonials.2.initials'),
+        },
+    ], [t]);
+
+    const clientSteps = useMemo(() => [
+        { step: '1', title: t('landing.clientSteps.0.title'), desc: t('landing.clientSteps.0.desc') },
+        { step: '2', title: t('landing.clientSteps.1.title'), desc: t('landing.clientSteps.1.desc') },
+        { step: '3', title: t('landing.clientSteps.2.title'), desc: t('landing.clientSteps.2.desc') },
+    ], [t]);
+
+    const tierOptions = useMemo(() => getTierOptions(t), [t]);
+
+    const footerProductLinks = useMemo(() => [
+        { id: 'funciones', label: t('landing.nav.features') },
+        { id: 'planes', label: t('landing.nav.plans') },
+        { id: 'como-funciona', label: t('landing.nav.howItWorks') },
+        { id: 'testimonios', label: t('landing.nav.testimonials') },
+    ], [t]);
+
+    const waHref = `https://wa.me/${CONTACT.whatsapp}?text=${encodeURIComponent(t('landing.contact.waMessage'))}`;
+    const emailHref = `mailto:${supportEmail}?subject=${encodeURIComponent(t('landing.contact.emailSubject'))}`;
 
     useEffect(() => {
-        const sections = NAV_LINKS.map((l) => document.getElementById(l.id)).filter(Boolean);
+        const sections = navLinksData.map((l) => document.getElementById(l.id)).filter(Boolean);
         const observer = new IntersectionObserver(
             (entries) => {
                 entries.forEach((entry) => {
@@ -106,7 +123,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
         );
         sections.forEach((s) => observer.observe(s!));
         return () => observer.disconnect();
-    }, []);
+    }, [navLinksData]);
 
     const scrollTo = (id: string) => {
         setMobileMenuOpen(false);
@@ -119,7 +136,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
     };
 
     const container = 'max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 xl:px-12';
-    const navLinks = isNativeMobile ? NAV_LINKS.filter((l) => l.id !== 'planes') : NAV_LINKS;
+    const navLinks = isNativeMobile ? navLinksData.filter((l) => l.id !== 'planes') : navLinksData;
 
     return (
         <div className="min-h-screen bg-[#12121c] text-white scroll-smooth text-[17px] lg:text-[18px]">
@@ -133,7 +150,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                             </div>
                             <div className="text-left hidden sm:block">
                                 <span className="font-bold text-white text-xl leading-tight block">BarberShow</span>
-                                <span className="text-xs text-slate-500 uppercase tracking-wider">Sistema para barberías</span>
+                                <span className="text-xs text-slate-500 uppercase tracking-wider">{t('landing.brandTagline')}</span>
                             </div>
                         </button>
 
@@ -162,7 +179,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 onClick={onGetStarted}
                                 className="hidden sm:inline-flex items-center gap-1.5 px-5 py-2.5 bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base rounded-xl transition-colors"
                             >
-                                Comenzar Gratis <ArrowRight size={18} />
+                                {t('landing.startFree')} <ArrowRight size={18} />
                             </button>
                             )}
                             <button
@@ -170,13 +187,13 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 onClick={onGoToLogin}
                                 className="hidden sm:inline-flex items-center gap-1.5 px-5 py-2.5 border border-white/25 hover:border-white/50 text-white font-semibold text-base rounded-xl transition-colors"
                             >
-                                Iniciar sesión
+                                {t('common.login')}
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                                 className="lg:hidden p-2 text-slate-400 hover:text-white rounded-lg"
-                                aria-label="Menú"
+                                aria-label={t('common.openMenu')}
                             >
                                 {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
                             </button>
@@ -202,7 +219,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 onClick={handleGoToBarberias}
                                 className="w-full flex items-center justify-center gap-1.5 px-4 py-3 border border-[#ffd427]/40 text-[#ffd427] font-semibold text-sm rounded-xl hover:bg-[#ffd427]/10"
                             >
-                                <Calendar size={16} /> Buscar barbería y agendar
+                                <Calendar size={16} /> {t('landing.searchAndBook')}
                             </button>
                         )}
                         {!isNativeMobile && (
@@ -211,7 +228,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                             onClick={onGetStarted}
                             className="w-full mt-2 flex items-center justify-center gap-1.5 px-4 py-3 bg-[#ffd427] text-slate-900 font-semibold text-sm rounded-xl"
                         >
-                            Comenzar Gratis <ArrowRight size={16} />
+                            {t('landing.startFree')} <ArrowRight size={16} />
                         </button>
                         )}
                         <button
@@ -219,7 +236,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                             onClick={onGoToLogin}
                             className="w-full mt-2 flex items-center justify-center gap-1.5 px-4 py-3 border border-white/25 text-white font-semibold text-sm rounded-xl"
                         >
-                            Iniciar sesión
+                            {t('common.login')}
                         </button>
                     </div>
                 )}
@@ -235,14 +252,14 @@ const LandingPage: React.FC<LandingPageProps> = ({
                     <div className="grid lg:grid-cols-2 gap-16 lg:gap-20 items-center">
                         <div className="relative z-10">
                             <span className="inline-block px-4 py-1.5 rounded-full bg-[#ffd427]/10 border border-[#ffd427]/30 text-[#ffd427] text-sm font-semibold uppercase tracking-wider mb-6">
-                                La plataforma todo en uno
+                                {t('landing.hero.badge')}
                             </span>
                             <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight mb-6">
-                                Administra tu barbería{' '}
-                                <span className="text-[#ffd427]">como un profesional</span>
+                                {t('landing.hero.titlePrefix')}{' '}
+                                <span className="text-[#ffd427]">{t('landing.hero.titleHighlight')}</span>
                             </h1>
                             <p className="text-slate-400 text-lg sm:text-xl leading-relaxed mb-8 max-w-2xl">
-                                Agenda citas, gestiona clientes, procesa ventas, administra tu equipo y haz crecer tu negocio desde una sola plataforma.
+                                {t('landing.hero.description')}
                             </p>
                             <div className="flex flex-col sm:flex-row gap-4">
                                 {!isNativeMobile && (
@@ -252,14 +269,14 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                     onClick={onGetStarted}
                                     className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-bold rounded-xl transition-colors shadow-lg shadow-[#ffd427]/20"
                                 >
-                                    Crear mi barbería <ArrowRight size={20} />
+                                    {t('landing.hero.createShop')} <ArrowRight size={20} />
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => scrollTo('planes')}
                                     className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base border border-white/25 hover:border-white/50 text-white font-medium rounded-xl transition-colors"
                                 >
-                                    Ver planes
+                                    {t('landing.hero.viewPlans')}
                                 </button>
                                 </>
                                 )}
@@ -269,7 +286,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                     onClick={handleGoToBarberias}
                                     className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-bold rounded-xl transition-colors"
                                 >
-                                    <Search size={18} /> Buscar barbería y agendar
+                                    <Search size={18} /> {t('landing.searchAndBook')}
                                 </button>
                                 )}
                             </div>
@@ -277,14 +294,14 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 <div className="mt-8 pt-6 border-t border-white/10">
                                     <p className="text-slate-500 text-base mb-3 flex items-center gap-2">
                                         <UserCircle size={20} className="text-[#ffd427] flex-shrink-0" />
-                                        ¿No eres barbero? Busca barberías registradas y agenda tu cita en línea.
+                                        {t('landing.hero.notBarber')}
                                     </p>
                                     <button
                                         type="button"
                                         onClick={handleGoToBarberias}
                                         className="inline-flex items-center justify-center gap-2 px-6 py-3 text-base border border-[#ffd427]/50 hover:bg-[#ffd427]/10 text-[#ffd427] font-semibold rounded-xl transition-colors"
                                     >
-                                        <Search size={18} /> Buscar barbería y agendar cita
+                                        <Search size={18} /> {t('landing.searchAndBookAppointment')}
                                     </button>
                                 </div>
                             )}
@@ -303,18 +320,17 @@ const LandingPage: React.FC<LandingPageProps> = ({
                         <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
                             <div>
                                 <span className="inline-block px-4 py-1.5 rounded-full bg-[#ffd427]/10 border border-[#ffd427]/30 text-[#ffd427] text-sm font-semibold uppercase tracking-wider mb-5">
-                                    Para clientes
+                                    {t('landing.clients.badge')}
                                 </span>
                                 <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-                                    ¿Buscas un barbero?{' '}
-                                    <span className="text-[#ffd427]">Agenda en segundos</span>
+                                    {t('landing.clients.titlePrefix')}{' '}
+                                    <span className="text-[#ffd427]">{t('landing.clients.titleHighlight')}</span>
                                 </h2>
                                 <p className="text-slate-400 text-lg leading-relaxed mb-6">
-                                    Explora las barberías registradas en BarberShow y reserva tu cita en línea.
-                                    Rápido, fácil y en pocos pasos.
+                                    {t('landing.clients.description')}
                                 </p>
                                 <ul className="space-y-3 mb-8">
-                                    {CLIENT_PERKS.map((perk) => (
+                                    {clientPerks.map((perk) => (
                                         <li key={perk} className="flex items-start gap-3 text-slate-300 text-base">
                                             <CheckCircle size={20} className="text-emerald-500 flex-shrink-0 mt-0.5" />
                                             <span>{perk}</span>
@@ -327,7 +343,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                         onClick={handleGoToBarberias}
                                         className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-bold rounded-xl transition-colors"
                                     >
-                                        <Calendar size={20} /> Ver barberías disponibles
+                                        <Calendar size={20} /> {t('landing.clients.viewShops')}
                                     </button>
                                     {onGoToClientRegister && (
                                         <button
@@ -335,7 +351,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                             onClick={onGoToClientRegister}
                                             className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base bg-white/10 hover:bg-white/15 border border-[#ffd427]/40 hover:border-[#ffd427]/70 text-white font-semibold rounded-xl transition-colors"
                                         >
-                                            <UserPlus size={20} /> Crear cuenta gratis
+                                            <UserPlus size={20} /> {t('landing.clients.createFreeAccount')}
                                         </button>
                                     )}
                                     <button
@@ -343,7 +359,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                         onClick={onGoToLogin}
                                         className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base border border-white/25 hover:border-white/50 text-white font-medium rounded-xl transition-colors"
                                     >
-                                        Ya tengo cuenta
+                                        {t('landing.clients.alreadyHaveAccount')}
                                     </button>
                                 </div>
                             </div>
@@ -353,16 +369,12 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                         <UserCircle size={32} className="text-[#ffd427]" />
                                     </div>
                                     <div>
-                                        <p className="font-bold text-lg">Reserva sin complicaciones</p>
-                                        <p className="text-slate-500 text-sm">Modo invitado disponible</p>
+                                        <p className="font-bold text-lg">{t('landing.clients.bookingCard.title')}</p>
+                                        <p className="text-slate-500 text-sm">{t('landing.clients.bookingCard.subtitle')}</p>
                                     </div>
                                 </div>
                                 <div className="space-y-4">
-                                    {[
-                                        { step: '1', title: 'Elige una barbería', desc: 'Consulta las barberías afiliadas a nuestra plataforma.' },
-                                        { step: '2', title: 'Selecciona servicio y horario', desc: 'Elige barbero, fecha y hora según disponibilidad.' },
-                                        { step: '3', title: 'Confirma tu cita', desc: 'Recibe confirmación al instante — solo nombre y teléfono.' },
-                                    ].map((item) => (
+                                    {clientSteps.map((item) => (
                                         <div key={item.step} className="flex gap-4 p-4 rounded-xl bg-white/5 border border-white/5">
                                             <span className="w-8 h-8 rounded-lg bg-[#ffd427]/20 text-[#ffd427] font-bold flex items-center justify-center flex-shrink-0 text-sm">
                                                 {item.step}
@@ -384,7 +396,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
             <section className="border-y border-white/5 bg-[#16162a]/50">
                 <div className={`${container} py-10`}>
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-10">
-                        {BENEFITS.map((b) => (
+                        {benefits.map((b) => (
                             <div key={b.label} className="flex items-center gap-4 justify-center lg:justify-start">
                                 <div className="w-12 h-12 rounded-lg bg-[#ffd427]/10 flex items-center justify-center flex-shrink-0">
                                     <b.icon size={24} className="text-[#ffd427]" />
@@ -401,14 +413,14 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 <div className={container}>
                     <div className="text-center mb-16">
                         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
-                            Todo lo que necesitas para hacer crecer tu negocio
+                            {t('landing.featuresSection.title')}
                         </h2>
                         <p className="text-slate-400 text-lg max-w-3xl mx-auto">
-                            Herramientas diseñadas específicamente para barberías modernas.
+                            {t('landing.featuresSection.subtitle')}
                         </p>
                     </div>
                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-7">
-                        {FEATURES.map((f) => (
+                        {features.map((f) => (
                             <div
                                 key={f.title}
                                 className="group p-8 rounded-2xl bg-[#1a1a28] border border-white/5 hover:border-[#ffd427]/30 transition-colors"
@@ -429,14 +441,14 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 <div className={container}>
                     <div className="text-center mb-16">
                         <span className="inline-block px-4 py-1.5 rounded-full bg-[#ffd427]/10 border border-[#ffd427]/30 text-[#ffd427] text-sm font-semibold uppercase tracking-wider mb-4">
-                            Cómo funciona
+                            {t('landing.howItWorks.badge')}
                         </span>
-                        <h2 className="text-3xl sm:text-4xl font-bold">Empieza en 3 simples pasos</h2>
+                        <h2 className="text-3xl sm:text-4xl font-bold">{t('landing.howItWorks.title')}</h2>
                     </div>
                     <div className="grid md:grid-cols-3 gap-10">
-                        {STEPS.map((step, i) => (
+                        {steps.map((step, i) => (
                             <div key={step.num} className="relative text-center md:text-left">
-                                {i < STEPS.length - 1 && (
+                                {i < steps.length - 1 && (
                                     <ChevronRight className="hidden md:block absolute top-8 -right-4 w-10 h-10 text-[#ffd427]/30" />
                                 )}
                                 <div className="text-5xl font-black text-[#ffd427]/20 mb-4">{step.num}</div>
@@ -454,15 +466,15 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 <div className={container}>
                     <div className="text-center mb-16">
                         <span className="inline-block px-4 py-1.5 rounded-full bg-[#ffd427]/10 border border-[#ffd427]/30 text-[#ffd427] text-sm font-semibold uppercase tracking-wider mb-4">
-                            Planes y precios
+                            {t('landing.pricing.badge')}
                         </span>
                         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-3">
-                            Elige el plan que mejor se adapte a tu barbería
+                            {t('landing.pricing.title')}
                         </h2>
-                        <p className="text-slate-400 text-lg">Sin contratos, cancela cuando quieras.</p>
+                        <p className="text-slate-400 text-lg">{t('landing.pricing.subtitle')}</p>
                     </div>
                     <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-7">
-                        {TIER_OPTIONS.map((plan) => {
+                        {tierOptions.map((plan) => {
                             const isPopular = plan.value === 'barberia';
                             return (
                                 <div
@@ -475,20 +487,20 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 >
                                     {isPopular && (
                                         <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#ffd427] text-slate-900 text-sm font-bold uppercase rounded-full">
-                                            Más popular
+                                            {t('landing.pricing.mostPopular')}
                                         </span>
                                     )}
                                     <div className="mb-4">
                                         <h3 className="font-bold text-xl">{plan.label}</h3>
                                         <div className="mt-2 flex items-baseline gap-1">
                                             <span className="text-4xl font-black text-[#ffd427]">
-                                                {plan.price === 0 ? 'Gratis' : `$${plan.price.toFixed(2)}`}
+                                                {plan.price === 0 ? t('landing.pricing.free') : `$${plan.price.toFixed(2)}`}
                                             </span>
-                                            {plan.price > 0 && <span className="text-slate-500 text-base">/mes</span>}
+                                            {plan.price > 0 && <span className="text-slate-500 text-base">{t('landing.pricing.perMonth')}</span>}
                                         </div>
                                         {plan.price > 0 && (
                                             <p className="text-sm text-emerald-400 mt-1 font-medium">
-                                                Anual −40% → ${(plan.price * 0.6).toFixed(2)}/mes
+                                                {t('landing.pricing.annualDiscount', { price: (plan.price * 0.6).toFixed(2) })}
                                             </p>
                                         )}
                                         <p className="text-slate-400 text-base mt-2">{plan.description}</p>
@@ -512,7 +524,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                                   : 'border border-[#ffd427]/50 hover:bg-[#ffd427]/10 text-[#ffd427]'
                                         }`}
                                     >
-                                        {plan.price === 0 ? 'Empezar Gratis' : 'Elegir Plan'}
+                                        {plan.price === 0 ? t('landing.pricing.startFree') : t('landing.pricing.choosePlan')}
                                     </button>
                                 </div>
                             );
@@ -527,26 +539,26 @@ const LandingPage: React.FC<LandingPageProps> = ({
                 <div className={container}>
                     <div className="text-center mb-16">
                         <span className="inline-block px-4 py-1.5 rounded-full bg-[#ffd427]/10 border border-[#ffd427]/30 text-[#ffd427] text-sm font-semibold uppercase tracking-wider mb-4">
-                            Lo que dicen nuestros clientes
+                            {t('landing.testimonials.badge')}
                         </span>
-                        <h2 className="text-3xl sm:text-4xl font-bold">Barberos que confían en BarberShow</h2>
+                        <h2 className="text-3xl sm:text-4xl font-bold">{t('landing.testimonials.title')}</h2>
                     </div>
                     <div className="hidden md:grid md:grid-cols-3 gap-7">
-                        {TESTIMONIALS.map((t) => (
-                            <div key={t.name} className="p-8 rounded-2xl bg-[#1a1a28] border border-white/5">
+                        {testimonials.map((item) => (
+                            <div key={item.name} className="p-8 rounded-2xl bg-[#1a1a28] border border-white/5">
                                 <div className="flex gap-1 mb-4">
                                     {Array.from({ length: 5 }).map((_, i) => (
                                         <Star key={i} size={18} className="text-[#ffd427] fill-[#ffd427]" />
                                     ))}
                                 </div>
-                                <p className="text-slate-300 text-base leading-relaxed mb-6">&ldquo;{t.quote}&rdquo;</p>
+                                <p className="text-slate-300 text-base leading-relaxed mb-6">&ldquo;{item.quote}&rdquo;</p>
                                 <div className="flex items-center gap-3">
                                     <div className="w-12 h-12 rounded-full bg-[#ffd427]/20 flex items-center justify-center text-[#ffd427] font-bold text-base">
-                                        {t.initials}
+                                        {item.initials}
                                     </div>
                                     <div>
-                                        <p className="font-semibold text-base">{t.name}</p>
-                                        <p className="text-slate-500 text-sm">{t.shop}</p>
+                                        <p className="font-semibold text-base">{item.name}</p>
+                                        <p className="text-slate-500 text-sm">{item.shop}</p>
                                     </div>
                                 </div>
                             </div>
@@ -560,20 +572,20 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 ))}
                             </div>
                             <p className="text-slate-300 text-sm leading-relaxed mb-6">
-                                &ldquo;{TESTIMONIALS[activeTestimonial].quote}&rdquo;
+                                &ldquo;{testimonials[activeTestimonial].quote}&rdquo;
                             </p>
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-[#ffd427]/20 flex items-center justify-center text-[#ffd427] font-bold text-sm">
-                                    {TESTIMONIALS[activeTestimonial].initials}
+                                    {testimonials[activeTestimonial].initials}
                                 </div>
                                 <div>
-                                    <p className="font-semibold text-sm">{TESTIMONIALS[activeTestimonial].name}</p>
-                                    <p className="text-slate-500 text-xs">{TESTIMONIALS[activeTestimonial].shop}</p>
+                                    <p className="font-semibold text-sm">{testimonials[activeTestimonial].name}</p>
+                                    <p className="text-slate-500 text-xs">{testimonials[activeTestimonial].shop}</p>
                                 </div>
                             </div>
                         </div>
                         <div className="flex justify-center gap-2 mt-6">
-                            {TESTIMONIALS.map((_, i) => (
+                            {testimonials.map((_, i) => (
                                 <button
                                     key={i}
                                     type="button"
@@ -581,13 +593,13 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                     className={`w-2 h-2 rounded-full transition-colors ${
                                         activeTestimonial === i ? 'bg-[#ffd427]' : 'bg-white/20'
                                     }`}
-                                    aria-label={`Testimonio ${i + 1}`}
+                                    aria-label={t('landing.testimonials.ariaLabel', { n: i + 1 })}
                                 />
                             ))}
                         </div>
                     </div>
                     <div className="hidden md:flex justify-center gap-2 mt-8">
-                        {TESTIMONIALS.map((_, i) => (
+                        {testimonials.map((_, i) => (
                             <span
                                 key={i}
                                 className={`w-2 h-2 rounded-full ${i === 1 ? 'bg-[#ffd427]' : 'bg-white/20'}`}
@@ -609,10 +621,10 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 </div>
                                 <div>
                                     <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">
-                                        ¿Listo para llevar tu barbería al siguiente nivel?
+                                        {t('landing.cta.title')}
                                     </h2>
                                     <p className="text-slate-400 text-lg">
-                                        Miles de barberos ya administran su negocio con BarberShow.
+                                        {t('landing.cta.subtitle')}
                                     </p>
                                 </div>
                             </div>
@@ -623,7 +635,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                     onClick={onGetStarted}
                                     className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-bold rounded-xl transition-colors whitespace-nowrap"
                                 >
-                                    Crear mi barbería ahora
+                                    {t('landing.cta.createShopNow')}
                                 </button>
                                 )}
                                 {onGoToBarberias ? (
@@ -632,7 +644,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                         onClick={handleGoToBarberias}
                                         className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base border border-[#ffd427]/50 hover:bg-[#ffd427]/10 text-[#ffd427] font-semibold rounded-xl transition-colors whitespace-nowrap"
                                     >
-                                        <Calendar size={18} /> Buscar barbería y agendar
+                                        <Calendar size={18} /> {t('landing.searchAndBook')}
                                     </button>
                                 ) : (
                                     <button
@@ -640,7 +652,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                         onClick={() => scrollTo('para-clientes')}
                                         className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base border border-white/25 hover:border-white/50 text-white font-medium rounded-xl transition-colors whitespace-nowrap"
                                     >
-                                        Ver demostración
+                                        {t('landing.cta.viewDemo')}
                                     </button>
                                 )}
                             </div>
@@ -661,7 +673,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 <span className="font-bold text-xl">BarberShow</span>
                             </div>
                             <p className="text-slate-500 text-base leading-relaxed mb-4">
-                                La plataforma todo en uno para administrar tu barbería como un profesional.
+                                {t('landing.footer.description')}
                             </p>
                             <div className="flex gap-3">
                                 {[
@@ -682,7 +694,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                             </div>
                         </div>
                         <div>
-                            <h4 className="font-semibold text-base mb-4">Producto</h4>
+                            <h4 className="font-semibold text-base mb-4">{t('landing.footer.product')}</h4>
                             <ul className="space-y-2 text-base text-slate-500">
                                 {onGoToBarberias && (
                                     <li>
@@ -691,40 +703,40 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                             onClick={handleGoToBarberias}
                                             className="hover:text-[#ffd427] transition-colors"
                                         >
-                                            Agendar cita
+                                            {t('landing.footer.bookAppointment')}
                                         </button>
                                     </li>
                                 )}
-                                {['Funciones', 'Planes', 'Cómo funciona', 'Testimonios'].map((item) => (
-                                    <li key={item}>
+                                {footerProductLinks.map((item) => (
+                                    <li key={item.id}>
                                         <button
                                             type="button"
-                                            onClick={() => scrollTo(item === 'Funciones' ? 'funciones' : item === 'Planes' ? 'planes' : item === 'Cómo funciona' ? 'como-funciona' : 'testimonios')}
+                                            onClick={() => scrollTo(item.id)}
                                             className="hover:text-[#ffd427] transition-colors"
                                         >
-                                            {item}
+                                            {item.label}
                                         </button>
                                     </li>
                                 ))}
                             </ul>
                         </div>
                         <div>
-                            <h4 className="font-semibold text-base mb-4">Empresa</h4>
+                            <h4 className="font-semibold text-base mb-4">{t('landing.footer.company')}</h4>
                             <ul className="space-y-2 text-base text-slate-500">
-                                <li><button type="button" onClick={() => scrollTo('contacto')} className="hover:text-[#ffd427] transition-colors">Acerca de nosotros</button></li>
-                                <li><button type="button" onClick={() => scrollTo('contacto')} className="hover:text-[#ffd427] transition-colors">Contacto</button></li>
-                                <li><a href={waHref} target="_blank" rel="noopener noreferrer" className="hover:text-[#ffd427] transition-colors">Soporte</a></li>
+                                <li><button type="button" onClick={() => scrollTo('contacto')} className="hover:text-[#ffd427] transition-colors">{t('landing.footer.aboutUs')}</button></li>
+                                <li><button type="button" onClick={() => scrollTo('contacto')} className="hover:text-[#ffd427] transition-colors">{t('landing.footer.contact')}</button></li>
+                                <li><a href={waHref} target="_blank" rel="noopener noreferrer" className="hover:text-[#ffd427] transition-colors">{t('landing.footer.support')}</a></li>
                             </ul>
                         </div>
                         <div>
-                            <h4 className="font-semibold text-base mb-4">Legal</h4>
+                            <h4 className="font-semibold text-base mb-4">{t('landing.footer.legal')}</h4>
                             <ul className="space-y-2 text-base text-slate-500">
-                                <li><button type="button" onClick={() => navigateToLegal('terminos')} className="hover:text-[#ffd427] transition-colors">Términos y condiciones</button></li>
-                                <li><button type="button" onClick={() => navigateToLegal('privacidad')} className="hover:text-[#ffd427] transition-colors">Política de privacidad</button></li>
+                                <li><button type="button" onClick={() => navigateToLegal('terminos')} className="hover:text-[#ffd427] transition-colors">{t('landing.footer.terms')}</button></li>
+                                <li><button type="button" onClick={() => navigateToLegal('privacidad')} className="hover:text-[#ffd427] transition-colors">{t('landing.footer.privacy')}</button></li>
                             </ul>
                         </div>
                         <div>
-                            <h4 className="font-semibold text-base mb-4">Contacto</h4>
+                            <h4 className="font-semibold text-base mb-4">{t('landing.footer.contact')}</h4>
                             <ul className="space-y-3 text-base">
                                 <li>
                                     <a href={`tel:+${CONTACT.whatsapp}`} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
@@ -741,20 +753,20 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 <li>
                                     <a href={waHref} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-slate-400 hover:text-[#ffd427] transition-colors">
                                         <MessageCircle size={16} className="text-emerald-500" />
-                                        WhatsApp
+                                        {t('landing.footer.whatsapp')}
                                     </a>
                                 </li>
                             </ul>
                         </div>
                     </div>
                     <div className="pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <p className="text-slate-600 text-sm">© 2024 BarberShow. Todos los derechos reservados.</p>
+                        <p className="text-slate-600 text-sm">{t('landing.footer.copyright')}</p>
                         <button
                             type="button"
                             onClick={onGoToLogin}
                             className="text-slate-500 hover:text-[#ffd427] text-sm font-medium flex items-center gap-1.5 transition-colors"
                         >
-                            <Zap size={14} /> Ya tengo cuenta — Iniciar sesión
+                            <Zap size={14} /> {t('landing.footer.loginLink')}
                         </button>
                     </div>
                 </div>

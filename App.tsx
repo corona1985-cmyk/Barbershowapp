@@ -47,7 +47,16 @@ import { initLocalNotifications, syncAppointmentNotifications, stopAppointmentNo
 import LegalDocumentPage from './pages/LegalDocumentPage';
 import { getLegalDocumentFromUrl, navigateToLegal, LegalDocumentType } from './utils/legal';
 import { GLOBAL_FREE_MODE } from './config/app';
-import { isIOSPlatform, openWebsiteSignup } from './utils/platform';
+import { isIOSAccountCreationAllowed, isIOSPlatform } from './utils/platform';
+import { useTranslation, translate } from './i18n';
+import LanguageSwitcher from './components/LanguageSwitcher';
+
+const guestShell = (content: React.ReactNode) => (
+    <>
+        <LanguageSwitcher floating />
+        {content}
+    </>
+);
 
 const ViewFallback = () => (
     <div className="flex items-center justify-center min-h-[200px]">
@@ -56,6 +65,7 @@ const ViewFallback = () => (
 );
 
 const App: React.FC = () => {
+    const { t, formatDate } = useTranslation();
     const isNativeApp = Capacitor.isNativePlatform();
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [currentView, setCurrentView] = useState<ViewState>('dashboard');
@@ -91,10 +101,10 @@ const App: React.FC = () => {
     const [isLoadingSession, setIsLoadingSession] = useState(true);
     /** Si false, se muestra primero la bienvenida (tipo de barbería + contacto). Si true, el formulario de login. */
     const [showLoginScreen, setShowLoginScreen] = useState(false);
+    /** Pantalla a la que vuelve "Volver" desde el login. */
+    const [loginReturnTarget, setLoginReturnTarget] = useState<'welcome' | 'landing' | 'barberias'>('welcome');
     /** Registro de perfil de barbero abierto desde la pantalla de login. */
     const [isBarberRegistering, setIsBarberRegistering] = useState(false);
-    /** iOS: login abierto desde "Barbero" — muestra enlace al registro web (Guideline 3.1.1). */
-    const [showBarberWebSignupHint, setShowBarberWebSignupHint] = useState(false);
     /** Landing page de marketing; nunca en iOS/Android nativo (Guideline 4.2). */
     const [showLandingPage, setShowLandingPage] = useState(() => !isNativeApp);
     /** Cliente sin cuenta que quiere ver barberías: muestra lista para elegir una y registrarse ahí. */
@@ -373,6 +383,7 @@ const App: React.FC = () => {
                     setIsAuthenticated(false);
                     setLoginError(accountDeactivatedMessage);
                     setShowLoginScreen(true);
+                    setLoginReturnTarget('welcome');
                     setIsRegistering(false);
                     setShowBarberiasGuest(false);
                     setGuestBookingPos(null);
@@ -448,7 +459,7 @@ const App: React.FC = () => {
                 }
             } catch (err) {
                 console.error('Error al restaurar sesión:', err);
-                setConnectionError('No se pudo conectar con la base de datos. Revisa tu conexión a internet y las reglas de Firebase.');
+                setConnectionError(translate('errors.connectionDb'));
             } finally {
                 completed = true;
                 clearTimeout(timeoutId);
@@ -464,7 +475,7 @@ const App: React.FC = () => {
         const trimmedUsername = (credentials?.username ?? username).trim().toLowerCase();
         const passwordToUse = credentials?.password ?? password;
         if (!passwordToUse.trim()) {
-            setLoginError('La contraseña es requerida.');
+            setLoginError(translate('errors.passwordRequired'));
             return;
         }
         setLoginLoading(true);
@@ -480,24 +491,24 @@ const App: React.FC = () => {
                 } catch (e) {
                     setLoginLoading(false);
                     if (e instanceof Error && e.message === 'NO_PASSWORD_SET') {
-                        setLoginError('Este usuario no tiene contraseña. El administrador debe asignarla en Admin Usuarios.');
+                        setLoginError(translate('errors.noPasswordAssigned'));
                     } else if (e instanceof Error && e.message === 'ACCOUNT_DEACTIVATED') {
                         setLoginError(accountDeactivatedMessage);
                     } else {
-                        setLoginError(e instanceof Error ? e.message : 'Error de conexión. Revisa tu internet e intenta de nuevo.');
+                        setLoginError(e instanceof Error ? e.message : translate('errors.connectionRetry'));
                     }
                     return;
                 }
                 if (!user) {
                     setLoginLoading(false);
-                    setLoginError('Contraseña incorrecta.');
+                    setLoginError(translate('errors.wrongPassword'));
                     return;
                 }
             }
 
                 if (!user) {
                     setLoginLoading(false);
-                    setLoginError('Usuario no encontrado o credenciales inválidas.');
+                    setLoginError(translate('errors.invalidCredentials'));
                     return;
                 }
 
@@ -510,7 +521,7 @@ const App: React.FC = () => {
 
                 if (user.status === 'pending_payment') {
                     setLoginLoading(false);
-                    setLoginError('Cuenta pendiente de pago. Completa el pago para activar tu barbería o crea una nueva con plan gratuito.');
+                    setLoginError(translate('errors.pendingPayment'));
                     return;
                 }
 
@@ -576,34 +587,35 @@ const App: React.FC = () => {
                     const tier = await handleSwitchPos(user.posId);
                     setCurrentView(tier === 'gratuito' ? 'appointments' : 'dashboard');
                 } else {
-                    setLoginError('Usuario no tiene una Sede asignada. Contacte al administrador.');
+                    setLoginError(translate('errors.noPosAssigned'));
                     setIsAuthenticated(false);
                     localStorage.removeItem('currentUser');
                 }
             }
         } catch (err) {            console.error('Error en login:', err);
-            setLoginError('Error de conexión. Revisa tu internet o las reglas de Firebase Realtime Database e intenta de nuevo.');
+            setLoginError(translate('errors.connectionFirebase'));
         } finally {            setLoginLoading(false);
         }
     };
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!isIOSAccountCreationAllowed()) return;
         setLoginError('');
         const userTrim = (regUsername || '').trim().toLowerCase();
         const nameTrim = (regName || '').trim();
         const phoneTrim = (regPhone || '').trim().replace(/\D/g, '');
         if (!userTrim || !regPassword || !nameTrim) {
-            setLoginError('Completa usuario, nombre y contraseña.');
+            setLoginError(translate('errors.completeRegistrationFields'));
             return;
         }
         if (phoneTrim.length < 8) {
-            setLoginError('Ingresa un teléfono válido (al menos 8 dígitos).');
+            setLoginError(translate('errors.invalidPhone'));
             return;
         }
         try {
             if (await DataService.isUsernameTaken(userTrim)) {
-                setLoginError('El usuario ya existe. Elige otro o inicia sesión.');
+                setLoginError(translate('errors.usernameExists'));
                 return;
             }
             const targetPosId = referralPos ? referralPos.id : 1;
@@ -613,7 +625,7 @@ const App: React.FC = () => {
                 nombre: nameTrim,
                 telefono: regPhone.trim(),
                 email: `${userTrim}@example.com`,
-                notas: referralPos ? `Registrado vía QR en ${referralPos.name}` : 'Registro Autoservicio Web',
+                notas: referralPos ? translate('auth.registeredViaQr', { name: referralPos.name }) : translate('auth.selfServiceNotes'),
                 fechaRegistro: new Date().toISOString().split('T')[0],
                 puntos: 0,
                 status: 'active',
@@ -630,17 +642,46 @@ const App: React.FC = () => {
                 setIsRegistering(false);
                 setUsername(userTrim);
                 setPassword('');
-                setLoginError('Registro exitoso. Por favor inicie sesión.');
+                setLoginError(translate('auth.registrationSuccessLogin'));
             }, 2000);
         } catch (err) {
             console.error('Error en registro:', err);
             const msg = err instanceof Error ? err.message : String(err);
-            setLoginError(msg.includes('conexión') || msg.includes('permiso') ? msg : `No se pudo completar el registro. ${msg}`);
+            setLoginError(msg.includes('conexión') || msg.includes('permiso') ? msg : translate('errors.registrationFailed', { message: msg }));
         }
     };
 
-    const openClientRegistration = (clearReferral = true) => {
+    const openLoginScreen = (returnTarget: 'welcome' | 'landing' | 'barberias' = 'welcome') => {
+        setLoginReturnTarget(returnTarget);
+        setShowBarberiasGuest(false);
+        if (returnTarget !== 'landing') setShowLandingPage(false);
+        setShowLoginScreen(true);
+        setIsRegistering(false);
+        setIsBarberRegistering(false);
+        setLoginError('');
+    };
+
+    const handleLoginBack = () => {
+        setShowLoginScreen(false);
+        setIsRegistering(false);
+        setIsBarberRegistering(false);
+        setLoginError('');
+        if (loginReturnTarget === 'landing') {
+            setShowLandingPage(true);
+            setShowBarberiasGuest(false);
+        } else if (loginReturnTarget === 'barberias') {
+            setShowLandingPage(false);
+            setShowBarberiasGuest(true);
+        } else {
+            setShowLandingPage(false);
+            setShowBarberiasGuest(false);
+        }
+    };
+
+    const openClientRegistration = (clearReferral = true, returnTarget: 'welcome' | 'landing' | 'barberias' = 'welcome') => {
+        if (!isIOSAccountCreationAllowed()) return;
         if (clearReferral) setReferralPos(null);
+        setLoginReturnTarget(returnTarget);
         setShowLandingPage(false);
         setShowBarberiasGuest(false);
         setShowLoginScreen(true);
@@ -666,7 +707,7 @@ const App: React.FC = () => {
     const handleRenewSubscription = async () => {
         if (!username.trim() || renewalLoading) return;
         if (!isNativePaymentAvailable()) {
-            setRenewalError('Renueva desde la app móvil (App Store o Google Play).');
+            setRenewalError(translate('errors.renewFromMobile'));
             return;
         }
         setRenewalError('');
@@ -676,7 +717,7 @@ const App: React.FC = () => {
         if (!result.success) {
             pendingRenewalRef.current = null;
             setRenewalLoading(false);
-            setRenewalError(result.message || 'No se pudo abrir la tienda.');
+            setRenewalError(result.message || translate('errors.storeOpenFailed'));
         }
     };
 
@@ -688,7 +729,7 @@ const App: React.FC = () => {
             const transactions = await getActivePlayTransactions();
             const barberiaTx = transactions.find((t) => t.productIdentifier.includes('barberia')) ?? transactions[0];
             if (!isTransactionActivatable(barberiaTx)) {
-                setRenewalError('No se encontraron compras activas para restaurar.');
+                setRenewalError(translate('errors.noPurchasesToRestore'));
                 return;
             }
             const result = await activatePlanFromPlay({
@@ -700,7 +741,7 @@ const App: React.FC = () => {
             if (result.success && currentPosId) {
                 await handleSwitchPos(currentPosId);
             } else {
-                setRenewalError(result.message || 'No se pudo restaurar la suscripción.');
+                setRenewalError(result.message || translate('errors.restoreFailed'));
             }
         } catch (e) {
             console.error(e);
@@ -712,8 +753,7 @@ const App: React.FC = () => {
 
     const handleAccountDeactivated = () => {
         handleLogout();
-        setShowLoginScreen(true);
-        setIsRegistering(false);
+        openLoginScreen('welcome');
         setLoginError(accountDeactivatedMessage);
     };
 
@@ -767,8 +807,32 @@ const App: React.FC = () => {
 
     // --- RENDER ---
 
+    const getViewTitle = (view: ViewState): string => {
+        const titles: Partial<Record<ViewState, string>> = {
+            shop: 'nav.onlineShop',
+            sales: 'nav.posPoint',
+            admin_pos: 'nav.globalManagement',
+            client_discovery: 'nav.barbershops',
+            qr_scanner: 'nav.scanQr',
+            sales_records: 'nav.salesRecords',
+            dashboard: 'nav.dashboard',
+            appointments: 'nav.appointments',
+            settings: 'nav.settings',
+            calendar: 'nav.calendar',
+            whatsapp_console: 'nav.whatsappConsole',
+            clients: 'nav.clients',
+            inventory: 'nav.inventory',
+            finance: 'nav.finance',
+            reports: 'nav.reports',
+            user_admin: 'nav.userAdmin',
+            client_profile: 'nav.clientProfile',
+        };
+        const key = titles[view];
+        return key ? t(key) : view.replace('_', ' ');
+    };
+
     if (legalView) {
-        return <LegalDocumentPage type={legalView} />;
+        return isAuthenticated ? <LegalDocumentPage type={legalView} /> : guestShell(<LegalDocumentPage type={legalView} />);
     }
 
     // 1. MASTER DASHBOARD RENDER (No sidebar, full screen exclusive)
@@ -783,16 +847,19 @@ const App: React.FC = () => {
     // 2. SUSCRIPCIÓN VENCIDA (admin/dueno/barbero con sede vencida)
     if (isAuthenticated && isSubscriptionExpired && currentPos && !GLOBAL_FREE_MODE) {
         const expiresAt = currentPos.subscriptionExpiresAt;
-        const expiryDate = expiresAt ? new Date(expiresAt).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+        const expiryDate = expiresAt ? formatDate(expiresAt, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
         return (
             <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col items-center justify-center p-6 text-white">
                 <div className="max-w-md w-full text-center space-y-6">
                     <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto">
                         <Shield size={32} className="text-amber-400" />
                     </div>
-                    <h1 className="text-2xl font-bold">Suscripción vencida</h1>
+                    <h1 className="text-2xl font-bold">{t('subscription.expiredTitle')}</h1>
                     <p className="text-slate-300">
-                        La suscripción de <strong className="text-white">{currentPosName || currentPos.name}</strong> venció{expiryDate ? ` el ${expiryDate}` : ''}. Renueva para seguir usando BarberShow.
+                        {t('subscription.expiredMessage', {
+                            name: currentPosName || currentPos.name,
+                            date: expiryDate ? t('subscription.expiredOn', { date: expiryDate }) : '',
+                        })}
                     </p>
                     {renewalError && (
                         <p className="text-sm text-red-300 bg-red-900/30 rounded-lg px-3 py-2">{renewalError}</p>
@@ -804,7 +871,7 @@ const App: React.FC = () => {
                             disabled={renewalLoading}
                             className="px-6 py-3 bg-[#ffd427] text-slate-900 font-semibold rounded-xl hover:bg-amber-400 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
                         >
-                            {renewalLoading ? <><Loader2 size={18} className="animate-spin" /> Procesando...</> : 'Renovar ahora'}
+                            {renewalLoading ? <><Loader2 size={18} className="animate-spin" /> {t('common.processing')}</> : t('subscription.renewNow')}
                         </button>
                         {isNativePaymentAvailable() && isIOSPlatform() && (
                             <button
@@ -813,7 +880,7 @@ const App: React.FC = () => {
                                 disabled={renewalLoading}
                                 className="px-6 py-3 border border-slate-500 text-slate-300 rounded-xl hover:bg-slate-700/50 transition-colors disabled:opacity-60"
                             >
-                                Restaurar compras
+                                {t('subscription.restorePurchases')}
                             </button>
                         )}
                         <button
@@ -821,7 +888,7 @@ const App: React.FC = () => {
                             onClick={handleLogout}
                             className="px-6 py-3 border border-slate-500 text-slate-300 rounded-xl hover:bg-slate-700/50 transition-colors"
                         >
-                            Cerrar sesión
+                            {t('common.logout')}
                         </button>
                     </div>
                 </div>
@@ -831,11 +898,11 @@ const App: React.FC = () => {
 
     // 3. LOADING (restaurando sesión)
     if (!isAuthenticated && isLoadingSession) {
-        return (
+        return guestShell(
             <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
                 <div className="text-center text-white">
                     <div className="w-16 h-16 border-4 border-[#ffd427] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                    <p className="text-lg font-medium">Cargando BarberShow...</p>
+                    <p className="text-lg font-medium">{t('auth.loadingApp')}</p>
                 </div>
             </div>
         );
@@ -843,38 +910,38 @@ const App: React.FC = () => {
 
     // 3. INVITADO: Agendar cita sin cuenta (desde QR o tras elegir barbería)
     if (!isAuthenticated && guestBookingPos) {
-        return (
-            <div className="min-h-screen min-h-[100dvh] bg-slate-100 p-4 md:p-8 overflow-x-hidden">
-                <GuestBookingView
-                    posId={guestBookingPos.id}
-                    posName={guestBookingPos.name}
-                    onBack={() => setGuestBookingPos(null)}
-                    onSuccess={() => setGuestBookingPos(null)}
-                />
-            </div>
+        return guestShell(
+            <GuestBookingView
+                posId={guestBookingPos.id}
+                posName={guestBookingPos.name}
+                onBack={() => setGuestBookingPos(null)}
+                onSuccess={() => setGuestBookingPos(null)}
+            />
         );
     }
 
     // 4. INVITADO: Ver barberías (cliente buscando barbería)
     if (!isAuthenticated && showBarberiasGuest) {
-        return (
+        return guestShell(
             <div className="min-h-screen min-h-[100dvh] bg-slate-50">
                 <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between safe-area-top shadow-sm">
                     <button type="button" onClick={() => setShowBarberiasGuest(false)} className="flex items-center gap-1.5 min-h-[44px] text-slate-600 hover:text-slate-900 text-sm rounded-xl hover:bg-slate-100 px-3 -ml-1 transition-colors">
-                        <ArrowLeft size={18} /> Volver
+                        <ArrowLeft size={18} /> {t('common.back')}
                     </button>
                     <div className="flex items-center gap-2">
                         <div className="w-9 h-9 bg-[#ffd427] rounded-lg flex items-center justify-center shadow-sm">
                             <Scissors size={18} className="text-slate-900" />
                         </div>
-                        <span className="font-bold text-slate-900 hidden sm:inline">BarberShow</span>
+                        <span className="font-bold text-slate-900 hidden sm:inline">{t('common.barberShow')}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => openClientRegistration(true)} className="min-h-[44px] flex items-center text-sm border border-slate-200 hover:border-slate-300 text-slate-700 font-medium px-3 sm:px-4 rounded-xl transition-colors hover:bg-slate-50">
-                            Registrarse
-                        </button>
-                        <button type="button" onClick={() => { setShowBarberiasGuest(false); setShowLoginScreen(true); setIsRegistering(false); }} className="min-h-[44px] flex items-center text-sm bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold px-3 sm:px-4 rounded-xl transition-colors shadow-sm">
-                            Iniciar sesión
+                        {isIOSAccountCreationAllowed() && (
+                            <button type="button" onClick={() => openClientRegistration(true, 'barberias')} className="min-h-[44px] flex items-center text-sm border border-slate-200 hover:border-slate-300 text-slate-700 font-medium px-3 sm:px-4 rounded-xl transition-colors hover:bg-slate-50">
+                                {t('common.register')}
+                            </button>
+                        )}
+                        <button type="button" onClick={() => openLoginScreen('barberias')} className="min-h-[44px] flex items-center text-sm bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold px-3 sm:px-4 rounded-xl transition-colors shadow-sm">
+                            {t('common.login')}
                         </button>
                     </div>
                 </header>
@@ -887,9 +954,11 @@ const App: React.FC = () => {
                                 const pos = list.find(p => p.id === id);
                                 if (pos) {
                                     setReferralPos(pos);
-                                    setShowLoginScreen(true);
-                                    setShowBarberiasGuest(false);
-                                    setIsRegistering(true);
+                                    if (isIOSAccountCreationAllowed()) {
+                                        openClientRegistration(false, 'barberias');
+                                    } else {
+                                        setGuestBookingPos({ id: pos.id, name: pos.name });
+                                    }
                                     window.history.replaceState({}, '', `${window.location.pathname}?ref_pos=${id}`);
                                 }
                             });
@@ -904,14 +973,14 @@ const App: React.FC = () => {
 
     // 5. LANDING PAGE (marketing) — solo web; nunca en app compilada iOS/Android
     if (!isAuthenticated && showLandingPage && !isNativeApp && !showBarberiasGuest && !guestBookingPos) {
-        return (
+        return guestShell(
             <>
                 <AdMobBanner showAds={true} />
                 <LandingPage
                     onGetStarted={() => setShowLandingPage(false)}
-                    onGoToLogin={() => { setShowLandingPage(false); setShowLoginScreen(true); setIsRegistering(false); }}
+                    onGoToLogin={() => { setShowLandingPage(false); openLoginScreen('landing'); }}
                     onGoToBarberias={() => { setShowLandingPage(false); setShowBarberiasGuest(true); }}
-                    onGoToClientRegister={() => openClientRegistration(true)}
+                    onGoToClientRegister={() => openClientRegistration(true, 'landing')}
                 />
             </>
         );
@@ -919,8 +988,8 @@ const App: React.FC = () => {
 
     // 6. BIENVENIDA (tipo de barbería + contacto) o LOGIN
     if (!isAuthenticated) {
-        if (isBarberRegistering) {
-            return (
+        if (isBarberRegistering && isIOSAccountCreationAllowed()) {
+            return guestShell(
                 <>
                     <AdMobBanner showAds={true} />
                     <SelfServiceBarberSignup
@@ -935,14 +1004,13 @@ const App: React.FC = () => {
             );
         }
         if (!showLoginScreen) {
-            return (
+            return guestShell(
                 <>
                     <AdMobBanner showAds={true} />
                     <WelcomePlanSelector
-                        onGoToLogin={() => { setShowBarberWebSignupHint(false); setShowLoginScreen(true); setIsRegistering(false); }}
-                        onGoToBarberLogin={() => { setShowBarberWebSignupHint(true); setShowLoginScreen(true); setIsRegistering(false); }}
+                        onGoToLogin={() => openLoginScreen('welcome')}
                         onGoToBarberias={() => setShowBarberiasGuest(true)}
-                        onGoToClientRegister={() => openClientRegistration(true)}
+                        onGoToClientRegister={() => openClientRegistration(true, 'welcome')}
                         onBackToLanding={isNativeApp ? undefined : () => setShowLandingPage(true)}
                         onBarberSignupSuccess={(username, password) => {
                             handleLogin({ preventDefault: () => {} } as React.FormEvent, { username, password });
@@ -951,20 +1019,19 @@ const App: React.FC = () => {
                 </>
             );
         }
-        return (
-            <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 md:p-8 relative overflow-hidden border-t-8 border-[#ffd427] my-2 sm:my-4">
+        return guestShell(
+            <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col">
+                <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-white/10 px-4 sm:px-6 py-3 safe-area-top">
                     <button
                         type="button"
-                        onClick={() => {
-                            setShowLoginScreen(false);
-                            setShowBarberWebSignupHint(false);
-                            if (!isNativeApp) setShowLandingPage(true);
-                        }}
-                        className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center justify-center gap-1.5 min-h-[44px] pl-2 pr-3 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 active:bg-slate-200 text-sm"
+                        onClick={handleLoginBack}
+                        className="flex items-center gap-1.5 min-h-[44px] text-slate-200 hover:text-white text-sm rounded-xl hover:bg-white/10 px-3 -ml-1 transition-colors"
                     >
-                        <ArrowLeft size={18} /> Volver
+                        <ArrowLeft size={18} /> {t('common.back')}
                     </button>
+                </header>
+                <main className="flex-1 overflow-y-auto scroll-touch px-3 sm:px-4 py-4 sm:py-6 safe-area-bottom flex items-start sm:items-center justify-center">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 md:p-8 border-t-8 border-[#ffd427] min-w-0">
                     {connectionError && (
                         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
                             {connectionError}
@@ -973,21 +1040,21 @@ const App: React.FC = () => {
                     {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('signup') === 'success' && (
                         <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-sm flex items-center gap-2">
                             <CheckCircle size={20} className="flex-shrink-0" />
-                            <span>Cuenta activada. Inicia sesión con tu usuario y contraseña.</span>
+                            <span>{t('auth.accountActivated')}</span>
                         </div>
                     )}
                     {/* Header */}
-                    <div className="text-center mb-6 relative z-10">
+                    <div className="text-center mb-6">
                         <div className="w-16 h-16 bg-[#ffd427] rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-yellow-500/20">
                             <Scissors size={32} className="text-slate-900" />
                         </div>
-                        <h1 className="text-2xl font-bold text-slate-900">BarberShow</h1>
+                        <h1 className="text-2xl font-bold text-slate-900">{t('common.barberShow')}</h1>
                         <p className="text-slate-400 text-xs mt-1">v{APP_VERSION}</p>
                     </div>
 
-                    {isRegistering ? (
+                    {isRegistering && isIOSAccountCreationAllowed() ? (
                          <form onSubmit={handleRegister} className="space-y-4 animate-in slide-in-from-right duration-300">
-                             <p className="text-center text-slate-600 text-sm mb-1">Crea tu cuenta como <span className="font-semibold text-slate-800">cliente</span> para agendar citas y guardar tu historial.</p>
+                             <p className="text-center text-slate-600 text-sm mb-1">{t('auth.createClientAccount', { role: t('auth.clientRole') })}</p>
                              {loginError && (
                                  <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
                                      {loginError}
@@ -997,7 +1064,7 @@ const App: React.FC = () => {
                                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-center mb-4">
                                      <MapPin size={20} className="text-[#ffd427] mr-2" />
                                      <div>
-                                         <p className="text-xs text-yellow-800 uppercase font-bold">Registrándose en:</p>
+                                         <p className="text-xs text-yellow-800 uppercase font-bold">{t('auth.registeringAt')}</p>
                                          <p className="font-bold text-slate-800">{referralPos.name}</p>
                                      </div>
                                  </div>
@@ -1006,34 +1073,34 @@ const App: React.FC = () => {
                              {regSuccess ? (
                                  <div className="bg-green-50 text-green-700 p-6 rounded-xl flex flex-col items-center justify-center text-center">
                                      <CheckCircle size={48} className="mb-2" />
-                                     <h3 className="font-bold text-lg">¡Cuenta Creada!</h3>
-                                     <p>Redirigiendo al login...</p>
+                                     <h3 className="font-bold text-lg">{t('auth.accountCreated')}</h3>
+                                     <p>{t('auth.redirectingLogin')}</p>
                                  </div>
                              ) : (
                                  <>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Usuario</label>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.username')}</label>
                                             <input type="text" required className="w-full px-4 py-2 border rounded-lg focus:ring-[#ffd427]" value={regUsername} onChange={e => setRegUsername(e.target.value)} />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.name')}</label>
                                             <input type="text" required className="w-full px-4 py-2 border rounded-lg focus:ring-[#ffd427]" value={regName} onChange={e => setRegName(e.target.value)} />
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Teléfono (WhatsApp)</label>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.phone')}</label>
                                         <input type="tel" required className="w-full px-4 py-2 border rounded-lg focus:ring-[#ffd427]" value={regPhone} onChange={e => setRegPhone(e.target.value)} />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.password')}</label>
                                         <input type="password" required className="w-full px-4 py-2 border rounded-lg focus:ring-[#ffd427]" value={regPassword} onChange={e => setRegPassword(e.target.value)} />
                                     </div>
                                     <button type="submit" className="w-full min-h-[48px] bg-[#ffd427] text-slate-900 py-3 rounded-xl font-bold hover:bg-[#e6be23] transition-colors shadow-lg mt-4 active:scale-[0.98]">
-                                        Registrarse
+                                        {t('common.register')}
                                     </button>
                                     <button type="button" onClick={() => setIsRegistering(false)} className="w-full min-h-[44px] text-slate-500 py-2 text-sm flex items-center justify-center hover:text-slate-700 active:bg-slate-100 rounded-lg">
-                                        <ArrowLeft size={14} className="mr-1" /> Volver al Login
+                                        <ArrowLeft size={14} className="mr-1" /> {t('auth.backToLogin')}
                                     </button>
                                  </>
                              )}
@@ -1047,71 +1114,56 @@ const App: React.FC = () => {
                                     </div>
                                 )}
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Usuario</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.username')}</label>
                                     <input 
                                         type="text" 
                                         className="w-full px-4 py-3 sm:py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
                                         value={username}
                                         onChange={e => setUsername(e.target.value)}
-                                        placeholder="Ej: barbero, cliente"
+                                        placeholder={t('common.usernamePlaceholder')}
                                         required
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.password')}</label>
                                     <input 
                                         type="password" 
                                         className="w-full px-4 py-3 sm:py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
                                         value={password}
                                         onChange={e => setPassword(e.target.value)}
-                                        placeholder="Contraseña"
+                                        placeholder={t('common.passwordPlaceholder')}
                                         required
                                     />
                                 </div>
                                 
                                 <button type="submit" disabled={loginLoading} className="w-full min-h-[48px] py-3 rounded-xl font-bold transition-colors shadow-lg shadow-yellow-500/30 mt-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.98] bg-[#ffd427] text-slate-900 hover:bg-[#e6be23]">
-                                    {loginLoading ? (<><Loader2 size={20} className="animate-spin" /> Iniciando sesión...</>) : 'Iniciar Sesión'}
+                                    {loginLoading ? (<><Loader2 size={20} className="animate-spin" /> {t('common.loggingIn')}</>) : t('common.loginTitle')}
                                 </button>
 
-                                {isIOSPlatform() && showBarberWebSignupHint && (
-                                    <div className="mt-5 pt-5 border-t border-slate-100 space-y-3 text-center">
-                                        <p className="text-sm text-slate-600 leading-relaxed">
-                                            ¿No tienes un barbero registrado?
-                                            <br />
-                                            Crea tu cuenta desde nuestro sitio web y luego inicia sesión desde la aplicación.
-                                        </p>
-                                        <button
-                                            type="button"
-                                            onClick={openWebsiteSignup}
-                                            className="w-full min-h-[44px] py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium text-sm hover:bg-slate-100 transition-colors"
-                                        >
-                                            Crear barbero en la web
-                                        </button>
-                                    </div>
-                                )}
-
+                                {isIOSAccountCreationAllowed() && (
                                 <div className="pt-4 border-t border-slate-100 mt-4 space-y-2">
                                     <button type="button" onClick={() => setIsRegistering(true)} className="w-full min-h-[44px] flex items-center justify-center text-slate-600 font-medium hover:underline hover:text-[#e6be23] rounded-lg active:bg-slate-50">
-                                        <UserPlus size={18} className="mr-2" /> ¿Eres cliente? Crear cuenta gratis
+                                        <UserPlus size={18} className="mr-2" /> {t('auth.createClientFree')}
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => {
                                             setIsBarberRegistering(true);
                                             setIsRegistering(false);
-                                            setShowBarberWebSignupHint(false);
                                             setLoginError('');
                                         }}
                                         className="w-full min-h-[44px] flex items-center justify-center text-slate-600 font-medium hover:underline hover:text-[#e6be23] rounded-lg active:bg-slate-50"
                                     >
-                                        <Scissors size={18} className="mr-2" /> Crear perfil de barbero
+                                        <Scissors size={18} className="mr-2" /> {t('auth.createBarberProfile')}
                                     </button>
                                 </div>
+                                )}
 
                             </form>
                         </div>
                     )}
-                </div>
+                    </div>
+                </main>
             </div>
         );
     }
@@ -1158,26 +1210,20 @@ const App: React.FC = () => {
                         <button 
                             className="md:hidden flex items-center justify-center min-h-[44px] min-w-[44px] text-slate-700 p-2 bg-white rounded-xl shadow-sm active:bg-slate-100"
                             onClick={() => setIsSidebarOpen(true)}
-                            aria-label="Abrir menú"
+                            aria-label={t('common.openMenu')}
                         >
                             <Menu size={24} />
                         </button>
 
                         <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 capitalize truncate max-w-[140px] sm:max-w-[200px] md:max-w-none">
-                            {currentView === 'shop' ? 'Tienda Online' : 
-                             currentView === 'sales' ? 'Punto de Venta' : 
-                             currentView === 'admin_pos' ? 'Gestión Global' :
-                             currentView === 'client_discovery' ? 'Barberías' :
-                             currentView === 'qr_scanner' ? 'Escanear QR' :
-                             currentView === 'sales_records' ? 'Registros de cortes' :
-                             currentView.replace('_', ' ')}
+                            {getViewTitle(currentView)}
                         </h1>
                         
                         {/* SuperAdmin Global Selector */}
                         {userRole === 'superadmin' && (
                             <div className="hidden md:flex items-center bg-slate-800 text-white px-3 py-1.5 rounded-lg shadow-md ml-4 border border-slate-700">
                                 <Globe size={16} className="text-[#ffd427] mr-2" />
-                                <span className="text-xs text-slate-400 mr-2 uppercase tracking-wider font-bold">Viendo Sede:</span>
+                                <span className="text-xs text-slate-400 mr-2 uppercase tracking-wider font-bold">{t('nav.viewingPos')}</span>
                                 <select 
                                     value={currentPosId || ''} 
                                     onChange={(e) => handleSwitchPos(Number(e.target.value))}
@@ -1193,7 +1239,7 @@ const App: React.FC = () => {
                         {accountTier === 'multisede' && posListForOwner.length > 1 && userRole !== 'superadmin' && (
                             <div className="hidden md:flex items-center bg-slate-800 text-white px-3 py-1.5 rounded-lg shadow-md ml-4 border border-slate-700">
                                 <MapPin size={16} className="text-[#ffd427] mr-2" />
-                                <span className="text-xs text-slate-400 mr-2 uppercase tracking-wider font-bold">Sede:</span>
+                                <span className="text-xs text-slate-400 mr-2 uppercase tracking-wider font-bold">{t('nav.posLabel')}</span>
                                 <select 
                                     value={currentPosId || ''} 
                                     onChange={(e) => handleSwitchPos(Number(e.target.value))}
@@ -1211,7 +1257,7 @@ const App: React.FC = () => {
                             <div className="hidden md:flex items-center bg-white px-3 py-1.5 rounded-full shadow-sm border border-slate-200">
                                 <MapPin size={14} className="text-[#ffd427] mr-2" />
                                 <span className="text-sm font-bold text-slate-700">
-                                    {accountTier === 'solo' ? 'Mi negocio' : currentPosName}
+                                    {accountTier === 'solo' ? t('common.myBusiness') : currentPosName}
                                 </span>
                             </div>
                         )}
@@ -1226,7 +1272,7 @@ const App: React.FC = () => {
                         />
                         <div className="text-right hidden md:block">
                             <p className="text-sm font-bold text-slate-800">{fullName || username}</p>
-                            <p className="text-xs text-slate-500 capitalize">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+                            <p className="text-xs text-slate-500 capitalize">{formatDate(new Date(), { weekday: 'long', day: 'numeric', month: 'long' })}</p>
                         </div>
                         <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-tr from-[#ffd427] to-amber-500 rounded-full flex items-center justify-center text-slate-900 font-bold border-2 border-white shadow-md overflow-hidden shrink-0">
                             {userPhotoUrl ? (
@@ -1241,8 +1287,8 @@ const App: React.FC = () => {
                             type="button"
                             onClick={handleLogout} 
                             className="flex items-center justify-center min-h-[44px] min-w-[44px] bg-white p-2 rounded-full text-slate-500 hover:text-red-600 hover:bg-red-50 active:bg-red-100 transition-colors shadow-sm border border-slate-200"
-                            title="Cerrar Sesión"
-                            aria-label="Cerrar sesión"
+                            title={t('common.logoutTitle')}
+                            aria-label={t('common.logout')}
                         >
                             <LogOut size={20} />
                         </button>
@@ -1300,14 +1346,13 @@ const App: React.FC = () => {
                         <div className="flex items-center space-x-3">
                             <Cookie className="text-[#ffd427]" size={24} />
                             <p className="text-sm">
-                                Usamos cookies para asegurar que tengas la mejor experiencia en nuestro sistema. 
-                                Al continuar navegando, aceptas nuestra política de privacidad.
+                                {t('cookies.message')}
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                            <button type="button" onClick={() => navigateToLegal('privacidad')} className="min-h-[44px] px-4 flex items-center text-slate-300 hover:text-white text-sm underline rounded-lg active:bg-white/10">Ver Política</button>
+                            <button type="button" onClick={() => navigateToLegal('privacidad')} className="min-h-[44px] px-4 flex items-center text-slate-300 hover:text-white text-sm underline rounded-lg active:bg-white/10">{t('common.viewPolicy')}</button>
                             <button type="button" onClick={acceptCookies} className="min-h-[44px] bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-6 py-2.5 rounded-full text-sm font-bold transition-colors active:scale-[0.98]">
-                                Aceptar
+                                {t('common.accept')}
                             </button>
                         </div>
                     </div>

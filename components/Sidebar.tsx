@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ViewState, UserRole, AccountTier } from '../types';
 import { LayoutDashboard, Users, Calendar, Package, DollarSign, FileText, LogOut, Scissors, Settings, ShoppingBag, MapPin, X, ChevronDown, ChevronRight, Briefcase, BarChart2, MessageCircle, Shield, Globe, ListChecks, QrCode, StarOff, User } from 'lucide-react';
+import { useTranslation } from '../i18n';
 
 interface SidebarProps {
     currentView: ViewState;
@@ -9,29 +10,20 @@ interface SidebarProps {
     userRole: UserRole | string;
     isOpen: boolean;        
     onClose: () => void;
-    /** Solo para rol cliente: true cuando ya eligió una barbería (Visitar Perfil). Si false, no se muestra Operaciones. */
     clientHasSelectedBarberia?: boolean;
-    /** Plan de negocio: en 'solo' se ocultan Calendario, WhatsApp, Inventario, Finanzas, Admin Usuarios. */
     accountTier?: AccountTier;
-    /** Solo cliente: id de la barbería favorita. Si coincide con currentPosId se muestra "Quitar de favoritos". */
     preferredPosId?: number | null;
-    /** Solo cliente: id de la barbería actualmente seleccionada. */
     currentPosId?: number | null;
-    /** Solo cliente: callback para quitar la barbería de favoritos. */
     onRemoveFavorite?: () => void | Promise<void>;
 }
 
 type NavGroup = 'principal' | 'operaciones' | 'administracion';
 
-/** Ítems que se ocultan en plan Solo (menú simplificado) */
 const HIDDEN_IN_TIER_SOLO: ViewState[] = ['calendar', 'inventory', 'finance', 'user_admin'];
-
-/** Plan Gratuito: ver citas, Ventas (POS) para registrar pagos, Mi perfil, Configuración, y permitir buscar más barberías / escanear QR. */
 const SHOWN_IN_TIER_GRATUITO: ViewState[] = ['dashboard', 'sales', 'client_profile', 'appointments', 'settings', 'client_discovery', 'qr_scanner'];
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, userRole, isOpen, onClose, clientHasSelectedBarberia = true, accountTier = 'barberia', preferredPosId = null, currentPosId = null, onRemoveFavorite }) => {
-    
-    // State for collapsible groups
+    const { t } = useTranslation();
     const [expandedGroups, setExpandedGroups] = useState<Record<NavGroup, boolean>>({
         principal: true,
         operaciones: true,
@@ -42,56 +34,56 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
         setExpandedGroups(prev => ({ ...prev, [group]: !prev[group] }));
     };
 
-    // Define items structure with groups
-    const navGroups = [
+    const navGroups = useMemo(() => [
         {
             id: 'principal' as NavGroup,
-            label: 'Principal',
+            label: t('nav.principal'),
             icon: <LayoutDashboard size={18} />,
             items: [
-                { id: 'admin_pos', label: 'Sedes Globales', icon: <MapPin size={18} />, roles: ['superadmin'] },
-                { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
-                { id: 'client_discovery', label: 'Descubrir Barberías', icon: <Globe size={18} />, roles: ['cliente'] },
-                { id: 'client_profile', label: 'Mi perfil', icon: <User size={18} />, roles: ['cliente', 'superadmin', 'admin', 'barbero'] },
-                { id: 'qr_scanner', label: 'Escanear QR', icon: <QrCode size={18} />, roles: ['cliente'] },
+                { id: 'admin_pos', label: t('nav.globalPos'), icon: <MapPin size={18} />, roles: ['superadmin'] },
+                { id: 'dashboard', label: t('nav.dashboard'), icon: <LayoutDashboard size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
+                { id: 'client_discovery', label: t('nav.discoverBarbershops'), icon: <Globe size={18} />, roles: ['cliente'] },
+                { id: 'client_profile', label: t('nav.myProfile'), icon: <User size={18} />, roles: ['cliente', 'superadmin', 'admin', 'barbero'] },
+                { id: 'qr_scanner', label: t('nav.scanQr'), icon: <QrCode size={18} />, roles: ['cliente'] },
             ]
         },
         {
             id: 'operaciones' as NavGroup,
-            label: 'Operaciones',
+            label: t('nav.operations'),
             icon: <Briefcase size={18} />,
             items: [
-                { id: 'sales', label: 'Ventas (POS)', icon: <DollarSign size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
-                { id: 'shop', label: 'Tienda Online', icon: <ShoppingBag size={18} />, roles: ['cliente'] },
-                { id: 'appointments', label: 'Agenda Citas', icon: <Calendar size={18} />, roles: ['superadmin', 'admin', 'barbero', 'cliente'] },
-                { id: 'calendar', label: 'Calendario Mensual', icon: <Calendar size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
-                { id: 'whatsapp_console', label: 'Consola WhatsApp', icon: <MessageCircle size={18} />, roles: ['barbero', 'admin'] },
-                { id: 'clients', label: 'Clientes', icon: <Users size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
+                { id: 'sales', label: t('nav.salesPos'), icon: <DollarSign size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
+                { id: 'shop', label: t('nav.onlineShop'), icon: <ShoppingBag size={18} />, roles: ['cliente'] },
+                { id: 'appointments', label: t('nav.appointments'), icon: <Calendar size={18} />, roles: ['superadmin', 'admin', 'barbero', 'cliente'] },
+                { id: 'calendar', label: t('nav.monthlyCalendar'), icon: <Calendar size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
+                { id: 'whatsapp_console', label: t('nav.whatsappConsole'), icon: <MessageCircle size={18} />, roles: ['barbero', 'admin'] },
+                { id: 'clients', label: t('nav.clients'), icon: <Users size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
             ]
         },
         {
             id: 'administracion' as NavGroup,
-            label: 'Administración',
+            label: t('nav.administration'),
             icon: <BarChart2 size={18} />,
             items: [
-                { id: 'inventory', label: 'Inventario', icon: <Package size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
-                { id: 'finance', label: 'Finanzas', icon: <DollarSign size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
-                { id: 'reports', label: 'Reportes', icon: <FileText size={18} />, roles: ['superadmin', 'admin'] },
-                { id: 'sales_records', label: 'Registros de cortes', icon: <ListChecks size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
-                { id: 'user_admin', label: 'Admin Usuarios', icon: <Shield size={18} />, roles: ['superadmin'] },
-                { id: 'settings', label: 'Configuración', icon: <Settings size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
+                { id: 'inventory', label: t('nav.inventory'), icon: <Package size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
+                { id: 'finance', label: t('nav.finance'), icon: <DollarSign size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
+                { id: 'reports', label: t('nav.reports'), icon: <FileText size={18} />, roles: ['superadmin', 'admin'] },
+                { id: 'sales_records', label: t('nav.salesRecords'), icon: <ListChecks size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
+                { id: 'user_admin', label: t('nav.userAdmin'), icon: <Shield size={18} />, roles: ['superadmin'] },
+                { id: 'settings', label: t('nav.settings'), icon: <Settings size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
             ]
         }
-    ];
+    ], [t]);
 
     const handleItemClick = (id: ViewState) => {
         onChangeView(id);
-        onClose(); // Auto close on mobile
+        onClose();
     };
+
+    const roleLabel = (userRole === 'barbero' || userRole === 'empleado') ? t('nav.barberRole') : userRole;
 
     return (
         <>
-            {/* Mobile Overlay */}
             {isOpen && (
                 <div 
                     className="fixed inset-0 bg-black/50 z-20 md:hidden backdrop-blur-sm transition-opacity"
@@ -99,7 +91,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                 />
             )}
 
-            {/* Sidebar Container */}
             <div className={`
                 fixed inset-y-0 left-0 w-64 bg-slate-900 text-white flex flex-col h-screen shadow-2xl z-30 
                 transform transition-transform duration-300 ease-in-out
@@ -111,7 +102,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                         type="button"
                         onClick={onClose}
                         className="absolute top-4 right-4 text-slate-400 hover:text-white md:hidden flex items-center justify-center min-h-[44px] min-w-[44px] rounded-xl hover:bg-slate-800 active:bg-slate-700"
-                        aria-label="Cerrar menú"
+                        aria-label={t('common.closeMenu')}
                     >
                         <X size={22} />
                     </button>
@@ -119,28 +110,23 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                     <div className="w-12 h-12 bg-[#ffd427] rounded-xl flex items-center justify-center mb-3 shadow-lg shadow-yellow-500/20 transform rotate-3">
                         <Scissors size={24} className="text-slate-900" />
                     </div>
-                    <h1 className="text-lg font-bold tracking-tight text-[#ffd427]">BarberShow</h1>
+                    <h1 className="text-lg font-bold tracking-tight text-[#ffd427]">{t('common.barberShow')}</h1>
                     <span className="text-[10px] text-slate-400 uppercase tracking-widest mt-1 px-2 py-0.5 rounded bg-slate-800">
-                        {(userRole === 'barbero' || userRole === 'empleado') ? 'Barbero' : userRole}
+                        {roleLabel}
                     </span>
                 </div>
                 
                 <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 custom-scrollbar">
                     {navGroups.map(group => {
-                        // Cliente: no mostrar Operaciones hasta que haya elegido una barbería
                         const effectiveRole = userRole === 'empleado' ? 'barbero' : userRole;
                         if (group.id === 'operaciones' && effectiveRole === 'cliente' && !clientHasSelectedBarberia) return null;
-                        // Filter items for this group based on permissions
                         let filteredItems = group.items.filter(item => item.roles.includes(effectiveRole as UserRole));
-                        // En plan Solo ocultar: Calendario, Inventario, Finanzas, Admin Usuarios
                         if (accountTier === 'solo') {
                             filteredItems = filteredItems.filter(item => !HIDDEN_IN_TIER_SOLO.includes(item.id as ViewState));
                         }
-                        // Plan Gratuito: solo Dashboard, Mi perfil, Agenda Citas, Configuración (superadmin ve todo)
                         if (accountTier === 'gratuito' && effectiveRole !== 'superadmin') {
                             filteredItems = filteredItems.filter(item => SHOWN_IN_TIER_GRATUITO.includes(item.id as ViewState));
                         }
-                        // Consola WhatsApp en todos los planes pagos (solo, barberia, multisede)
                         if (accountTier === 'gratuito') {
                             filteredItems = filteredItems.filter(item => item.id !== 'whatsapp_console');
                         }
@@ -188,10 +174,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                         <button
                             type="button"
                             onClick={() => { onRemoveFavorite(); onClose(); }}
-                            className="w-full flex items-center justify-center space-x-2 px-4 min-h-[44px] py-2 rounded-xl text-slate-400 hover:bg-slate-700 hover:text-[#ffd427] transition-all duration-200 text-sm touch-target-inline"
+                            className="w-full flex items-center justify-center space-x-2 px-4 min-h-[44px] py-2 rounded-xl text-slate-400 hover:bg-slate-700 hover:text-[#ffd427] transition-colors duration-200 text-sm touch-target-inline"
                         >
                             <StarOff size={16} />
-                            <span>Quitar de favoritos</span>
+                            <span>{t('nav.removeFavorite')}</span>
                         </button>
                     )}
                     <button 
@@ -200,7 +186,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                         className="w-full flex items-center justify-center space-x-2 px-4 min-h-[44px] py-2.5 border border-slate-700 rounded-xl text-slate-400 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all duration-200 text-sm font-medium touch-target-inline"
                     >
                         <LogOut size={18} />
-                        <span>Cerrar Sesión</span>
+                        <span>{t('common.logoutTitle')}</span>
                     </button>
                 </div>
             </div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { AccountTier } from '../types';
 import { Scissors, User, Users, MapPin } from 'lucide-react';
+import { useTranslation } from '../i18n';
 
 interface OnboardingTierProps {
     /** Nombre de la sede/negocio para personalizar el mensaje */
@@ -8,28 +9,30 @@ interface OnboardingTierProps {
     onSelect: (tier: AccountTier) => void;
 }
 
-const TIER_OPTIONS: { value: AccountTier; label: string; description: string; icon: React.ReactNode }[] = [
-    {
-        value: 'solo',
-        label: 'Solo yo en mi barbería',
-        description: 'Una persona, un local. Menú simplificado y reportes básicos.',
-        icon: <User size={28} className="text-slate-700" />,
-    },
-    {
-        value: 'barberia',
-        label: 'Tengo equipo (varios barberos)',
-        description: 'Varios barberos en una sede. Agenda y reportes por barbero.',
-        icon: <Users size={28} className="text-slate-700" />,
-    },
-    {
-        value: 'multisede',
-        label: 'Varias ubicaciones o cadena',
-        description: 'Múltiples sedes. Administración global y reportes por sede.',
-        icon: <MapPin size={28} className="text-slate-700" />,
-    },
-];
-
 const OnboardingTier: React.FC<OnboardingTierProps> = ({ businessName, onSelect }) => {
+    const { t } = useTranslation();
+
+    const tierOptions: { value: AccountTier; label: string; description: string; icon: React.ReactNode }[] = [
+        {
+            value: 'solo',
+            label: t('onboarding.soloLabel'),
+            description: t('onboarding.soloDesc'),
+            icon: <User size={28} className="text-slate-700" />,
+        },
+        {
+            value: 'barberia',
+            label: t('onboarding.teamLabel'),
+            description: t('onboarding.teamDesc'),
+            icon: <Users size={28} className="text-slate-700" />,
+        },
+        {
+            value: 'multisede',
+            label: t('onboarding.chainLabel'),
+            description: t('onboarding.chainDesc'),
+            icon: <MapPin size={28} className="text-slate-700" />,
+        },
+    ];
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/95 p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border-t-4 border-[#ffd427]">
@@ -40,14 +43,16 @@ const OnboardingTier: React.FC<OnboardingTierProps> = ({ businessName, onSelect 
                         </div>
                     </div>
                     <h2 className="text-xl md:text-2xl font-bold text-slate-800 text-center mb-1">
-                        ¿Cómo trabajas?
+                        {t('onboarding.title')}
                     </h2>
                     <p className="text-slate-500 text-center text-sm mb-6">
-                        {businessName ? `Configura "${businessName}" según tu tipo de negocio.` : 'Elige la opción que mejor describe tu negocio.'}
+                        {businessName
+                            ? t('onboarding.subtitleNamed', { name: businessName })
+                            : t('onboarding.subtitleDefault')}
                     </p>
 
                     <div className="space-y-3">
-                        {TIER_OPTIONS.map((opt) => (
+                        {tierOptions.map((opt) => (
                             <button
                                 key={opt.value}
                                 type="button"

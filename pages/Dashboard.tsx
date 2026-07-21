@@ -2,8 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { DataService } from '../services/data';
 import { ViewState, Appointment, Client, PointOfSale } from '../types';
 import { Users, Calendar, ShoppingBag, AlertTriangle, TrendingUp, Clock, Loader2, MessageCircle } from 'lucide-react';
+import { useTranslation } from '../i18n';
 
-/** Teléfono a formato wa.me: solo dígitos (sin añadir prefijo de país). */
 function phoneToWa(phone: string | number | null | undefined): string {
     return String(phone ?? '').replace(/\D/g, '');
 }
@@ -21,6 +21,7 @@ interface DashboardProps {
 const LOAD_TIMEOUT_MS = 22000;
 
 const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
+    const { t, formatDate } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
     const [stats, setStats] = useState({
@@ -47,7 +48,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
                 DataService.getPointsOfSale(),
             ]);
             const timeoutPromise = new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error('Tiempo de espera agotado.')), LOAD_TIMEOUT_MS)
+                setTimeout(() => reject(new Error(t('common.timeout'))), LOAD_TIMEOUT_MS)
             );
             const [clients, appointments, sales, products, posList] = await Promise.race([loadPromise, timeoutPromise]);
             const clientsSafe = Array.isArray(clients) ? clients : [];
@@ -80,7 +81,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
             });
             const recentSales = salesSafe.slice(-3).map(s => ({
                 type: 'sale',
-                text: `Venta #${s.numeroVenta}`,
+                text: t('dashboard.saleNumber', { number: s.numeroVenta }),
                 time: s.hora,
                 amount: s.total
             }));
@@ -91,17 +92,32 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [t]);
 
     useEffect(() => {
         loadData();
     }, [loadData]);
 
+    const openReminder = () => {
+        if (!nextAppointment) return;
+        const posName = pointsOfSale.find(p => p.id === nextAppointment.apt.posId)?.name || t('common.barberShow');
+        const fechaStr = formatDate(nextAppointment.apt.fecha + 'T12:00:00', { weekday: 'long', day: 'numeric', month: 'long' });
+        const msg = t('dashboard.reminderMessage', {
+            name: nextAppointment.client.nombre,
+            date: fechaStr,
+            time: nextAppointment.apt.hora,
+            shop: posName,
+        });
+        const url = buildWaLink(nextAppointment.client.telefono, msg);
+        if (url) window.open(url, '_blank', 'noopener,noreferrer');
+        else alert(t('dashboard.invalidWhatsApp'));
+    };
+
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center py-24 text-slate-500">
                 <Loader2 className="animate-spin mb-4" size={48} />
-                <p className="font-medium">Cargando panel...</p>
+                <p className="font-medium">{t('dashboard.loading')}</p>
             </div>
         );
     }
@@ -109,14 +125,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
     if (loadError) {
         return (
             <div className="flex flex-col items-center justify-center py-24 text-slate-600 max-w-md mx-auto text-center px-4">
-                <p className="font-medium mb-2">No se pudo cargar el panel.</p>
-                <p className="text-sm text-slate-500 mb-6">Revisa tu conexión e intenta de nuevo.</p>
+                <p className="font-medium mb-2">{t('dashboard.loadFailed')}</p>
+                <p className="text-sm text-slate-500 mb-6">{t('common.connectionHint')}</p>
                 <button
                     type="button"
                     onClick={() => loadData()}
                     className="bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold px-6 py-3 rounded-xl"
                 >
-                    Reintentar
+                    {t('common.retry')}
                 </button>
             </div>
         );
@@ -124,7 +140,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
 
     return (
         <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-slate-800">Panel de Control</h2>
+            <h2 className="text-2xl font-bold text-slate-800">{t('dashboard.title')}</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-4 hover:shadow-md transition-shadow">
@@ -132,7 +148,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
                         <Users size={24} />
                     </div>
                     <div>
-                        <p className="text-sm text-slate-500 font-medium">Clientes Totales</p>
+                        <p className="text-sm text-slate-500 font-medium">{t('dashboard.totalClients')}</p>
                         <h3 className="text-2xl font-bold text-slate-800">{stats.clients}</h3>
                     </div>
                 </div>
@@ -142,7 +158,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
                         <Calendar size={24} />
                     </div>
                     <div>
-                        <p className="text-sm text-slate-500 font-medium">Citas Hoy</p>
+                        <p className="text-sm text-slate-500 font-medium">{t('dashboard.appointmentsToday')}</p>
                         <h3 className="text-2xl font-bold text-slate-800">{stats.appointmentsToday}</h3>
                     </div>
                 </div>
@@ -152,7 +168,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
                         <TrendingUp size={24} />
                     </div>
                     <div>
-                        <p className="text-sm text-slate-500 font-medium">Ventas Hoy</p>
+                        <p className="text-sm text-slate-500 font-medium">{t('dashboard.salesToday')}</p>
                         <h3 className="text-2xl font-bold text-slate-800">${stats.salesToday.toFixed(2)}</h3>
                     </div>
                 </div>
@@ -162,7 +178,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
                         <AlertTriangle size={24} />
                     </div>
                     <div>
-                        <p className="text-sm text-slate-500 font-medium">Stock Bajo</p>
+                        <p className="text-sm text-slate-500 font-medium">{t('dashboard.lowStock')}</p>
                         <h3 className="text-2xl font-bold text-slate-800">{stats.lowStock}</h3>
                     </div>
                 </div>
@@ -170,7 +186,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4">Actividad Reciente</h3>
+                    <h3 className="text-lg font-bold text-slate-800 mb-4">{t('dashboard.recentActivity')}</h3>
                     <div className="space-y-4">
                         {activities.length > 0 ? activities.map((act, idx) => (
                             <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
@@ -186,7 +202,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
                                 <span className="font-bold text-green-600">+${act.amount.toFixed(2)}</span>
                             </div>
                         )) : (
-                            <p className="text-slate-500 text-sm">No hay actividad reciente.</p>
+                            <p className="text-slate-500 text-sm">{t('dashboard.noActivity')}</p>
                         )}
                     </div>
                 </div>
@@ -194,60 +210,45 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
                     {nextAppointment && (
                         <div className="pb-4 border-b border-slate-100">
-                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Siguiente cita</h3>
+                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">{t('dashboard.nextAppointment')}</h3>
                             <p className="font-semibold text-slate-800">{nextAppointment.client.nombre}</p>
                             <p className="text-sm text-slate-600 flex items-center mt-1">
                                 <Clock size={14} className="mr-1.5" /> {nextAppointment.apt.hora}
                             </p>
                             <button
                                 type="button"
-                                onClick={() => {
-                                    const posName = pointsOfSale.find(p => p.id === nextAppointment.apt.posId)?.name || 'BarberShow';
-                                    const fechaStr = new Date(nextAppointment.apt.fecha + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-                                    const msg = `Hola ${nextAppointment.client.nombre}, recordatorio: tienes cita el ${fechaStr} a las ${nextAppointment.apt.hora} en ${posName}. ¡Te esperamos!`;
-                                    const url = buildWaLink(nextAppointment.client.telefono, msg);
-                                    if (url) window.open(url, '_blank', 'noopener,noreferrer');
-                                    else alert('Este cliente no tiene un número de WhatsApp válido.');
-                                }}
+                                onClick={openReminder}
                                 disabled={!nextAppointment.client.telefono || phoneToWa(nextAppointment.client.telefono).length < 10}
                                 className="mt-3 w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold bg-green-600 text-white hover:bg-green-700 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
                             >
                                 <MessageCircle size={20} />
-                                Enviar recordatorio al próximo cliente
+                                {t('dashboard.sendReminder')}
                             </button>
-                            <p className="text-xs text-slate-500 mt-2">Se abrirá WhatsApp con el mensaje listo. Envías desde tu número.</p>
+                            <p className="text-xs text-slate-500 mt-2">{t('dashboard.reminderHint')}</p>
                         </div>
                     )}
                     <div>
-                        <h3 className="text-lg font-bold text-slate-800 mb-4">Acciones Rápidas</h3>
+                        <h3 className="text-lg font-bold text-slate-800 mb-4">{t('dashboard.quickActions')}</h3>
                         <div className="space-y-3">
                             <button
                                 type="button"
-                                onClick={() => {
-                                    if (!nextAppointment) return;
-                                    const posName = pointsOfSale.find(p => p.id === nextAppointment.apt.posId)?.name || 'BarberShow';
-                                    const fechaStr = new Date(nextAppointment.apt.fecha + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-                                    const msg = `Hola ${nextAppointment.client.nombre}, recordatorio: tienes cita el ${fechaStr} a las ${nextAppointment.apt.hora} en ${posName}. ¡Te esperamos!`;
-                                    const url = buildWaLink(nextAppointment.client.telefono, msg);
-                                    if (url) window.open(url, '_blank', 'noopener,noreferrer');
-                                    else alert('Este cliente no tiene un número de WhatsApp válido.');
-                                }}
+                                onClick={openReminder}
                                 disabled={!nextAppointment || !nextAppointment.client.telefono || phoneToWa(nextAppointment.client.telefono).length < 10}
                                 className="w-full flex items-center justify-between p-4 bg-green-50 hover:bg-green-100 text-green-800 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-50"
                             >
-                                <span>Enviar recordatorio al próximo cliente</span>
+                                <span>{t('dashboard.sendReminder')}</span>
                                 <MessageCircle size={20} />
                             </button>
                             <button onClick={() => onChangeView('sales')} className="w-full flex items-center justify-between p-4 bg-yellow-50 hover:bg-yellow-100 text-yellow-800 rounded-lg transition-colors font-medium">
-                                <span>Nueva Venta</span>
+                                <span>{t('dashboard.newSale')}</span>
                                 <ShoppingBag size={20} />
                             </button>
                             <button onClick={() => onChangeView('appointments')} className="w-full flex items-center justify-between p-4 bg-orange-50 hover:bg-orange-100 text-orange-800 rounded-lg transition-colors font-medium">
-                                <span>Agendar Cita</span>
+                                <span>{t('dashboard.bookAppointment')}</span>
                                 <Calendar size={20} />
                             </button>
                             <button onClick={() => onChangeView('clients')} className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors font-medium">
-                                <span>Registrar Cliente</span>
+                                <span>{t('dashboard.registerClient')}</span>
                                 <Users size={20} />
                             </button>
                         </div>

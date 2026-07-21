@@ -2,17 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { DataService } from '../services/data';
 import { Sale, Client, Barber, AccountTier } from '../types';
 import { Scissors, Loader2, Calendar, ChevronDown, ChevronUp, User, Clock, Package } from 'lucide-react';
+import { useTranslation } from '../i18n';
 
 interface SalesRecordsProps {
     accountTier?: AccountTier;
 }
 
-const formatDate = (iso: string) => {
-    const d = new Date(iso + 'T12:00:00');
-    return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
-};
-
 const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => {
+    const { t, formatDate } = useTranslation();
     const [sales, setSales] = useState<Sale[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [barbers, setBarbers] = useState<Barber[]>([]);
@@ -42,16 +39,28 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
     }, [showBarbero]);
 
     const getClientName = (clienteId: number | null) => {
-        if (clienteId == null) return 'Cliente ocasional';
+        if (clienteId == null) return t('salesRecords.walkInClient');
         const c = clients.find((x) => x.id === clienteId);
-        return c ? c.nombre : `Cliente #${clienteId}`;
+        return c ? c.nombre : t('salesRecords.clientFallback', { id: clienteId });
     };
 
     const getBarberName = (barberoId?: number | null) => {
         if (barberoId == null) return '—';
         const b = barbers.find((x) => x.id === barberoId);
-        return b ? b.name : `Barbero #${barberoId}`;
+        return b ? b.name : t('salesRecords.barberFallback', { id: barberoId });
     };
+
+    const getPaymentMethodLabel = (method: string) => {
+        const labels: Record<string, string> = {
+            efectivo: t('sales.cash'),
+            tarjeta: t('sales.card'),
+            transferencia: t('sales.transfer'),
+        };
+        return labels[method] ?? method;
+    };
+
+    const formatSaleDate = (iso: string) =>
+        formatDate(iso + 'T12:00:00', { day: 'numeric', month: 'short', year: 'numeric' });
 
     const filtered = sales
         .filter((s) => {
@@ -70,7 +79,7 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
         return (
             <div className="flex flex-col items-center justify-center py-24 text-slate-500">
                 <Loader2 className="animate-spin mb-4 text-[#ffd427]" size={48} />
-                <p className="font-medium">Cargando registros...</p>
+                <p className="font-medium">{t('salesRecords.loading')}</p>
             </div>
         );
     }
@@ -85,8 +94,8 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
                             <Scissors size={28} strokeWidth={2.2} />
                         </div>
                         <div>
-                            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Registros de cortes</h1>
-                            <p className="text-sm text-slate-500 mt-1">Ventas completadas por fecha</p>
+                            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">{t('salesRecords.title')}</h1>
+                            <p className="text-sm text-slate-500 mt-1">{t('salesRecords.subtitle')}</p>
                         </div>
                     </div>
                 </div>
@@ -99,11 +108,11 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
                                 <div className="p-2 rounded-lg bg-amber-50 text-amber-600">
                                     <Calendar size={20} strokeWidth={2} />
                                 </div>
-                                <span className="font-semibold">Rango de fechas</span>
+                                <span className="font-semibold">{t('salesRecords.dateRange')}</span>
                             </div>
                             <div className="flex flex-wrap items-center gap-3">
                                 <label className="flex items-center gap-2 text-sm text-slate-600">
-                                    <span className="hidden sm:inline font-medium">Desde</span>
+                                    <span className="hidden sm:inline font-medium">{t('salesRecords.from')}</span>
                                     <input
                                         type="date"
                                         value={dateFrom}
@@ -111,9 +120,9 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
                                         className="border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-300/60 focus:border-amber-400 transition-all shadow-sm"
                                     />
                                 </label>
-                                <span className="text-slate-400 font-medium">a</span>
+                                <span className="text-slate-400 font-medium">{t('salesRecords.toConnector')}</span>
                                 <label className="flex items-center gap-2 text-sm text-slate-600">
-                                    <span className="hidden sm:inline font-medium">Hasta</span>
+                                    <span className="hidden sm:inline font-medium">{t('salesRecords.to')}</span>
                                     <input
                                         type="date"
                                         value={dateTo}
@@ -126,10 +135,10 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
                         {filtered.length > 0 && (
                             <div className="mt-5 pt-5 border-t border-slate-100 flex flex-wrap items-center gap-4">
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 text-sm font-medium">
-                                    {filtered.length} registro{filtered.length !== 1 ? 's' : ''}
+                                    {filtered.length} {filtered.length !== 1 ? t('salesRecords.recordMany') : t('salesRecords.recordOne')}
                                 </span>
                                 <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-50 to-amber-100/80 text-amber-800 font-bold text-base border border-amber-200/60">
-                                    Total en período: ${totalInPeriod.toFixed(2)}
+                                    {t('salesRecords.periodTotal', { amount: totalInPeriod.toFixed(2) })}
                                 </span>
                             </div>
                         )}
@@ -143,8 +152,8 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
                             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 flex items-center justify-center mx-auto mb-5 border border-slate-100">
                                 <Scissors size={32} className="text-slate-400" />
                             </div>
-                            <p className="text-slate-700 font-semibold text-lg">No hay registros en el rango seleccionado</p>
-                            <p className="text-slate-500 text-sm mt-2">Ajusta las fechas o espera nuevas ventas</p>
+                            <p className="text-slate-700 font-semibold text-lg">{t('salesRecords.emptyTitle')}</p>
+                            <p className="text-slate-500 text-sm mt-2">{t('salesRecords.emptyHint')}</p>
                         </div>
                     ) : (
                     <>
@@ -153,20 +162,20 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
                             <table className="w-full text-left min-w-[640px]">
                                 <thead>
                                     <tr className="bg-gradient-to-r from-slate-50 to-slate-50/80 text-slate-600 text-xs font-semibold uppercase tracking-wider border-b-2 border-slate-200">
-                                        <th className="py-4 px-5">Fecha</th>
-                                        <th className="py-4 px-5">Hora</th>
-                                        <th className="py-4 px-5">Cliente</th>
-                                        {showBarbero && <th className="py-4 px-5">Barbero</th>}
-                                        <th className="py-4 px-5">Servicios / Productos</th>
-                                        <th className="py-4 px-5 text-right">Total</th>
-                                        <th className="py-4 px-3 w-12" aria-label="Detalle" />
+                                        <th className="py-4 px-5">{t('salesRecords.dateColumn')}</th>
+                                        <th className="py-4 px-5">{t('salesRecords.timeColumn')}</th>
+                                        <th className="py-4 px-5">{t('salesRecords.clientColumn')}</th>
+                                        {showBarbero && <th className="py-4 px-5">{t('salesRecords.barberColumn')}</th>}
+                                        <th className="py-4 px-5">{t('salesRecords.itemsColumn')}</th>
+                                        <th className="py-4 px-5 text-right">{t('salesRecords.totalColumn')}</th>
+                                        <th className="py-4 px-3 w-12" aria-label={t('salesRecords.detailColumn')} />
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {filtered.map((sale) => (
                                         <React.Fragment key={sale.id}>
                                             <tr className="hover:bg-amber-50/40 transition-colors group">
-                                                <td className="py-4 px-5 text-slate-700 font-medium">{formatDate(sale.fecha)}</td>
+                                                <td className="py-4 px-5 text-slate-700 font-medium">{formatSaleDate(sale.fecha)}</td>
                                                 <td className="py-4 px-5 text-slate-600 flex items-center gap-1.5">
                                                     <Clock size={14} className="text-slate-400 shrink-0" />
                                                     {sale.hora}
@@ -181,7 +190,7 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
                                                     <span className="text-slate-600">
                                                         {(sale.items || []).slice(0, 2).map((i) => i.name).join(', ')}
                                                         {(sale.items?.length ?? 0) > 2 && (
-                                                            <span className="text-slate-400"> +{(sale.items?.length ?? 0) - 2} más</span>
+                                                            <span className="text-slate-400"> {t('salesRecords.moreItems', { count: (sale.items?.length ?? 0) - 2 })}</span>
                                                         )}
                                                     </span>
                                                 </td>
@@ -193,7 +202,7 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
                                                         type="button"
                                                         onClick={() => setExpandedId(expandedId === sale.id ? null : sale.id)}
                                                         className="p-2 rounded-xl text-slate-400 hover:bg-amber-100 hover:text-amber-700 transition-colors"
-                                                        title={expandedId === sale.id ? 'Ocultar detalle' : 'Ver detalle'}
+                                                        title={expandedId === sale.id ? t('salesRecords.hideDetail') : t('salesRecords.showDetail')}
                                                     >
                                                         {expandedId === sale.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                                                     </button>
@@ -205,7 +214,7 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
                                                         <div className="rounded-xl bg-white border border-amber-200/60 shadow-sm p-4 text-sm">
                                                             <p className="font-semibold text-slate-800 mb-3 flex items-center gap-2">
                                                                 <Package size={16} className="text-amber-600" />
-                                                                Detalle — {sale.numeroVenta}
+                                                                {t('salesRecords.detailTitle', { number: sale.numeroVenta })}
                                                             </p>
                                                             <div className="flex flex-wrap gap-2 mb-3">
                                                                 {(sale.items || []).map((item, idx) => (
@@ -218,7 +227,12 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
                                                                 ))}
                                                             </div>
                                                             <p className="text-slate-500 border-t border-slate-100 pt-3">
-                                                                Subtotal ${sale.subtotal.toFixed(2)} · IVA ${sale.iva.toFixed(2)} · Total ${sale.total.toFixed(2)} · {sale.metodoPago}
+                                                                {t('salesRecords.summaryLine', {
+                                                                    subtotal: sale.subtotal.toFixed(2),
+                                                                    tax: sale.iva.toFixed(2),
+                                                                    total: sale.total.toFixed(2),
+                                                                    method: getPaymentMethodLabel(sale.metodoPago),
+                                                                })}
                                                             </p>
                                                         </div>
                                                     </td>
@@ -246,7 +260,7 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
                                             <p className="font-semibold text-slate-800 truncate">{getClientName(sale.clienteId)}</p>
                                             <p className="text-sm text-slate-500 mt-0.5 flex items-center gap-1">
                                                 <Clock size={12} className="text-slate-400 shrink-0" />
-                                                {formatDate(sale.fecha)} · {sale.hora}
+                                                {formatSaleDate(sale.fecha)} · {sale.hora}
                                             </p>
                                             <p className="text-sm text-slate-600 mt-1">
                                                 {(sale.items || []).slice(0, 2).map((i) => i.name).join(', ')}
@@ -280,7 +294,7 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
                                                 ))}
                                             </ul>
                                             <p className="text-slate-500 text-xs mt-3 pt-3 border-t border-slate-200">
-                                                Subtotal ${sale.subtotal.toFixed(2)} · IVA ${sale.iva.toFixed(2)} · {sale.metodoPago}
+                                                Subtotal ${sale.subtotal.toFixed(2)} · {t('invoiceDoc.tax')} ${sale.iva.toFixed(2)} · {getPaymentMethodLabel(sale.metodoPago)}
                                             </p>
                                         </div>
                                     )}

@@ -16,6 +16,9 @@ export const GLOBAL_FREE_MODE = true;
 /** Permite autoregistro de barberías en app móvil nativa (con IAP cuando aplique). */
 export const ALLOW_NATIVE_BARBER_SIGNUP = true;
 
+/** Desactiva autoregistro en iOS (App Store). Android y web sin cambios. */
+export const ALLOW_IOS_ACCOUNT_CREATION = false;
+
 /**
  * Tier otorgado sin pago mientras GLOBAL_FREE_MODE esté activo.
  * Plan Barbería: varios barberos, una sede, reportes por barbero, etc.

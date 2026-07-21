@@ -1,5 +1,6 @@
 import React from 'react';
 import { Sale } from '../types';
+import { useTranslation } from '../i18n';
 
 export interface InvoiceProps {
     sale: Sale;
@@ -11,10 +12,12 @@ export interface InvoiceProps {
 }
 
 const Invoice: React.FC<InvoiceProps> = ({ sale, storeName, currencySymbol, clientName, forPrint }) => {
+    const { t } = useTranslation();
+
     const metodoPagoLabel: Record<string, string> = {
-        efectivo: 'Efectivo',
-        tarjeta: 'Tarjeta',
-        transferencia: 'Transferencia',
+        efectivo: t('sales.cash'),
+        tarjeta: t('sales.card'),
+        transferencia: t('sales.transfer'),
     };
 
     return (
@@ -24,21 +27,21 @@ const Invoice: React.FC<InvoiceProps> = ({ sale, storeName, currencySymbol, clie
         >
             <header className="border-b border-slate-200 pb-4 mb-4">
                 <h1 className="text-xl font-bold text-slate-900">{storeName}</h1>
-                <p className="text-sm text-slate-500 mt-1">Factura / Comprobante de venta</p>
+                <p className="text-sm text-slate-500 mt-1">{t('invoiceDoc.title')}</p>
             </header>
 
             <div className="grid grid-cols-2 gap-2 text-sm mb-4">
-                <span className="text-slate-500">Nº venta:</span>
+                <span className="text-slate-500">{t('invoiceDoc.saleNumber')}</span>
                 <span className="font-semibold">{sale.numeroVenta}</span>
-                <span className="text-slate-500">Fecha:</span>
+                <span className="text-slate-500">{t('invoiceDoc.date')}</span>
                 <span>{sale.fecha}</span>
-                <span className="text-slate-500">Hora:</span>
+                <span className="text-slate-500">{t('invoiceDoc.time')}</span>
                 <span>{sale.hora}</span>
-                <span className="text-slate-500">Método de pago:</span>
+                <span className="text-slate-500">{t('invoiceDoc.paymentMethod')}</span>
                 <span>{metodoPagoLabel[sale.metodoPago] ?? sale.metodoPago}</span>
                 {clientName && (
                     <>
-                        <span className="text-slate-500">Cliente:</span>
+                        <span className="text-slate-500">{t('invoiceDoc.client')}</span>
                         <span>{clientName}</span>
                     </>
                 )}
@@ -47,10 +50,10 @@ const Invoice: React.FC<InvoiceProps> = ({ sale, storeName, currencySymbol, clie
             <table className="w-full text-sm border-collapse">
                 <thead>
                     <tr className="border-b-2 border-slate-200">
-                        <th className="text-left py-2 font-semibold text-slate-700">Concepto</th>
-                        <th className="text-right py-2 font-semibold text-slate-700 w-16">Cant.</th>
-                        <th className="text-right py-2 font-semibold text-slate-700 w-20">Precio</th>
-                        <th className="text-right py-2 font-semibold text-slate-700 w-24">Total</th>
+                        <th className="text-left py-2 font-semibold text-slate-700">{t('invoiceDoc.concept')}</th>
+                        <th className="text-right py-2 font-semibold text-slate-700 w-16">{t('invoiceDoc.qty')}</th>
+                        <th className="text-right py-2 font-semibold text-slate-700 w-20">{t('invoiceDoc.price')}</th>
+                        <th className="text-right py-2 font-semibold text-slate-700 w-24">{t('invoiceDoc.total')}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -67,21 +70,21 @@ const Invoice: React.FC<InvoiceProps> = ({ sale, storeName, currencySymbol, clie
 
             <div className="mt-4 pt-4 border-t border-slate-200 space-y-1 text-sm">
                 <div className="flex justify-between">
-                    <span className="text-slate-600">Subtotal</span>
+                    <span className="text-slate-600">{t('invoiceDoc.subtotal')}</span>
                     <span>{currencySymbol}{sale.subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                    <span className="text-slate-600">IVA</span>
+                    <span className="text-slate-600">{t('invoiceDoc.tax')}</span>
                     <span>{currencySymbol}{sale.iva.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-base font-bold pt-2">
-                    <span>Total</span>
+                    <span>{t('invoiceDoc.total')}</span>
                     <span>{currencySymbol}{sale.total.toFixed(2)}</span>
                 </div>
             </div>
 
             <footer className="mt-6 pt-4 border-t border-slate-100 text-xs text-slate-400 text-center">
-                Gracias por su preferencia · {storeName}
+                {t('invoiceDoc.footerThanks', { store: storeName })}
             </footer>
         </div>
     );

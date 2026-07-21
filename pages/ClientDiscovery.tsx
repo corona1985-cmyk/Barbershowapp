@@ -18,6 +18,7 @@ import {
 } from '../utils/posLocation';
 import { requestUserLocationWithPermission } from '../utils/geolocation';
 import { haversineKm, isWithinRadius } from '../utils/distance';
+import { useTranslation } from '../i18n';
 
 const LOAD_TIMEOUT_MS = 18000;
 
@@ -36,6 +37,7 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
     preferredPosId = null,
     onRemoveFavorite,
 }) => {
+    const { t } = useTranslation();
     const [posList, setPosList] = useState<PointOfSale[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCountry, setSelectedCountry] = useState('');
@@ -64,7 +66,7 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
         setLoading(true);
         try {
             const timeoutPromise = new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error('Tiempo de espera agotado.')), LOAD_TIMEOUT_MS)
+                setTimeout(() => reject(new Error(t('common.timeout'))), LOAD_TIMEOUT_MS)
             );
             const list = await Promise.race([DataService.getPointsOfSale(), timeoutPromise]);
             setPosList(Array.isArray(list) ? list.filter((p) => p.isActive !== false) : []);
@@ -178,11 +180,11 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
             const inCity = countShopsInCity(posList, result.countryCode, result.city);
             const inCountry = countShopsInCountry(posList, result.countryCode);
             if (inCity > 0) {
-                setGeoMessage(`Estás en ${result.displayLabel}. Encontramos ${inCity} barbería${inCity === 1 ? '' : 's'} en tu ciudad.`);
+                setGeoMessage(t('discovery.geoFoundInCity', { location: result.displayLabel, count: inCity }));
             } else if (inCountry > 0) {
-                setGeoMessage(`Estás en ${result.displayLabel}. No hay barberías en tu ciudad, pero hay ${inCountry} en ${getCountryName(result.countryCode)}.`);
+                setGeoMessage(t('discovery.geoNoneInCity', { location: result.displayLabel, count: inCountry, country: getCountryName(result.countryCode) }));
             } else {
-                setGeoMessage(`Estás en ${result.displayLabel}. Aún no hay barberías registradas en este país.`);
+                setGeoMessage(t('discovery.geoNoneInCountry', { location: result.displayLabel }));
             }
         } else {
             setGeoMessage(result.message);
@@ -203,8 +205,8 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
                 <div className="w-16 h-16 rounded-2xl bg-[#ffd427]/20 flex items-center justify-center mb-5">
                     <Loader2 className="animate-spin text-[#ffd427]" size={36} />
                 </div>
-                <p className="font-semibold text-lg text-slate-800">Cargando barberías...</p>
-                <p className="text-sm text-slate-500 mt-1">Un momento por favor</p>
+                <p className="font-semibold text-lg text-slate-800">{t('discovery.loading')}</p>
+                <p className="text-sm text-slate-500 mt-1">{t('discovery.loadingHint')}</p>
             </div>
         );
     }
@@ -212,14 +214,14 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
     if (loadError) {
         return (
             <div className="flex flex-col items-center justify-center py-32 max-w-md mx-auto text-center px-4">
-                <p className="font-bold text-xl text-slate-900 mb-2">No se pudieron cargar las barberías</p>
-                <p className="text-slate-500 mb-6">Revisa tu conexión e intenta de nuevo.</p>
+                <p className="font-bold text-xl text-slate-900 mb-2">{t('discovery.loadFailed')}</p>
+                <p className="text-slate-500 mb-6">{t('common.connectionHint')}</p>
                 <button
                     type="button"
                     onClick={() => loadBarberias()}
                     className="bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-bold px-8 py-3.5 rounded-xl shadow-md"
                 >
-                    Reintentar
+                    {t('common.retry')}
                 </button>
             </div>
         );
@@ -232,16 +234,14 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
                 <div className="absolute top-0 right-0 w-64 h-64 bg-[#ffd427]/10 rounded-full blur-3xl pointer-events-none" aria-hidden />
                 <div className="relative z-10">
                     <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#ffd427]/15 text-amber-800 text-sm font-bold mb-5">
-                        <Globe size={16} /> Latinoamérica y Estados Unidos
+                        <Globe size={16} /> {t('discovery.regionBadge')}
                     </span>
                     <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 leading-tight mb-4">
-                        Encuentra tu{' '}
-                        <span className="text-[#ffd427] drop-shadow-sm">barbería ideal</span>
+                        {t('discovery.heroTitlePrefix')}{' '}
+                        <span className="text-[#ffd427] drop-shadow-sm">{t('discovery.heroTitleHighlight')}</span>
                     </h1>
                     <p className="text-slate-600 text-lg leading-relaxed mb-8 max-w-2xl">
-                        {guestMode
-                            ? 'Usa tu ubicación o elige país y ciudad. Agenda tu cita en segundos — sin crear cuenta.'
-                            : 'Explora barberías afiliadas a BarberShow en tu país y ciudad.'}
+                        {guestMode ? t('discovery.guestSubtitle') : t('discovery.loggedSubtitle')}
                     </p>
 
                     <div className="flex flex-wrap gap-4 mb-8">
@@ -249,14 +249,14 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
                             <Building2 size={22} className="text-[#ffd427]" />
                             <div>
                                 <p className="text-2xl font-black text-slate-900 leading-none">{posList.length}</p>
-                                <p className="text-xs text-slate-500 mt-0.5">Barberías activas</p>
+                                <p className="text-xs text-slate-500 mt-0.5">{t('discovery.activeShops')}</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-slate-50 border border-slate-100">
                             <MapPin size={22} className="text-[#ffd427]" />
                             <div>
                                 <p className="text-2xl font-black text-slate-900 leading-none">{countriesWithShops || SUPPORTED_COUNTRIES.length}</p>
-                                <p className="text-xs text-slate-500 mt-0.5">Países</p>
+                                <p className="text-xs text-slate-500 mt-0.5">{t('discovery.countries')}</p>
                             </div>
                         </div>
                     </div>
@@ -369,7 +369,7 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
                             disabled={!selectedCountry}
                             className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#ffd427] disabled:opacity-50 cursor-pointer"
                         >
-                            <option value="">{selectedCountry ? 'Todas las ciudades' : 'Elige un país'}</option>
+                            <option value="">{selectedCountry ? t('discovery.allCities') : t('discovery.chooseCountry')}</option>
                             {cityOptions.map((city) => (
                                 <option key={city} value={city}>{city}</option>
                             ))}
@@ -396,7 +396,7 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                             <input
                                 type="text"
-                                placeholder="Buscar barbería..."
+                                placeholder={t('discovery.searchPlaceholder')}
                                 className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -562,7 +562,7 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
                                             onClick={() => onSwitchPos(pos.id)}
                                             className="w-full py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                                         >
-                                            {guestMode ? 'Registrarme aquí' : 'Ver perfil'}
+                                            {guestMode ? t('discovery.registerHere') : t('discovery.viewProfile')}
                                             <ExternalLink size={15} />
                                         </button>
                                     </div>

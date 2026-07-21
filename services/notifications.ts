@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { DataService } from './data';
 import { Appointment, Client, Barber } from '../types';
+import { translate } from '../i18n';
 
 /**
  * Notificaciones locales de citas (sin servidor / sin plan Blaze).
@@ -197,14 +198,20 @@ async function rescheduleReminders(
         let body: string;
         if (ctx.role === 'cliente') {
             const bName = barberName(barbers, apt.barberoId);
-            body = `Tu cita es a las ${apt.hora}${bName ? ` con ${bName}` : ''}. Faltan ${MINUTES_BEFORE} min.`;
+            body = bName
+                ? translate('notifications.upcomingClientWithBarber', { time: apt.hora, barber: bName, minutes: MINUTES_BEFORE })
+                : translate('notifications.upcomingClientBody', { time: apt.hora, minutes: MINUTES_BEFORE });
         } else {
-            body = `Cita con ${clientName(clients, apt.clienteId)} a las ${apt.hora}. Faltan ${MINUTES_BEFORE} min.`;
+            body = translate('notifications.upcomingStaffBody', {
+                client: clientName(clients, apt.clienteId),
+                time: apt.hora,
+                minutes: MINUTES_BEFORE,
+            });
         }
 
         toSchedule.push({
             id: reminderNotificationId(apt.id),
-            title: 'BarberShow – Cita próxima',
+            title: translate('notifications.upcomingTitle'),
             body,
             schedule: { at: fireAt },
             channelId: ANDROID_CHANNEL_ID,
@@ -239,8 +246,12 @@ async function notifyNewAppointments(
     const newAppts = relevant.filter((a) => !seen.has(a.id) && a.estado !== 'cancelada');
     const notifications = newAppts.map((apt) => ({
         id: instantNotificationId(apt.id),
-        title: 'BarberShow – Nueva cita',
-        body: `${clientName(clients, apt.clienteId)} agendó para el ${apt.fecha} a las ${apt.hora}.`,
+        title: translate('notifications.newTitle'),
+        body: translate('notifications.newBody', {
+            client: clientName(clients, apt.clienteId),
+            date: apt.fecha,
+            time: apt.hora,
+        }),
         channelId: ANDROID_CHANNEL_ID,
     }));
 

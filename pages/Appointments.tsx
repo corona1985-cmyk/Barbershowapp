@@ -4,6 +4,7 @@ import { Appointment, Barber, BarberGalleryPhoto, Client, Service, AppointmentFo
 import { ViewState } from '../types';
 import { Calendar, Clock, User, Scissors, Check, X, Trash2, Printer, MessageCircle, MapPin, Loader2, ImageIcon, RefreshCw } from 'lucide-react';
 import { handlePrint } from '../utils/print';
+import { useTranslation } from '../i18n';
 
 interface AppointmentsProps {
     onChangeView?: (view: ViewState) => void;
@@ -21,6 +22,7 @@ const getTodayLocal = (): string => {
 };
 
 const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteForBilling, accountTier = 'barberia' }) => {
+    const { t } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -69,7 +71,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                 DataService.getPointsOfSale(),
             ]);
             const timeoutPromise = new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error('Tiempo de espera agotado. Revisa tu conexión.')), LOAD_TIMEOUT_MS)
+                setTimeout(() => reject(new Error(t('common.timeoutConnection'))), LOAD_TIMEOUT_MS)
             );
             const [appts, barbersList, clientsList, servicesList, posList] = await Promise.race([loadPromise, timeoutPromise]);
             const apptsSafe = Array.isArray(appts) ? appts : [];
@@ -186,17 +188,26 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         return services.filter((s) => s.barberId == null || s.barberId === bid);
     }, [services, newApt.barberoId, isPlanSolo, defaultBarberId, userRole]);
 
+    const statusLabel = (estado: string) => {
+        const key = `appointments.status.${estado}`;
+        const translated = t(key);
+        return translated === key ? estado : translated;
+    };
+
+    const freePlanLimitAlert = () =>
+        t('appointments.freePlanLimitAlert', { limit: FREE_PLAN_MONTHLY_LIMIT, count: monthlyCount });
+
     const handleSave = async () => {
         if (atFreePlanLimit) {
-            alert(`Plan gratuito: solo puedes agendar ${FREE_PLAN_MONTHLY_LIMIT} citas al mes. Este mes ya tienes ${monthlyCount}. Actualiza tu plan para más citas.`);
+            alert(freePlanLimitAlert());
             return;
         }
         const barberoId = isPlanSolo ? (newApt.barberoId ?? defaultBarberId) : newApt.barberoId;
-        if (!barberoId) { alert('Seleccione un barbero.'); return; }
-        if (!newApt.hora) { alert('Seleccione una hora.'); return; }
-        if (!isPlanGratuito && !newApt.servicios?.length) { alert('Seleccione al menos un servicio.'); return; }
+        if (!barberoId) { alert(t('appointments.selectBarberAlert')); return; }
+        if (!newApt.hora) { alert(t('appointments.selectTimeAlert')); return; }
+        if (!isPlanGratuito && !newApt.servicios?.length) { alert(t('appointments.selectServiceAlert')); return; }
         if (newApt.fecha && isDateTimeInPast(newApt.fecha, newApt.hora)) {
-            alert('No se puede agendar una cita en una fecha u hora que ya pasó.');
+            alert(t('appointments.pastDateError'));
             return;
         }
         if (saving) return;
@@ -219,7 +230,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                         status: 'active',
                     });
                     const timeoutPromise = new Promise<never>((_, reject) =>
-                        setTimeout(() => reject(new Error('Tiempo de espera al crear/buscar cliente. Revisa tu conexión e intenta de nuevo.')), SAVE_TIMEOUT_MS)
+                        setTimeout(() => reject(new Error(t('appointments.clientSaveTimeout'))), SAVE_TIMEOUT_MS)
                     );
                     const client = await Promise.race([clientPromise, timeoutPromise]);                    finalClientId = client.id;
                     if (!clients.some(c => c.id === client.id)) setClients(prev => [...prev, client]);
@@ -232,7 +243,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         } else if (isNewClient) {
             if (!newClientName.trim() || !newClientPhone.trim()) {
                 setSaving(false);
-                alert('Ingrese nombre y teléfono del nuevo cliente.');
+                alert(t('appointments.enterNewClient'));
                 return;
             }
             try {                const clientPromise = DataService.addClientOrGetExisting({
@@ -246,7 +257,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                     status: 'active',
                 });
                 const timeoutPromise = new Promise<never>((_, reject) =>
-                    setTimeout(() => reject(new Error('Tiempo de espera al crear/buscar cliente. Revisa tu conexión e intenta de nuevo.')), SAVE_TIMEOUT_MS)
+                    setTimeout(() => reject(new Error(t('appointments.clientSaveTimeout'))), SAVE_TIMEOUT_MS)
                 );
                 const client = await Promise.race([clientPromise, timeoutPromise]);                finalClientId = client.id;
                 if (!clients.some(c => c.id === client.id)) setClients([...clients, client]);
@@ -259,16 +270,16 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         if (!finalClientId) {
             setSaving(false);
             if (userRole === 'cliente') {
-                alert('Ingresa tu número de teléfono abajo para confirmar la reserva.');
+                alert(t('appointments.enterPhoneToConfirm'));
             } else {
-                alert('Seleccione un cliente o agregue uno nuevo (nombre y teléfono).');
+                alert(t('appointments.selectOrAddClient'));
             }
             return;
         }
         const clientRecord = clients.find(c => c.id === finalClientId);
         if (clientRecord && !String(clientRecord.telefono ?? '').trim()) {
             setSaving(false);
-            alert('El cliente debe tener un número de teléfono para confirmar la cita. Edite el cliente o use "Buscar por teléfono".');
+            alert(t('appointments.clientNeedsPhone'));
             return;
         }
         const serviciosList = newApt.servicios ?? [];
@@ -285,13 +296,13 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         });
         if (overlaps) {
             setSaving(false);
-            alert(`No se puede agendar: la cita duraría ${duration} minutos y se solaparía con otra cita de ese barbero. Elige otra hora o menos servicios.`);
+            alert(t('appointments.overlapError', { duration }));
             return;
         }
         const posId = DataService.getActivePosId();
         if (posId == null) {
             setSaving(false);
-            alert('No hay sede activa. Selecciona una barbería o sede antes de agendar.');
+            alert(t('appointments.noActivePos'));
             return;
         }
         const aptData: Omit<Appointment, 'id'> = {
@@ -310,7 +321,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         try {
             const savePromise = DataService.addAppointment(aptData);
             const timeoutPromise = new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error('La conexión tardó demasiado. Revisa tu internet e intenta de nuevo.')), SAVE_TIMEOUT_MS)
+                setTimeout(() => reject(new Error(t('appointments.saveTimeout'))), SAVE_TIMEOUT_MS)
             );
             const saved = await Promise.race([savePromise, timeoutPromise]);
             setAppointments(prev => [...prev, saved]);
@@ -320,11 +331,11 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             setNewClientName('');
             setNewClientPhone('');
             setClientPhoneForBooking('');
-            alert('Cita agendada con éxito.');
+            alert(t('appointments.savedSuccess'));
             await loadData();
         } catch (err) {            console.error('Error al agendar cita:', err);
             const msg = err instanceof Error ? err.message : String(err);
-            alert(msg.includes('permiso') || msg.includes('conexión') || msg.includes('tardó demasiado') ? msg : `No se pudo guardar la cita. ${msg}`);
+            alert(msg.includes('permiso') || msg.includes('conexión') || msg.includes('tardó demasiado') ? msg : t('appointments.saveFailed', { message: msg }));
         } finally {
             setSaving(false);
         }
@@ -371,7 +382,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     };
 
     const deleteAppointment = async (id: number) => {
-        if (confirm('¿Eliminar cita?')) {
+        if (confirm(t('appointments.deleteConfirm'))) {
             setAppointments(prev => prev.filter(a => a.id !== id));
             await DataService.deleteAppointment(id);
             await loadData();
@@ -391,7 +402,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     const handleSearchByPhone = async () => {
         const trimmed = searchPhone.trim();
         if (trimmed.length < 6) {
-            alert('Ingrese al menos 6 dígitos para buscar.');
+            alert(t('appointments.searchMinDigits'));
             return;
         }
         setSearchAttempted(true);
@@ -497,7 +508,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     const handleSlotClick = (time: string, taken: boolean, past?: boolean) => {
         if (taken || past) return;
         if (atFreePlanLimit) {
-            alert(`Plan gratuito: solo puedes agendar ${FREE_PLAN_MONTHLY_LIMIT} citas al mes. Este mes ya tienes ${monthlyCount}. Actualiza tu plan para más citas.`);
+            alert(freePlanLimitAlert());
             return;
         }
         const current = newApt.servicios || [];
@@ -516,7 +527,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         return (
             <div className="flex flex-col items-center justify-center py-24 text-slate-500">
                 <Loader2 className="animate-spin mb-4" size={48} />
-                <p className="font-medium">Cargando citas...</p>
+                <p className="font-medium">{t('appointments.loading')}</p>
             </div>
         );
     }
@@ -524,14 +535,14 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     if (loadError) {
         return (
             <div className="flex flex-col items-center justify-center py-24 text-slate-600 max-w-md mx-auto text-center px-4">
-                <p className="font-medium mb-2">No se pudo cargar la agenda.</p>
-                <p className="text-sm text-slate-500 mb-6">Revisa tu conexión a internet e intenta de nuevo.</p>
+                <p className="font-medium mb-2">{t('appointments.loadFailed')}</p>
+                <p className="text-sm text-slate-500 mb-6">{t('common.connectionHintInternet')}</p>
                 <button
                     type="button"
                     onClick={() => loadData()}
                     className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 font-semibold px-6 py-3 rounded-xl transition-colors"
                 >
-                    Reintentar
+                    {t('common.retry')}
                 </button>
             </div>
         );
@@ -548,23 +559,23 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                     {currentBarberiaName && (
                         <div className="flex items-center gap-2 bg-[#ffd427]/20 border border-[#ffd427]/50 text-slate-800 px-4 py-3 rounded-xl">
                             <MapPin size={20} className="text-[#ffd427] flex-shrink-0" />
-                            <span className="font-semibold">Barbería:</span>
+                            <span className="font-semibold">{t('common.barbershopLabel')}</span>
                             <span>{currentBarberiaName}</span>
                         </div>
                     )}
                     {currentBarber && (
                         <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 text-slate-800 px-4 py-3 rounded-xl">
                             <User size={20} className="text-slate-500 flex-shrink-0" />
-                            <span className="font-semibold">Barbero:</span>
+                            <span className="font-semibold">{t('appointments.barberLabel')}</span>
                             <span>{currentBarber.name}</span>
                         </div>
                     )}
                 </div>
                 <div className="flex justify-between items-center flex-wrap gap-2">
-                    <h2 className="text-2xl font-bold text-slate-800">Reservar Cita</h2>
+                    <h2 className="text-2xl font-bold text-slate-800">{t('appointments.bookTitle')}</h2>
                     {isPlanGratuito && (
                         <span className="text-sm font-medium text-slate-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
-                            Citas este mes: <strong>{monthlyCount} / {FREE_PLAN_MONTHLY_LIMIT}</strong>
+                            {t('appointments.monthlyCount', { count: monthlyCount, limit: FREE_PLAN_MONTHLY_LIMIT })}
                         </span>
                     )}
                 </div>
@@ -573,7 +584,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                     <div className="flex flex-col md:flex-row gap-6 mb-8">
                         {!isPlanSolo && (
                             <div className="flex-1">
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Seleccionar Barbero</label>
+                                <label className="block text-sm font-medium text-slate-700 mb-2">{t('appointments.selectBarber')}</label>
                                 <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
                                     {barbers.map(b => (
                                         <button 
@@ -590,7 +601,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                         >
                                             <span>{b.name}</span>
                                             <span className={`text-[10px] mt-1 ${!b.active ? 'text-slate-400' : selectedBarberForView === b.id ? 'text-slate-800' : 'text-green-600'}`}>
-                                                {b.active ? 'En línea' : 'No disponible'}
+                                                {b.active ? t('appointments.online') : t('appointments.unavailable')}
                                             </span>
                                         </button>
                                     ))}
@@ -598,7 +609,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                             </div>
                         )}
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Seleccionar Fecha</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">{t('appointments.selectDate')}</label>
                             <input 
                                 type="date" 
                                 min={todayStr}
@@ -611,7 +622,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
 
                     {currentBarber && clientBarberGallery.length > 0 && (
                         <div className="mb-6">
-                            <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-1"><ImageIcon size={18} /> Trabajos de {currentBarber.name}</h3>
+                            <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-1"><ImageIcon size={18} /> {t('appointments.worksOf', { name: currentBarber.name })}</h3>
                             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                                 {clientBarberGallery.map((p) => (
                                     <button key={p.id} type="button" className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border border-slate-200 shadow-sm hover:ring-2 hover:ring-[#ffd427] focus:outline-none" onClick={() => window.open(p.imageUrl, '_blank')}>
@@ -623,7 +634,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                     )}
 
                     <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
-                        <Clock className="mr-2" size={20} /> Horarios Disponibles
+                        <Clock className="mr-2" size={20} /> {t('appointments.availableSlots')}
                     </h3>
                     
                     {currentBarber?.active ? (
@@ -644,7 +655,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                 >
                                     {slot.time}
                                     <span className="block text-xs mt-1 font-normal opacity-75">
-                                        {slot.taken ? 'Ocupado' : slot.past ? 'Pasado' : atFreePlanLimit ? 'Límite' : 'Libre'}
+                                        {slot.taken ? t('appointments.occupied') : slot.past ? t('appointments.past') : atFreePlanLimit ? t('appointments.limit') : t('appointments.free')}
                                     </span>
                                 </button>
                             );})}
@@ -653,15 +664,15 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                         <div className="mt-8 pt-6 border-t border-slate-100">
                             <div className="flex gap-4 text-sm text-slate-500">
                                 <div className="flex items-center"><div className="w-3 h-3 bg-yellow-50 border border-yellow-200 rounded mr-2"></div> Disponible</div>
-                                <div className="flex items-center"><div className="w-3 h-3 bg-slate-100 rounded mr-2"></div> Ocupado</div>
+                                <div className="flex items-center"><div className="w-3 h-3 bg-slate-100 rounded mr-2"></div> {t('appointments.occupied')}</div>
                             </div>
                         </div>
                         </>
                     ) : (
                         <div className="bg-slate-50 border border-slate-100 rounded-lg p-8 text-center text-slate-500">
                             <User className="mx-auto mb-2 text-slate-300" size={32} />
-                            <p>El barbero seleccionado no está disponible en este momento.</p>
-                            <p className="text-sm mt-1">Por favor selecciona otro barbero activo.</p>
+                            <p>{t('appointments.barberUnavailable')}</p>
+                            <p className="text-sm mt-1">{t('appointments.selectAnotherBarber')}</p>
                         </div>
                     )}
                 </div>
@@ -671,7 +682,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
                         <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
                             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                                <h3 className="text-xl font-bold text-slate-800">Confirmar Reserva</h3>
+                                <h3 className="text-xl font-bold text-slate-800">{t('appointments.confirmBooking')}</h3>
                                 <button onClick={() => { setShowModal(false); setClientPhoneForBooking(''); setNewApt(prev => ({ ...prev, servicios: [] })); }} className="text-slate-400 hover:text-slate-600"><X size={24}/></button>
                             </div>
                             <div className="p-6 space-y-4">
@@ -685,7 +696,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                 </div>
                                 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-2">Selecciona tus Servicios</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">{t('appointments.selectServices')}</label>
                                     <div className="space-y-2 border border-slate-200 rounded-lg p-2 max-h-48 overflow-y-auto">
                                         {servicesForBarber.map(s => (
                                             <label key={s.id} className="flex items-center space-x-2 p-2 rounded hover:bg-slate-50 cursor-pointer transition-colors">
@@ -706,23 +717,23 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                         <p className="text-xs text-red-500 mt-1">* Selecciona al menos un servicio</p>
                                     )}
                                     {isPlanGratuito && (
-                                        <p className="text-xs text-slate-500 mt-1">Plan gratuito: los servicios son opcionales.</p>
+                                        <p className="text-xs text-slate-500 mt-1">{t('appointments.freePlanOptionalServices')}</p>
                                     )}
                                 </div>
                                 {/* Cliente: mostrar nombre y, si no está en la barbería, pedir teléfono */}
                                 {userRole === 'cliente' && (
                                     <div className="space-y-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                        <p className="text-sm font-medium text-slate-700">Datos para la reserva</p>
+                                        <p className="text-sm font-medium text-slate-700">{t('appointments.bookingDetails')}</p>
                                         {newApt.clienteId ? (
-                                            <p className="text-slate-600 text-sm">Reservando a nombre de: <strong>{clients.find(c => c.id === newApt.clienteId)?.nombre}</strong></p>
+                                            <p className="text-slate-600 text-sm">{t('appointments.bookingFor')} <strong>{clients.find(c => c.id === newApt.clienteId)?.nombre}</strong></p>
                                         ) : (
                                             <>
                                                 <div>
-                                                    <label className="block text-xs text-slate-500 mb-1">Tu nombre</label>
+                                                    <label className="block text-xs text-slate-500 mb-1">{t('guestBooking.yourName')}</label>
                                                     <p className="font-medium text-slate-800">{DataService.getCurrentUser()?.name || 'Cliente'}</p>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium text-slate-700 mb-1">Tu teléfono (requerido para confirmar) <span className="text-red-500">*</span></label>
+                                                    <label className="block text-sm font-medium text-slate-700 mb-1">{t('appointments.phoneRequiredConfirm')} <span className="text-red-500">*</span></label>
                                                     <input
                                                         type="tel"
                                                         className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-[#ffd427]"
@@ -737,23 +748,23 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                 )}
                                 {userRole !== 'cliente' && (
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Tu Nombre (Confirmación)</label>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">{t('appointments.yourNameConfirm')}</label>
                                         <select className="w-full border border-slate-300 rounded-lg p-2" value={newApt.clienteId || ''} onChange={e => setNewApt({...newApt, clienteId: Number(e.target.value)})}>
-                                            <option value="">Selecciona tu perfil</option>
+                                            <option value="">{t('appointments.selectProfile')}</option>
                                             {activeClients.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                                         </select>
                                     </div>
                                 )}
                             </div>
                             <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end space-x-3">
-                                <button onClick={() => { setShowModal(false); setClientPhoneForBooking(''); }} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">Cancelar</button>
+                                <button onClick={() => { setShowModal(false); setClientPhoneForBooking(''); }} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">{t('common.cancel')}</button>
                                 <button 
                                     type="button"
                                     onClick={handleSave}
                                     disabled={saving}
                                     className="px-6 py-2 bg-[#ffd427] text-slate-900 font-medium rounded-lg hover:bg-[#e6be23] shadow-lg shadow-yellow-500/30 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
                                 >
-                                    {saving ? (<><Loader2 className="animate-spin" size={18} /> Guardando...</>) : 'Confirmar Cita'}
+                                    {saving ? (<><Loader2 className="animate-spin" size={18} /> {t('appointments.confirming')}</>) : t('appointments.confirmAppointment')}
                                 </button>
                             </div>
                         </div>
@@ -774,10 +785,10 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             )}
             <div className="flex justify-between items-center flex-wrap gap-3">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <h2 className="text-2xl font-bold text-slate-800">Agenda de Citas</h2>
+                    <h2 className="text-2xl font-bold text-slate-800">{t('appointments.scheduleTitle')}</h2>
                     {isPlanGratuito && (
                         <span className="text-sm font-medium text-slate-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
-                            Citas este mes: <strong>{monthlyCount} / {FREE_PLAN_MONTHLY_LIMIT}</strong>
+                            {t('appointments.monthlyCount', { count: monthlyCount, limit: FREE_PLAN_MONTHLY_LIMIT })}
                         </span>
                     )}
                 </div>
@@ -790,7 +801,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                         title="Actualizar lista de citas"
                     >
                         <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-                        <span className="hidden sm:inline">Actualizar</span>
+                        <span className="hidden sm:inline">{t('common.refresh')}</span>
                     </button>
                     <button 
                         onClick={() => handlePrint({
@@ -806,23 +817,23 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                         className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors shadow-sm"
                     >
                         <Printer size={18} />
-                        <span className="hidden sm:inline">Imprimir</span>
+                        <span className="hidden sm:inline">{t('common.print')}</span>
                     </button>
                     <button 
                         onClick={() => { setNewApt(prev => ({ ...prev, servicios: [] })); setShowModal(true); }}
                         disabled={atFreePlanLimit}
-                        title={atFreePlanLimit ? `Límite del plan gratuito (${FREE_PLAN_MONTHLY_LIMIT} citas/mes). Actualiza tu plan para más.` : undefined}
+                        title={atFreePlanLimit ? t('appointments.freePlanLimitTitle', { limit: FREE_PLAN_MONTHLY_LIMIT }) : undefined}
                         className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2 rounded-lg font-bold flex items-center space-x-2 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                         <Calendar size={18} />
-                        <span className="hidden sm:inline">Nueva Cita</span>
+                        <span className="hidden sm:inline">{t('appointments.newAppointment')}</span>
                     </button>
                 </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                 <div className="flex items-center space-x-2">
-                    <label className="font-medium text-slate-700">Filtrar Fecha:</label>
+                    <label className="font-medium text-slate-700">{t('appointments.filterDate')}</label>
                     <input 
                         type="date" 
                         value={selectedDate}
@@ -831,14 +842,14 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                     />
                 </div>
                 <div className="flex items-center gap-2">
-                    <label className="font-medium text-slate-700">Ordenar:</label>
+                    <label className="font-medium text-slate-700">{t('appointments.sortBy')}</label>
                     <select 
                         value={sortBy} 
                         onChange={(e) => setSortBy(e.target.value as 'hora' | 'estado')}
                         className="border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427] text-slate-700"
                     >
-                        <option value="hora">Por hora</option>
-                        <option value="estado">Por tipo (estado)</option>
+                        <option value="hora">{t('appointments.sortByTime')}</option>
+                        <option value="estado">{t('appointments.sortByStatus')}</option>
                     </select>
                 </div>
             </div>
@@ -847,7 +858,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                 {sortedAppointments.length === 0 ? (
                     <div className="col-span-full py-12 text-center text-slate-400 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
                         <Calendar size={48} className="mx-auto mb-3 opacity-50" />
-                        <p>No hay citas programadas para este día</p>
+                        <p>{t('appointments.noAppointmentsDay')}</p>
                     </div>
                 ) : (
                     sortedAppointments.map(apt => {
@@ -862,7 +873,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                         // Here we just use the clean number. If it lacks country code, WA might fail or open blank.
                         // Ideally prompts for country code.
                         const waLink = cleanPhone.length > 7
-                            ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hola ${client?.nombre}, le escribimos de BarberShow para confirmar su cita el ${apt.fecha} a las ${apt.hora}.`)}`
+                            ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(t('appointments.waConfirmMessage', { name: client?.nombre ?? '', date: apt.fecha, time: apt.hora }))}`
                             : '#';
 
                         return (
@@ -877,20 +888,20 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                         apt.estado === 'completada' ? 'bg-green-100 text-green-700' :
                                         'bg-red-100 text-red-700'
                                     }`}>
-                                        {apt.estado}
+                                        {statusLabel(apt.estado)}
                                     </span>
                                 </div>
                                 <div className="space-y-2 mb-4">
                                     <div className="flex items-center text-slate-700">
                                         <User size={16} className="mr-2 text-slate-400" />
-                                        <span className="font-medium">{client?.nombre || 'Cliente desconocido (eliminado o sin registro)'}</span>
+                                        <span className="font-medium">{client?.nombre || t('appointments.unknownClient')}</span>
                                     </div>
                                     <div className="flex items-center text-slate-600 text-sm">
                                         <Scissors size={16} className="mr-2 text-slate-400" />
-                                        <span>{apt.servicios?.length ? apt.servicios.map(s => s.name).join(', ') : 'Sin servicios'}</span>
+                                        <span>{apt.servicios?.length ? apt.servicios.map(s => s.name).join(', ') : t('appointments.noServices')}</span>
                                     </div>
                                     <div className="text-sm text-slate-500">
-                                        Barbero: <span className="text-slate-700 font-medium">{barber?.name}</span>
+                                        {t('appointments.barberLabel')} <span className="text-slate-700 font-medium">{barber?.name}</span>
                                     </div>
                                 </div>
                                 <div className="pt-3 border-t border-slate-100 flex justify-end space-x-2">
@@ -901,22 +912,22 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                             target="_blank" 
                                             rel="noopener noreferrer"
                                             className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-green-100"
-                                            title="Enviar WhatsApp"
+                                            title={t('appointments.sendWhatsApp')}
                                         >
                                             <MessageCircle size={18} />
                                         </a>
                                     )}
                                     {apt.estado === 'confirmada' && (
                                         <>
-                                            <button onClick={() => handleCompleteAndGoToBilling(apt)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-transparent hover:border-green-100" title="Completar e ir a facturación">
+                                            <button onClick={() => handleCompleteAndGoToBilling(apt)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-transparent hover:border-green-100" title={t('appointments.completeAndBill')}>
                                                 <Check size={18} />
                                             </button>
-                                            <button onClick={() => updateStatus(apt.id, 'cancelada')} className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-transparent hover:border-amber-100" title="Cancelar">
+                                            <button onClick={() => updateStatus(apt.id, 'cancelada')} className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-transparent hover:border-amber-100" title={t('appointments.cancelAppointment')}>
                                                 <X size={18} />
                                             </button>
                                         </>
                                     )}
-                                    <button onClick={() => deleteAppointment(apt.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100" title="Eliminar">
+                                    <button onClick={() => deleteAppointment(apt.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100" title={t('common.delete')}>
                                         <Trash2 size={18} />
                                     </button>
                                 </div>
@@ -931,22 +942,22 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                            <h3 className="text-xl font-bold text-slate-800">Nueva Cita</h3>
+                            <h3 className="text-xl font-bold text-slate-800">{t('appointments.newAppointment')}</h3>
                             <button onClick={() => { setShowModal(false); setIsNewClient(false); setNewClientName(''); setNewClientPhone(''); setSearchPhone(''); setClientFoundByPhone(null); setSearchAttempted(false); setNewApt(prev => ({ ...prev, servicios: [] })); }} className="text-slate-400 hover:text-slate-600"><X size={24}/></button>
                         </div>
                         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Fecha</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.date')}</label>
                                     <input type="date" min={todayStr} className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-[#ffd427]" value={newApt.fecha} onChange={e => setNewApt({...newApt, fecha: e.target.value})} />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Hora</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.time')}</label>
                                     <input type="time" min={newApt.fecha === todayStr ? minTimeToday : undefined} className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-[#ffd427]" value={newApt.hora || ''} onChange={e => setNewApt({...newApt, hora: e.target.value})} />
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Buscar cliente por teléfono (ya en la base de datos)</label>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">{t('appointments.searchByPhone')}</label>
                                 <div className="flex gap-2">
                                     <input
                                         type="tel"
@@ -956,26 +967,26 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                         onChange={e => setSearchPhone(e.target.value)}
                                         onKeyDown={e => e.key === 'Enter' && handleSearchByPhone()}
                                     />
-                                    <button type="button" onClick={handleSearchByPhone} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium text-sm whitespace-nowrap">Buscar</button>
+                                    <button type="button" onClick={handleSearchByPhone} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium text-sm whitespace-nowrap">{t('common.search')}</button>
                                 </div>
                                 {clientFoundByPhone && (
                                     <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex flex-wrap items-center justify-between gap-2">
                                         <div>
-                                            <span className="font-medium text-green-800">Cliente encontrado: {clientFoundByPhone.nombre}</span>
-                                            <span className="text-green-700"> – {clientFoundByPhone.telefono || 'Sin teléfono'}</span>
+                                            <span className="font-medium text-green-800">{t('appointments.clientFound', { name: clientFoundByPhone.nombre })}</span>
+                                            <span className="text-green-700"> – {clientFoundByPhone.telefono || t('common.noPhone')}</span>
                                         </div>
                                         <div className="flex gap-2">
-                                            <button type="button" onClick={() => handleUseClientFound(clientFoundByPhone)} className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">Usar este cliente</button>
-                                            <button type="button" onClick={() => { setClientFoundByPhone(null); setSearchPhone(''); setSearchAttempted(false); }} className="px-3 py-1.5 text-slate-600 hover:bg-slate-200 rounded-lg text-sm">Buscar otro</button>
+                                            <button type="button" onClick={() => handleUseClientFound(clientFoundByPhone)} className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">{t('appointments.useThisClient')}</button>
+                                            <button type="button" onClick={() => { setClientFoundByPhone(null); setSearchPhone(''); setSearchAttempted(false); }} className="px-3 py-1.5 text-slate-600 hover:bg-slate-200 rounded-lg text-sm">{t('appointments.searchAnother')}</button>
                                         </div>
                                     </div>
                                 )}
                                 {searchAttempted && !clientFoundByPhone && searchPhone.trim().length >= 6 && (
-                                    <p className="text-sm text-slate-500">No encontrado con ese teléfono. Puede agregar como nuevo cliente abajo.</p>
+                                    <p className="text-sm text-slate-500">{t('appointments.notFoundAddNew')}</p>
                                 )}
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Cliente</label>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">{t('appointments.client')}</label>
                                 {!isNewClient ? (
                                     <>
                                         <select
@@ -986,13 +997,13 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                                 setNewApt({ ...newApt, clienteId: val ? Number(val) : undefined });
                                             }}
                                         >
-                                            <option value="">Seleccionar Cliente</option>
-                                            {activeClients.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.telefono || 'Sin teléfono'}</option>)}
+                                            <option value="">{t('appointments.selectClient')}</option>
+                                            {activeClients.map(c => <option key={c.id} value={c.id}>{c.nombre} – {c.telefono || t('common.noPhone')}</option>)}
                                         </select>
                                         {newApt.clienteId && (() => {
                                             const sel = clients.find(c => c.id === newApt.clienteId);
                                             return sel && !String(sel.telefono ?? '').trim() ? (
-                                                <p className="mt-1 text-amber-600 text-sm">Este cliente no tiene teléfono. Agregue uno en Gestión de Clientes o busque por otro.</p>
+                                                <p className="mt-1 text-amber-600 text-sm">{t('appointments.clientNoPhone')}</p>
                                             ) : null;
                                         })()}
                                         <button
@@ -1007,7 +1018,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                 ) : (
                                     <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-sm font-medium text-amber-800">Cliente nuevo (sin registro)</span>
+                                            <span className="text-sm font-medium text-amber-800">{t('appointments.newClientWalkin')}</span>
                                             <button
                                                 type="button"
                                                 onClick={() => { setIsNewClient(false); setNewClientName(''); setNewClientPhone(''); }}
@@ -1018,7 +1029,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                         </div>
                                         <div className="grid grid-cols-2 gap-3">
                                             <div>
-                                                <label className="block text-xs font-medium text-amber-800 mb-1">Nombre</label>
+                                                <label className="block text-xs font-medium text-amber-800 mb-1">{t('common.name')}</label>
                                                 <input
                                                     type="text"
                                                     className="w-full border border-amber-300 rounded-lg p-2 text-sm"
@@ -1028,7 +1039,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-medium text-amber-800 mb-1">Teléfono</label>
+                                                <label className="block text-xs font-medium text-amber-800 mb-1">{t('common.phone')}</label>
                                                 <input
                                                     type="tel"
                                                     className="w-full border border-amber-300 rounded-lg p-2 text-sm"
@@ -1043,14 +1054,14 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                             </div>
                             {!isPlanSolo && (
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Barbero</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.barber')}</label>
                                     <select className="w-full border border-slate-300 rounded-lg p-2" value={newApt.barberoId || ''} onChange={e => {
                                         const newBarberoId = Number(e.target.value);
                                         const current = newApt.servicios || [];
                                         const soloDelBarbero = current.filter((s) => s.barberId == null || s.barberId === newBarberoId);
                                         setNewApt({ ...newApt, barberoId: newBarberoId, servicios: soloDelBarbero });
                                     }}>
-                                        <option value="">Seleccionar Barbero</option>
+                                        <option value="">{t('appointments.selectBarber')}</option>
                                         {barbers.map(b => (
                                             <option key={b.id} value={b.id} disabled={!b.active}>
                                                 {b.name} {!b.active && '(No disponible)'}
@@ -1060,7 +1071,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                 </div>
                             )}
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Servicios</label>
+                                <label className="block text-sm font-medium text-slate-700 mb-2">{t('appointments.services')}</label>
                                 <div className="space-y-2 border border-slate-200 p-2 rounded-lg max-h-40 overflow-y-auto">
                                     {servicesForBarber.map(s => (
                                         <label key={s.id} className="flex items-center space-x-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
@@ -1080,9 +1091,9 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                             </div>
                         </div>
                         <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end space-x-3">
-                            <button onClick={() => { setShowModal(false); setIsNewClient(false); setNewClientName(''); setNewClientPhone(''); setSearchPhone(''); setClientFoundByPhone(null); setSearchAttempted(false); }} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">Cancelar</button>
+                            <button onClick={() => { setShowModal(false); setIsNewClient(false); setNewClientName(''); setNewClientPhone(''); setSearchPhone(''); setClientFoundByPhone(null); setSearchAttempted(false); }} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">{t('common.cancel')}</button>
                             <button type="button" onClick={handleSave} disabled={saving} className="px-6 py-2 bg-[#ffd427] text-slate-900 font-bold rounded-lg hover:bg-[#e6be23] transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2">
-                                {saving ? (<><Loader2 className="animate-spin" size={18} /> Guardando...</>) : 'Guardar Cita'}
+                                {saving ? (<><Loader2 className="animate-spin" size={18} /> {t('common.saving')}</>) : t('appointments.saveAppointment')}
                             </button>
                         </div>
                     </div>

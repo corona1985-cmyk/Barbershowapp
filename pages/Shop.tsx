@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { DataService, generateUniqueId } from '../services/data';
 import { Product, CartItem, Sale } from '../types';
 import { Search, ShoppingBag, Plus, Minus, Trash2, CheckCircle, Package } from 'lucide-react';
+import { useTranslation } from '../i18n';
 
 const Shop: React.FC = () => {
+    const { t, formatTime } = useTranslation();
     const [products, setProducts] = useState<Product[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [cart, setCart] = useState<CartItem[]>([]);
@@ -19,7 +21,7 @@ const Shop: React.FC = () => {
     const handleAddToCart = (product: Product) => {
         if (product.stock <= 0) return;
         const updatedCart = DataService.addToCart(product);
-        setCart([...updatedCart]); // Trigger re-render
+        setCart([...updatedCart]);
     };
 
     const handleUpdateQuantity = (id: number, quantity: number) => {
@@ -34,7 +36,7 @@ const Shop: React.FC = () => {
         if (cart.length === 0) return;
         const activePosId = DataService.getActivePosId();
         if (activePosId == null) {
-            alert('No hay barbería seleccionada. Entra a una barbería desde Descubrir Barberías para poder comprar.');
+            alert(t('shop.noShopSelected'));
             return;
         }
         try {
@@ -63,8 +65,8 @@ const Shop: React.FC = () => {
                 iva: tax,
                 total,
                 fecha: new Date().toISOString().split('T')[0],
-                hora: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-                notas: 'Pedido Online - Pendiente de recojo',
+                hora: formatTime(new Date(), { hour: '2-digit', minute: '2-digit' }),
+                notas: t('shop.onlineOrderNote'),
                 estado: 'completada'
             };
             const updatedProducts = [...products];
@@ -88,7 +90,7 @@ const Shop: React.FC = () => {
             setShowSuccess(true);
             setTimeout(() => setShowSuccess(false), 3000);
         } catch (err) {
-            alert(err instanceof Error ? err.message : 'No se pudo completar el pedido. Intenta de nuevo.');
+            alert(err instanceof Error ? err.message : t('shop.checkoutFailed'));
         }
     };
 
@@ -97,14 +99,13 @@ const Shop: React.FC = () => {
 
     return (
         <div className="flex flex-col lg:flex-row min-h-0 lg:h-[calc(100vh-8rem)] gap-4 md:gap-6">
-            {/* Product Grid */}
             <div className="flex-1 flex flex-col min-h-[280px] lg:min-h-0 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-4 border-b border-slate-200 flex justify-between items-center">
                     <div className="relative flex-1 max-w-md">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
                         <input 
                             type="text" 
-                            placeholder="Buscar productos..." 
+                            placeholder={t('shop.searchProducts')}
                             className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -145,9 +146,9 @@ const Shop: React.FC = () => {
                                     </div>
                                     <div className="mt-2 text-xs">
                                         {product.stock > 0 ? (
-                                            <span className="text-green-600 font-medium">{product.stock} disponibles</span>
+                                            <span className="text-green-600 font-medium">{t('shop.available', { count: product.stock })}</span>
                                         ) : (
-                                            <span className="text-red-500 font-medium">Agotado</span>
+                                            <span className="text-red-500 font-medium">{t('shop.outOfStock')}</span>
                                         )}
                                     </div>
                                 </div>
@@ -157,14 +158,13 @@ const Shop: React.FC = () => {
                 </div>
             </div>
 
-            {/* Cart Sidebar (Desktop: Fixed Right, Mobile: Drawer/Modal) */}
             <div className={`
                 fixed inset-y-0 right-0 w-80 bg-white shadow-2xl transform transition-transform duration-300 z-50 lg:relative lg:transform-none lg:w-96 lg:shadow-sm lg:border lg:border-slate-200 lg:rounded-xl lg:flex lg:flex-col
                 ${showCart ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
             `}>
                 <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                     <h2 className="font-bold text-slate-800 flex items-center">
-                        <ShoppingBag className="mr-2" size={20} /> Mi Carrito
+                        <ShoppingBag className="mr-2" size={20} /> {t('shop.myCart')}
                     </h2>
                     <button onClick={() => setShowCart(false)} className="lg:hidden text-slate-400">
                         <Trash2 size={20} /> 
@@ -175,7 +175,7 @@ const Shop: React.FC = () => {
                     {cart.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-slate-400">
                             <ShoppingBag size={48} className="mb-4 opacity-50" />
-                            <p>Tu carrito está vacío</p>
+                            <p>{t('shop.emptyCart')}</p>
                         </div>
                     ) : (
                         cart.map(item => (
@@ -199,7 +199,7 @@ const Shop: React.FC = () => {
 
                 <div className="p-4 border-t border-slate-200 bg-slate-50">
                     <div className="flex justify-between items-center mb-4">
-                        <span className="text-slate-600">Total a Pagar</span>
+                        <span className="text-slate-600">{t('shop.totalToPay')}</span>
                         <span className="text-2xl font-bold text-slate-900">${cartTotal.toFixed(2)}</span>
                     </div>
                     <button 
@@ -211,21 +211,20 @@ const Shop: React.FC = () => {
                             : 'bg-slate-300 cursor-not-allowed'
                         }`}
                     >
-                        Realizar Pedido
+                        {t('shop.placeOrder')}
                     </button>
                 </div>
             </div>
 
-            {/* Success Modal */}
             {showSuccess && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] backdrop-blur-sm">
                     <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center animate-in fade-in zoom-in duration-300">
                         <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
                             <CheckCircle size={40} />
                         </div>
-                        <h3 className="text-2xl font-bold text-slate-800 mb-2">¡Pedido Realizado!</h3>
+                        <h3 className="text-2xl font-bold text-slate-800 mb-2">{t('shop.orderSuccess')}</h3>
                         <p className="text-slate-500 mb-6 text-center">
-                            Tu orden ha sido procesada.<br/>
+                            {t('shop.orderProcessed')}<br/>
                             <span className="font-mono text-xs font-bold bg-slate-100 px-2 py-1 rounded mt-2 inline-block">#{lastOrderId}</span>
                         </p>
                     </div>

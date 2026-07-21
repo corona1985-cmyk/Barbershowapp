@@ -19,67 +19,32 @@ export type TierOption = {
     icon: React.ReactNode;
 };
 
-/** Planes con precios (USD/mes). Gratuito = solo ver citas, 100/mes. */
-export const TIER_OPTIONS: TierOption[] = [
-    {
-        value: 'gratuito',
-        label: 'Plan Gratuito',
-        description: 'Solo ver y gestionar citas. Hasta 100 citas al mes.',
-        price: 0,
-        benefits: [
-            'Solo agenda de citas: ver citas agendadas',
-            'Contador de citas mensuales (máximo 100 por mes)',
-            'Sin ventas POS, ni clientes, ni reportes ni inventario',
-            'Ideal para probar la app o negocios muy pequeños',
-        ],
-        icon: <Scissors size={32} className="text-slate-600" />,
-    },
-    {
-        value: 'solo',
-        label: 'Plan Solo',
-        description: 'Una persona, un local.',
-        price: 14.95,
-        benefits: [
-            'Interfaz simple: todo es "mi negocio", sin sedes ni lista de barberos',
-            'Menú reducido: Dashboard, Citas, Clientes, Ventas (POS), Configuración básica',
-            'Citas y ventas directas: no eliges barbero; la cita o venta es contigo',
-            'Reportes básicos: resumen de ventas y citas',
-            'Opcional: inventario simple (productos que vendes)',
-            'Ideal para: barbero independiente que trabaja solo',
-        ],
-        icon: <User size={32} className="text-slate-700" />,
-    },
-    {
-        value: 'barberia',
-        label: 'Plan Barbería',
-        description: 'Varios barberos, una sede.',
-        price: 19.95,
-        benefits: [
-            'Todo lo del plan Solo',
-            'Varios barberos: alta y baja de barberos; asignar citas y ventas por barbero',
-            'Agenda por barbero: ver y gestionar la agenda de cada profesional',
-            'Reportes por barbero: ver rendimiento y ventas de cada uno',
-            'Una sede: un solo local; selector de barbero, no de sede',
-            'Control de equipo: gestionar quién hace qué (citas, ventas)',
-            'Opcional: inventario, finanzas, Consola WhatsApp, administración de usuarios',
-            'Ideal para: barbería con 2–4 barberos en una sola ubicación',
-        ],
-        icon: <Users size={32} className="text-slate-700" />,
-    },
-    {
-        value: 'multisede',
-        label: 'Plan Multi-Sede',
-        description: 'Varias ubicaciones o cadena.',
-        price: 29.95,
-        benefits: [
-            'Todo lo del plan Barbería',
-            'Varias sedes: crear y gestionar múltiples ubicaciones',
-            'Selector de sede: cambiar de sede para ver agenda, barberos y reportes',
-            'Reportes por sede: comparar rendimiento entre ubicaciones',
-            'Administración global: vista centralizada; control por sede',
-            'Sin límite de sedes ni barberos: escalable para cadenas',
-            'Ideal para: cadenas o negocios con varias barberías',
-        ],
-        icon: <MapPin size={32} className="text-slate-700" />,
-    },
+const PLAN_BENEFIT_COUNTS: Record<AccountTier, number> = {
+    gratuito: 4,
+    solo: 6,
+    barberia: 8,
+    multisede: 7,
+};
+
+const TIER_DEFS: { value: AccountTier; price: number; icon: React.ReactNode }[] = [
+    { value: 'gratuito', price: 0, icon: <Scissors size={32} className="text-slate-600" /> },
+    { value: 'solo', price: 14.95, icon: <User size={32} className="text-slate-700" /> },
+    { value: 'barberia', price: 19.95, icon: <Users size={32} className="text-slate-700" /> },
+    { value: 'multisede', price: 29.95, icon: <MapPin size={32} className="text-slate-700" /> },
 ];
+
+export function getTierOptions(t: (key: string) => string): TierOption[] {
+    return TIER_DEFS.map((def) => ({
+        value: def.value,
+        price: def.price,
+        icon: def.icon,
+        label: t(`plans.${def.value}.label`),
+        description: t(`plans.${def.value}.description`),
+        benefits: Array.from({ length: PLAN_BENEFIT_COUNTS[def.value] }, (_, i) =>
+            t(`plans.${def.value}.benefit${i}`),
+        ),
+    }));
+}
+
+/** @deprecated Use getTierOptions(t) inside components */
+export const TIER_OPTIONS: TierOption[] = [];

@@ -4,6 +4,8 @@ import { Client } from '../types';
 import { User, Upload, ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
 import { ViewState } from '../types';
 import DeactivateAccountSection from '../components/account/DeactivateAccountSection';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useTranslation } from '../i18n';
 
 interface ClientProfileProps {
   onChangeView: (view: ViewState) => void;
@@ -12,6 +14,7 @@ interface ClientProfileProps {
 }
 
 const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUpdated, onAccountDeactivated }) => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -27,7 +30,7 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
     try {
       const user = DataService.getCurrentUser();
       if (!user) {
-        setError('No hay sesión iniciada.');
+        setError(t('errors.noSession'));
         setLoading(false);
         return;
       }
@@ -52,7 +55,7 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
       setTelefono(String(c.telefono ?? ''));
       setPhotoUrl(c.photoUrl || '');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al cargar el perfil.');
+      setError(e instanceof Error ? e.message : t('errors.loadProfileFailed'));
     } finally {
       setLoading(false);
     }
@@ -127,7 +130,7 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
       onProfileUpdated?.();
       setTimeout(() => setSuccess(false), 3000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al guardar.');
+      setError(e instanceof Error ? e.message : t('errors.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -137,7 +140,7 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
         <Loader2 size={32} className="animate-spin text-[#ffd427]" />
-        <p className="text-slate-600">Cargando tu perfil...</p>
+        <p className="text-slate-600">{t('profile.loading')}</p>
       </div>
     );
   }
@@ -147,7 +150,7 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
       <div className="p-6 max-w-md mx-auto">
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-center">{error}</div>
         <button type="button" onClick={() => onChangeView('dashboard')} className="mt-4 flex items-center gap-2 text-slate-600 hover:text-slate-900">
-          <ArrowLeft size={18} /> Volver
+          <ArrowLeft size={18} /> {t('common.back')}
         </button>
       </div>
     );
@@ -162,13 +165,15 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
         onClick={() => onChangeView(isCliente ? 'appointments' : 'dashboard')}
         className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-6"
       >
-        <ArrowLeft size={18} /> Volver
+        <ArrowLeft size={18} /> {t('common.back')}
       </button>
+
+      <LanguageSwitcher className="mb-6" />
 
       <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
         <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-8 text-center">
-          <h1 className="text-xl font-bold text-white">Mi perfil</h1>
-          <p className="text-slate-300 text-sm mt-1">Edita tu nombre, teléfono y foto</p>
+          <h1 className="text-xl font-bold text-white">{t('profile.title')}</h1>
+          <p className="text-slate-300 text-sm mt-1">{t('profile.subtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -177,25 +182,24 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
           )}
           {success && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-green-700 text-sm flex items-center gap-2">
-              <CheckCircle size={18} /> Perfil guardado correctamente.
+              <CheckCircle size={18} /> {t('profile.saved')}
             </div>
           )}
 
           {!isCliente && (
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-slate-600 text-sm mb-2">
-              <p className="font-medium text-slate-700">Cuenta de administrador</p>
-              <p className="mt-1">Usuario: <strong>{DataService.getCurrentUser()?.username}</strong></p>
+              <p className="font-medium text-slate-700">{t('profile.adminAccount')}</p>
+              <p className="mt-1">{t('profile.adminUserLabel')} <strong>{DataService.getCurrentUser()?.username}</strong></p>
             </div>
           )}
 
-          {/* Foto de perfil (todos) */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Foto de perfil</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">{t('profile.photoLabel')}</label>
             <div className="flex flex-col sm:flex-row items-center gap-4">
               <div className="relative group">
                 <div className="w-24 h-24 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border-2 border-slate-200 shrink-0">
                   {photoUrl ? (
-                    <img src={photoUrl} alt="Tu foto" className="w-full h-full object-cover" />
+                    <img src={photoUrl} alt={t('profile.photoAlt')} className="w-full h-full object-cover" />
                   ) : (
                     <User size={40} className="text-slate-400" />
                   )}
@@ -209,17 +213,17 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
                 <input
                   type="url"
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ffd427] text-sm"
-                  placeholder="O pega una URL de imagen..."
+                  placeholder={t('profile.photoUrlPlaceholder')}
                   value={photoUrl}
                   onChange={(e) => setPhotoUrl(e.target.value)}
                 />
-                <p className="text-xs text-slate-500 mt-1">Sube una imagen o pega un enlace.</p>
+                <p className="text-xs text-slate-500 mt-1">{t('profile.photoHint')}</p>
               </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.name')}</label>
             <input
               type="text"
               required={isCliente}
@@ -231,13 +235,13 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
 
           {isCliente && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Teléfono (WhatsApp)</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.phone')}</label>
               <input
                 type="tel"
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
                 value={telefono}
                 onChange={(e) => setTelefono(e.target.value)}
-                placeholder="Ej. 8095551234"
+                placeholder={t('common.phonePlaceholder')}
               />
             </div>
           )}
@@ -247,7 +251,7 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
             disabled={saving}
             className="w-full bg-[#ffd427] text-slate-900 py-3 rounded-lg font-bold hover:bg-[#e6be23] transition-colors shadow-lg disabled:opacity-70 flex items-center justify-center gap-2"
           >
-            {saving ? <><Loader2 size={20} className="animate-spin" /> Guardando...</> : 'Guardar cambios'}
+            {saving ? <><Loader2 size={20} className="animate-spin" /> {t('common.saving')}</> : t('common.saveChanges')}
           </button>
         </form>
 

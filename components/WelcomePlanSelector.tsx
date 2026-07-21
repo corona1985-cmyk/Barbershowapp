@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { AccountTier } from '../types';
 import { Scissors, LogIn, ArrowLeft, UserCircle, Store, CheckCircle, Send, MessageCircle, CreditCard, X, Mail, UserPlus } from 'lucide-react';
@@ -13,11 +13,13 @@ import {
     getTransactionForPlan,
     isTransactionActivatable,
 } from '../services/playBilling';
-import { CONTACT, TIER_OPTIONS } from '../constants/plans';
+import { CONTACT, getTierOptions } from '../constants/plans';
 import { SUPPORTED_COUNTRIES } from '../constants/regions';
 import { formatSignupAddress, getBarriosForCity, getCitiesForCountry } from '../utils/posLocation';
 import { navigateToLegal } from '../utils/legal';
 import { ALLOW_NATIVE_BARBER_SIGNUP } from '../config/app';
+import { isIOSAccountCreationAllowed } from '../utils/platform';
+import { useTranslation } from '../i18n';
 
 type Step = 'who' | 'barber_plan' | 'barber_registered' | 'barber_contact' | 'client_registered' | 'client_new';
 type UserType = 'barbero' | 'cliente';
@@ -37,8 +39,11 @@ interface WelcomePlanSelectorProps {
 }
 
 const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, onGoToBarberLogin, onGoToBarberias, onGoToClientRegister, onBarberSignupSuccess, onBackToLanding }) => {
+    const { t } = useTranslation();
+    const tierOptions = useMemo(() => getTierOptions(t), [t]);
     const isNativeMobile = Capacitor.isNativePlatform();
-    const canSelfSignupBarber = !isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP;
+    const canCreateAccount = isIOSAccountCreationAllowed();
+    const canSelfSignupBarber = (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && canCreateAccount;
     const [step, setStep] = useState<Step>('who');
     const [userType, setUserType] = useState<UserType | null>(null);
     const [showSelfSignup, setShowSelfSignup] = useState(false);
@@ -79,7 +84,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
             try {
                 const tx = await getTransactionForPlan(pending.plan, pending.cycle);
                 if (!isTransactionActivatable(tx)) {
-                    alert('Compra recibida. Si no se activa tu plan, contacta a soporte con tu correo.');
+                    alert(t('welcome.purchaseReceived'));
                     pendingPlayRef.current = null;
                     return;
                 }
@@ -92,18 +97,18 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                     nombreRepresentante: pending.nombreRepresentante || undefined,
                 });
                 pendingPlayRef.current = null;
-                if (result.success) alert('Plan activado. Ya puedes iniciar sesión con tu correo.');
-                else alert(result.message || 'No se pudo activar el plan. Contacta a soporte.');
+                if (result.success) alert(t('welcome.planActivated'));
+                else alert(result.message || t('welcome.planActivateFailed'));
             } catch (e) {
                 console.error(e);
-                alert('Error al activar el plan. Contacta a soporte con tu correo.');
+                alert(t('welcome.planActivateError'));
                 pendingPlayRef.current = null;
             }
         });
         return remove;
     }, []);
 
-    const plan = selectedPlan ? TIER_OPTIONS.find((o) => o.value === selectedPlan) : null;
+    const plan = selectedPlan ? tierOptions.find((o) => o.value === selectedPlan) : null;
     const whatsappNumber = CONTACT.whatsapp;
     const whatsappMessage = selectedPlan
         ? `Hola, quiero activar el plan ${plan?.label ?? selectedPlan.toUpperCase()} en BarberShow. ¿Me pueden dar de alta?`
@@ -151,7 +156,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
 
     const handleEnviarSolicitudCorreo = () => {
         if (!formAceptoTerminos) {
-            alert('Debes aceptar los Términos de Servicio y la Política de Privacidad.');
+            alert(t('welcome.acceptTermsRequired'));
             return;
         }
         const body = getSolicitudBody();
@@ -167,7 +172,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
 
     const handleEnviarSolicitudWhatsApp = () => {
         if (!formAceptoTerminos) {
-            alert('Debes aceptar los Términos de Servicio y la Política de Privacidad.');
+            alert(t('welcome.acceptTermsRequired'));
             return;
         }
         const body = getSolicitudBody();
@@ -177,11 +182,11 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
 
     const handlePagarEnApp = async (provider?: PlanCheckoutProvider) => {
         if (!formAceptoTerminos) {
-            alert('Debes aceptar los Términos de Servicio y la Política de Privacidad.');
+            alert(t('welcome.acceptTermsRequired'));
             return;
         }
         if (!formEmail?.trim()) {
-            alert('Indica tu correo electrónico para continuar al pago.');
+            alert(t('welcome.emailRequired'));
             return;
         }
         if (!plan || !selectedPlan) return;
@@ -198,7 +203,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
             if (url) window.location.href = url;
         } catch (e) {
             console.error(e);
-            alert('El pago en la app aún no está configurado. Por ahora usa "Enviar por WhatsApp" o "Enviar por correo". En el proyecto ver el archivo PLANES_EN_APP.md para activar el pago con Stripe, Mercado Pago o PayPal.');
+            alert(t('welcome.paymentNotConfigured'));
         } finally {
             setPayLoading(false);
         }
@@ -206,11 +211,11 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
 
     const handlePagarConGooglePlay = async () => {
         if (!formAceptoTerminos) {
-            alert('Debes aceptar los Términos de Servicio y la Política de Privacidad.');
+            alert(t('welcome.acceptTermsRequired'));
             return;
         }
         if (!formEmail?.trim()) {
-            alert('Indica tu correo electrónico para activar tu plan tras la compra.');
+            alert(t('welcome.emailRequiredPlay'));
             return;
         }
         if (!plan || !selectedPlan) return;
@@ -513,7 +518,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                     onClick={onBackToLanding}
                     className="fixed top-0 left-0 z-20 flex items-center gap-1.5 min-h-[44px] m-3 sm:m-4 px-3 py-2 rounded-xl text-slate-300 hover:text-white bg-black/30 hover:bg-black/50 border border-white/10 backdrop-blur-sm text-sm font-medium transition-colors safe-area-top"
                 >
-                    <ArrowLeft size={18} /> Volver al inicio
+                    <ArrowLeft size={18} /> {t('common.goHome')}
                 </button>
             )}
             {/* Contenido */}
@@ -523,7 +528,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                     <div className="w-14 h-14 bg-[#ffd427] rounded-xl flex items-center justify-center mx-auto mb-3">
                         <Scissors size={28} className="text-slate-900" />
                     </div>
-                    <h1 className="text-2xl font-semibold text-white">BarberShow</h1>
+                    <h1 className="text-2xl font-semibold text-white">{t('common.barberShow')}</h1>
                     <p className="text-slate-400 mt-1 text-sm">Sistema para barberos</p>
                     <p className="text-slate-500 text-xs mt-0.5">v1.0.10</p>
                 </div>
@@ -533,23 +538,29 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                 {!showSelfSignup && step === 'who' && isNativeMobile && !ALLOW_NATIVE_BARBER_SIGNUP && (
                     <div className="max-w-lg mx-auto space-y-4">
                         <p className="text-white text-center text-lg font-semibold mb-2">Bienvenido a BarberShow</p>
-                        <p className="text-slate-400 text-center text-sm mb-6">Inicia sesión o regístrate como cliente para reservar citas.</p>
+                        <p className="text-slate-400 text-center text-sm mb-6">
+                            {canCreateAccount
+                                ? 'Inicia sesión o regístrate como cliente para reservar citas.'
+                                : 'Inicia sesión para reservar citas o agenda como invitado.'}
+                        </p>
                         <button
                             type="button"
                             onClick={onGoToLogin}
                             className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base transition-colors active:scale-[0.98]"
                         >
                             <LogIn size={20} />
-                            Iniciar sesión
+                            {t('common.login')}
                         </button>
+                        {canCreateAccount && (
                         <button
                             type="button"
                             onClick={() => { setUserType('cliente'); setStep('client_registered'); }}
                             className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-base transition-colors active:bg-white/20"
                         >
                             <UserCircle size={20} />
-                            Registrarme como cliente
+                            {t('welcome.registerClient')}
                         </button>
+                        )}
                         <p className="text-xs text-slate-500 text-center mt-4 px-2 leading-relaxed">
                             ¿Eres dueño de un negocio y quieres unirte? Visita nuestra plataforma web.
                         </p>
@@ -558,7 +569,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
 
                 {!showSelfSignup && step === 'who' && (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && (
                     <>
-                        <p className="text-white text-center text-lg font-semibold mb-5">¿Eres Barbero o Cliente?</p>
+                        <p className="text-white text-center text-lg font-semibold mb-5">{t('welcome.title')}</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 max-w-lg mx-auto">
                             <button
                                 type="button"
@@ -568,21 +579,30 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 <div className="w-11 h-11 rounded-lg bg-[#ffd427]/20 flex items-center justify-center group-hover:bg-[#ffd427]/30">
                                     <Scissors size={22} className="text-[#ffd427]" strokeWidth={2} />
                                 </div>
-                                <span className="font-semibold text-white text-base">Barbero</span>
+                                <span className="font-semibold text-white text-base">{t('welcome.iAmBarber')}</span>
                                 <span className="text-slate-400 text-sm text-center leading-snug">
-                                    Iniciar sesión
+                                    {t('common.login')}
                                 </span>
                             </button>
                             <button
                                 type="button"
-                                onClick={() => { setUserType('cliente'); setStep('client_registered'); }}
+                                onClick={() => {
+                                    if (canCreateAccount) {
+                                        setUserType('cliente');
+                                        setStep('client_registered');
+                                    } else if (onGoToBarberias) {
+                                        onGoToBarberias();
+                                    } else {
+                                        onGoToLogin();
+                                    }
+                                }}
                                 className="flex flex-col items-center gap-3 min-h-[120px] py-5 px-5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 transition-colors group active:bg-white/20"
                             >
                                 <div className="w-11 h-11 rounded-lg bg-[#ffd427]/20 flex items-center justify-center group-hover:bg-[#ffd427]/30">
                                     <UserCircle size={22} className="text-[#ffd427]" strokeWidth={2} />
                                 </div>
-                                <span className="font-semibold text-white text-base">Cliente</span>
-                                <span className="text-slate-400 text-sm text-center leading-snug">Quiero reservar o comprar</span>
+                                <span className="font-semibold text-white text-base">{t('welcome.iAmClient')}</span>
+                                <span className="text-slate-400 text-sm text-center leading-snug">{t('welcome.iAmClientDesc')}</span>
                             </button>
                         </div>
                         {(!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && (
@@ -592,7 +612,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 onClick={() => setShowPlansModal(true)}
                                 className="text-slate-400 hover:text-[#ffd427] text-sm font-medium inline-flex items-center gap-1.5 transition-colors"
                             >
-                                <CreditCard size={16} /> Ver planes y precios
+                                <CreditCard size={16} /> {t('welcome.viewPlans')}
                             </button>
                         </p>
                         )}
@@ -631,7 +651,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                         <p className="text-slate-400 text-center text-sm mb-1">Elige el plan que mejor describe tu negocio.</p>
                         <p className="text-slate-500 text-center text-xs mb-4">Haz clic sobre un plan para elegirlo.</p>
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
-                            {TIER_OPTIONS.map((opt) => (
+                            {tierOptions.map((opt) => (
                                 <button
                                     key={opt.value}
                                     type="button"
@@ -709,6 +729,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 <LogIn size={20} />
                                 Ya estoy registrado
                             </button>
+                            {canCreateAccount && (
                             <button
                                 type="button"
                                 onClick={() => setStep('client_new')}
@@ -716,6 +737,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             >
                                 Soy nuevo
                             </button>
+                            )}
                         </div>
                     </div>
                 )}
@@ -727,7 +749,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             <ArrowLeft size={16} /> Volver
                         </button>
                         <p className="text-white text-center text-lg font-semibold mb-5">¿No tienes negocio elegido aún?</p>
-                        {onGoToClientRegister && (
+                        {canCreateAccount && onGoToClientRegister && (
                             <button
                                 type="button"
                                 onClick={onGoToClientRegister}
@@ -784,7 +806,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 </button>
                             </div>
                             <div className="overflow-y-auto p-4 space-y-4">
-                                {TIER_OPTIONS.map((opt) => (
+                                {tierOptions.map((opt) => (
                                     <div key={opt.value} className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="flex items-center gap-3">

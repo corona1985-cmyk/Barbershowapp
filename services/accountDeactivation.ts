@@ -15,15 +15,15 @@ const FEEDBACK_TIMEOUT_MS = 6000;
 // así que en nativo leemos/borramos vía HTTP (igual que services/data.ts).
 const RTDB_BASE_URL = 'https://gen-lang-client-0624135070-default-rtdb.firebaseio.com';
 
-export const DEACTIVATION_REASON_OPTIONS: Array<{ value: DeactivationReason; label: string }> = [
-  { value: 'no_longer_need_app', label: 'Ya no necesito la aplicación' },
-  { value: 'found_another_barbershop', label: 'Encontré otra barbería' },
-  { value: 'technical_issues', label: 'Problemas técnicos' },
-  { value: 'hard_to_use', label: 'La aplicación es difícil de usar' },
-  { value: 'too_many_notifications', label: 'Demasiadas notificaciones' },
-  { value: 'account_issues', label: 'Problemas con mi cuenta' },
-  { value: 'privacy_security', label: 'Privacidad o seguridad' },
-  { value: 'other', label: 'Otro' },
+export const DEACTIVATION_REASON_OPTIONS: Array<{ value: DeactivationReason; labelKey: string }> = [
+  { value: 'no_longer_need_app', labelKey: 'deactivate.reasons.noLongerNeedApp' },
+  { value: 'found_another_barbershop', labelKey: 'deactivate.reasons.foundAnotherBarbershop' },
+  { value: 'technical_issues', labelKey: 'deactivate.reasons.technicalIssues' },
+  { value: 'hard_to_use', labelKey: 'deactivate.reasons.hardToUse' },
+  { value: 'too_many_notifications', labelKey: 'deactivate.reasons.tooManyNotifications' },
+  { value: 'account_issues', labelKey: 'deactivate.reasons.accountIssues' },
+  { value: 'privacy_security', labelKey: 'deactivate.reasons.privacySecurity' },
+  { value: 'other', labelKey: 'deactivate.reasons.other' },
 ];
 
 export interface DeactivateAccountPayload {

@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
-import { DEFAULT_PUBLIC_APP_URL } from '../config/app';
+import { ALLOW_IOS_ACCOUNT_CREATION, DEFAULT_PUBLIC_APP_URL } from '../config/app';
 
 /** Equivalente a Platform.OS === 'ios' en apps Capacitor. */
 export function isIOSPlatform(): boolean {
@@ -9,6 +9,11 @@ export function isIOSPlatform(): boolean {
 
 export function isAndroidPlatform(): boolean {
   return Capacitor.getPlatform() === 'android';
+}
+
+/** false en iOS cuando ALLOW_IOS_ACCOUNT_CREATION está desactivado. */
+export function isIOSAccountCreationAllowed(): boolean {
+  return !isIOSPlatform() || ALLOW_IOS_ACCOUNT_CREATION;
 }
 
 /** URL pública de la app web (registro de barberías, QR, etc.). */

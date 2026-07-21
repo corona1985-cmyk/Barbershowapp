@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { DataService } from '../services/data';
 import { Appointment, Barber, BarberGalleryPhoto, Service } from '../types';
 import { MapPin, ArrowLeft, CheckCircle, ImageIcon } from 'lucide-react';
+import { useTranslation } from '../i18n';
 
 interface GuestBookingViewProps {
     posId: number;
@@ -11,6 +12,7 @@ interface GuestBookingViewProps {
 }
 
 const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onBack, onSuccess }) => {
+    const { t } = useTranslation();
     const [services, setServices] = useState<Service[]>([]);
     const [barbers, setBarbers] = useState<Barber[]>([]);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -47,7 +49,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                 setAppointments(a);
                 if (active.length > 0) setSelectedBarberId(active[0].id);
             })
-            .catch(() => setError('No se pudo cargar la información.'))
+            .catch(() => setError(t('errors.loadDataFailed')))
             .finally(() => setDataLoading(false));
         return () => { DataService.setActivePosId(prev); };
     }, [posId]);
@@ -133,19 +135,19 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
     const handleConfirm = async () => {
         setError('');
         if (!nombre.trim() || !telefono.trim()) {
-            setError('Nombre y teléfono son obligatorios.');
+            setError(t('guestBooking.namePhoneRequired'));
             return;
         }
         if (servicesForBarber.length > 0 && selectedServices.length === 0) {
-            setError('Elige al menos un servicio.');
+            setError(t('guestBooking.pickService'));
             return;
         }
         if (!selectedTime) {
-            setError('Elige una hora.');
+            setError(t('guestBooking.pickTime'));
             return;
         }
         if (!barberId) {
-            setError('No hay barberos disponibles en esta barbería.');
+            setError(t('guestBooking.noBarbersError'));
             return;
         }
         const duracionTotal = selectedServices.length > 0 ? selectedServices.reduce((acc, s) => acc + s.duration, 0) : 30;
@@ -161,7 +163,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
             return newStart < end2 && otherStart < end1;
         });
         if (overlaps) {
-            setError('Esa hora ya no está disponible (se solapa con otra cita). Elige otra.');
+            setError(t('guestBooking.slotOverlap'));
             return;
         }
         setLoading(true);
@@ -193,7 +195,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
             setDone(true);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            setError(msg.includes('permiso') || msg.includes('conexión') ? msg : `No se pudo agendar. ${msg}`);
+            setError(msg.includes('permiso') || msg.includes('conexión') ? msg : t('guestBooking.bookingFailedWithMsg', { message: msg }));
         } finally {
             setLoading(false);
         }
@@ -201,53 +203,90 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
 
     if (done) {
         return (
-            <div className="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-4 sm:p-8 text-center min-w-0">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle size={32} className="text-green-600" />
-                </div>
-                <h2 className="text-xl font-bold text-slate-800 mb-2">Cita agendada</h2>
-                <p className="text-slate-600 mb-6">
-                    Tu cita en <strong>{posName}</strong> para el {selectedDate} a las {selectedTime} está confirmada. Te contactaremos al {telefono} si hace falta.
-                </p>
-                <button
-                    type="button"
-                    onClick={onSuccess}
-                    className="w-full py-3 bg-[#ffd427] text-slate-900 font-bold rounded-xl hover:bg-amber-400"
-                >
-                    Volver a barberías
-                </button>
+            <div className="min-h-screen min-h-[100dvh] bg-slate-100 flex flex-col">
+                <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-3 safe-area-top shadow-sm">
+                    <button
+                        type="button"
+                        onClick={onSuccess}
+                        className="flex items-center gap-1.5 min-h-[44px] text-slate-600 hover:text-slate-900 text-sm rounded-xl hover:bg-slate-100 px-3 -ml-1 transition-colors"
+                    >
+                        <ArrowLeft size={18} /> {t('common.back')}
+                    </button>
+                </header>
+                <main className="flex-1 px-4 sm:px-6 py-6 safe-area-bottom scroll-touch">
+                    <div className="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-4 sm:p-8 text-center min-w-0">
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <CheckCircle size={32} className="text-green-600" />
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-800 mb-2">{t('guestBooking.appointmentBooked')}</h2>
+                        <p className="text-slate-600 mb-6">
+                            {t('guestBooking.successConfirmed', { shop: posName, date: selectedDate, time: selectedTime, phone: telefono })}
+                        </p>
+                        <button
+                            type="button"
+                            onClick={onSuccess}
+                            className="w-full min-h-[52px] py-3 bg-[#ffd427] text-slate-900 font-bold rounded-xl hover:bg-amber-400"
+                        >
+                            {t('guestBooking.backToShops')}
+                        </button>
+                    </div>
+                </main>
             </div>
         );
     }
 
     if (dataLoading) {
         return (
-            <div className="w-full max-w-2xl mx-auto px-4 flex flex-col items-center justify-center min-h-[280px]">
-                <div className="w-14 h-14 border-4 border-[#ffd427] border-t-transparent rounded-full animate-spin mb-4" />
-                <p className="text-slate-600 font-medium">Cargando barbería...</p>
+            <div className="min-h-screen min-h-[100dvh] bg-slate-100 flex flex-col">
+                <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-3 safe-area-top shadow-sm">
+                    <button
+                        type="button"
+                        onClick={onBack}
+                        className="flex items-center gap-1.5 min-h-[44px] text-slate-600 hover:text-slate-900 text-sm rounded-xl hover:bg-slate-100 px-3 -ml-1 transition-colors"
+                    >
+                        <ArrowLeft size={18} /> Volver
+                    </button>
+                </header>
+                <main className="flex-1 px-4 flex flex-col items-center justify-center safe-area-bottom">
+                    <div className="w-14 h-14 border-4 border-[#ffd427] border-t-transparent rounded-full animate-spin mb-4" />
+                    <p className="text-slate-600 font-medium">{t('guestBooking.loadingShop')}</p>
+                </main>
             </div>
         );
     }
 
     return (
-            <div className="w-full max-w-2xl mx-auto px-0 sm:px-2 min-w-0">
-            <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-slate-600 hover:text-slate-800 mb-4 sm:mb-6 py-2 min-h-[44px] -ml-1 rounded-lg active:bg-slate-200/50 w-fit">
-                <ArrowLeft size={20} /> Volver
-            </button>
-            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-                <div className="p-4 sm:p-6 border-b border-slate-100 bg-[#ffd427]/10">
-                    <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                        <MapPin size={22} className="text-[#ffd427]" /> {posName}
-                    </h1>
-                    <p className="text-slate-600 text-sm mt-1">Agenda tu cita sin registrarte</p>
+        <div className="min-h-screen min-h-[100dvh] bg-slate-100 flex flex-col">
+            <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center gap-3 safe-area-top shadow-sm">
+                <button
+                    type="button"
+                    onClick={onBack}
+                    className="flex items-center gap-1.5 min-h-[44px] shrink-0 text-slate-600 hover:text-slate-900 text-sm rounded-xl hover:bg-slate-100 px-3 -ml-1 transition-colors"
+                >
+                    <ArrowLeft size={18} /> {t('common.back')}
+                </button>
+                <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-900 truncate">{posName}</p>
+                    <p className="text-xs text-slate-500 truncate">{t('guestBooking.subtitle')}</p>
                 </div>
-                <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 min-w-0 overflow-hidden">
+            </header>
+
+            <main className="flex-1 overflow-y-auto scroll-touch px-4 sm:px-6 py-4 sm:py-6 safe-area-bottom">
+                <div className="w-full max-w-2xl mx-auto min-w-0">
+                    <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+                        <div className="p-4 sm:p-6 border-b border-slate-100 bg-[#ffd427]/10 sm:hidden">
+                            <h1 className="text-lg font-bold text-slate-800 flex items-center gap-2 min-w-0">
+                                <MapPin size={20} className="text-[#ffd427] shrink-0" />
+                                <span className="truncate">{posName}</span>
+                            </h1>
+                        </div>
+                        <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 min-w-0">
                     {error && <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>}
 
                     {/* Barbero (si hay más de uno) */}
                     {activeBarbers.length > 1 && (
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Barbero</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">{t('common.barber')}</label>
                             <div className="flex flex-wrap gap-2">
                                 {activeBarbers.map((b) => (
                                     <button
@@ -266,11 +305,11 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                     {/* Galería del barbero */}
                     {guestBarberGallery.length > 0 && (
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Trabajos de {activeBarbers.find((b) => b.id === (selectedBarberId || defaultBarberId))?.name}</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">{t('guestBooking.worksOf', { name: activeBarbers.find((b) => b.id === (selectedBarberId || defaultBarberId))?.name ?? '' })}</label>
                             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                                 {guestBarberGallery.map((p) => (
                                     <button key={p.id} type="button" className="flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border border-slate-200 shadow-sm hover:ring-2 hover:ring-[#ffd427] focus:outline-none" onClick={() => window.open(p.imageUrl, '_blank')}>
-                                        <img src={p.imageUrl} alt={p.caption || 'Trabajo'} className="w-full h-full object-cover" />
+                                        <img src={p.imageUrl} alt={p.caption || t('profile.workAlt')} className="w-full h-full object-cover" />
                                     </button>
                                 ))}
                             </div>
@@ -279,7 +318,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
 
                     {/* Fecha */}
                     <div className="min-w-0">
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Fecha</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">{t('common.date')}</label>
                         <input
                             type="date"
                             min={todayStr}
@@ -289,29 +328,37 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                         />
                     </div>
 
-                    {noBarbers && <p className="text-amber-700 bg-amber-50 p-3 rounded-lg text-sm">No hay barberos disponibles en esta barbería por el momento.</p>}
+                    {noBarbers && <p className="text-amber-700 bg-amber-50 p-3 rounded-lg text-sm">{t('guestBooking.noBarbers')}</p>}
 
                     {/* Hora */}
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Hora</label>
-                        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                            {slots.map((slot) => (
-                                <button
-                                    key={slot.time}
-                                    type="button"
-                                    disabled={slot.taken || slot.past}
-                                    onClick={() => setSelectedTime(slot.time)}
-                                    className={`min-h-[44px] py-2.5 rounded-xl text-sm font-medium ${slot.taken || slot.past ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : selectedTime === slot.time ? 'bg-[#ffd427] text-slate-900' : 'bg-slate-100 text-slate-700 hover:bg-[#ffd427]/30 active:bg-[#ffd427]/50'}`}
-                                >
-                                    {slot.time}
-                                </button>
-                            ))}
+                    {!noBarbers && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">{t('guestBooking.time')}</label>
+                            {slots.length > 0 ? (
+                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                                    {slots.map((slot) => (
+                                        <button
+                                            key={slot.time}
+                                            type="button"
+                                            disabled={slot.taken || slot.past}
+                                            onClick={() => setSelectedTime(slot.time)}
+                                            className={`min-h-[44px] py-2.5 rounded-xl text-sm font-medium ${slot.taken || slot.past ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : selectedTime === slot.time ? 'bg-[#ffd427] text-slate-900' : 'bg-slate-100 text-slate-700 hover:bg-[#ffd427]/30 active:bg-[#ffd427]/50'}`}
+                                        >
+                                            {slot.time}
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm">
+                                    {t('guestBooking.noSlotsPickDate')}
+                                </p>
+                            )}
                         </div>
-                    </div>
+                    )}
 
                     {/* Servicios */}
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Servicios</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">{t('guestBooking.services')}</label>
                         {servicesForBarber.length > 0 ? (
                             <div className="space-y-1 border border-slate-200 rounded-xl p-3 max-h-44 overflow-y-auto scroll-touch bg-white">
                                 {servicesForBarber.map((s) => (
@@ -329,7 +376,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                             </div>
                         ) : (
                             <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 text-slate-600 text-sm">
-                                No hay servicios configurados. Puedes confirmar la cita solo con fecha y hora.
+                                {t('guestBooking.noServicesConfigured')}
                             </div>
                         )}
                     </div>
@@ -337,22 +384,22 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                     {/* Nombre y teléfono */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Tu nombre</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">{t('guestBooking.yourName')}</label>
                             <input
                                 type="text"
                                 value={nombre}
                                 onChange={(e) => setNombre(e.target.value)}
-                                placeholder="Ej: Juan Pérez"
+                                placeholder={t('guestBooking.namePlaceholder')}
                                 className="w-full border border-slate-300 rounded-xl px-4 py-3 sm:py-2 min-h-[48px] focus:ring-2 focus:ring-[#ffd427]"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Teléfono (para confirmar)</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">{t('guestBooking.phoneConfirm')}</label>
                             <input
                                 type="tel"
                                 value={telefono}
                                 onChange={(e) => setTelefono(e.target.value)}
-                                placeholder="Ej: 555 123 4567"
+                                placeholder={t('guestBooking.phonePlaceholderGuest')}
                                 className="w-full border border-slate-300 rounded-xl px-4 py-3 sm:py-2 min-h-[48px] focus:ring-2 focus:ring-[#ffd427]"
                             />
                         </div>
@@ -364,10 +411,12 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                         disabled={loading || noBarbers}
                         className="min-h-[52px] w-full py-3 rounded-xl font-bold bg-[#ffd427] text-slate-900 hover:bg-[#e6be23] active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
                     >
-                        {loading ? 'Agendando...' : 'Confirmar cita'}
+                        {loading ? t('guestBooking.booking') : t('guestBooking.confirmAppointment')}
                     </button>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            </main>
         </div>
     );
 };

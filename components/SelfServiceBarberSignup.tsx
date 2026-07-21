@@ -10,13 +10,14 @@ import { requestUserLocationWithPermission } from '../utils/geolocation';
 import { initPlayBilling, purchasePlan, addPlayPurchaseListener, getActivePlayTransactions, isPlanAvailableForPurchase, isTransactionActivatable, getTransactionForPlan, isNativePaymentAvailable } from '../services/playBilling';
 import { navigateToLegal } from '../utils/legal';
 import { ALLOW_NATIVE_BARBER_SIGNUP, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER, IOS_IAP_TIERS } from '../config/app';
-import { isIOSPlatform } from '../utils/platform';
+import { isIOSAccountCreationAllowed, isIOSPlatform } from '../utils/platform';
+import { useTranslation } from '../i18n';
 
-const TIER_OPTIONS: { value: AccountTier; label: string; description: string; price: number }[] = [
-  { value: 'gratuito', label: 'Perfil básico', description: 'Gestiona citas y servicios desde tu cuenta.', price: 0 },
-  { value: 'solo', label: 'Perfil individual', description: 'Una persona, un local.', price: 14.95 },
-  { value: 'barberia', label: 'Perfil profesional', description: 'Perfil para gestionar servicios y agenda.', price: 19.95 },
-  { value: 'multisede', label: 'Perfil avanzado', description: 'Varias ubicaciones o equipo ampliado.', price: 29.95 },
+const TIER_OPTION_DEFS: { value: AccountTier; tierKey: 'basic' | 'solo' | 'barberia' | 'multisede'; price: number }[] = [
+  { value: 'gratuito', tierKey: 'basic', price: 0 },
+  { value: 'solo', tierKey: 'solo', price: 14.95 },
+  { value: 'barberia', tierKey: 'barberia', price: 19.95 },
+  { value: 'multisede', tierKey: 'multisede', price: 29.95 },
 ];
 
 type WizardStep = 1 | 2 | 3;
@@ -34,6 +35,13 @@ const APP_STORE_URL = 'https://apps.apple.com/app/barbershow/id123456789';
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.barbershow.app';
 
 const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuccess, onGoToLogin, onGoBack }) => {
+  const { t } = useTranslation();
+  const TIER_OPTIONS = TIER_OPTION_DEFS.map((def) => ({
+    value: def.value,
+    label: t(`signup.tiers.${def.tierKey}.label`),
+    description: t(`signup.tiers.${def.tierKey}.description`),
+    price: def.price,
+  }));
   const [step, setStep] = useState<WizardStep>(1);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -74,7 +82,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const isNativeMobile = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform();
   const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'android';
   const isIOS = isIOSPlatform();
-  const canSelfSignupBarber = !isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP;
+  const canSelfSignupBarber = (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && isIOSAccountCreationAllowed();
 
   const isPlanComingSoonOnIOS = (tier: AccountTier) =>
     isIOS && tier !== 'gratuito' && !IOS_IAP_TIERS.includes(tier);
@@ -93,8 +101,8 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const canPurchaseSelectedPlan = !isFree && isNativeMobile && isPlanAvailableForPurchase(selectedPlan);
 
   const formatPlanPrice = (opt: (typeof TIER_OPTIONS)[number]) => {
-    if (GLOBAL_FREE_MODE && opt.value === PROMOTIONAL_FREE_TIER) return 'Incluido';
-    return opt.price === 0 ? 'Incluido' : `$${opt.price}/mes`;
+    if (GLOBAL_FREE_MODE && opt.value === PROMOTIONAL_FREE_TIER) return t('common.included');
+    return opt.price === 0 ? t('common.included') : t('signup.pricePerMonth', { price: opt.price });
   };
 
   const checkUsername = async () => {
@@ -158,7 +166,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
       setCountry(result.countryCode);
       setCity(result.city);
       setBarrio('');
-      setShopLocationMessage(`Ubicación detectada: ${result.displayLabel}`);
+      setShopLocationMessage(t('signup.locationDetected', { label: result.displayLabel }));
       return;
     }
     setShopLocationMessage(result.message);
@@ -186,7 +194,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
       });
       onSuccess(username.trim().toLowerCase(), password);
     } catch (err: unknown) {
-      const msg = err && typeof (err as { message?: string }).message === 'string' ? (err as { message: string }).message : 'No se pudo crear la cuenta. Intenta de nuevo.';
+      const msg = err && typeof (err as { message?: string }).message === 'string' ? (err as { message: string }).message : t('signup.createAccountFailed');
       setError(msg);
     } finally {
       setLoading(false);
@@ -207,7 +215,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
       try {
         const tx = await getTransactionForPlan(pending.plan, pending.cycle);
         if (!isTransactionActivatable(tx)) {
-          setError('Compra recibida. Si no se activa, contacta a soporte.');
+          setError(t('welcome.purchaseReceived'));
           pendingMobileRef.current = null;
           return;
         }
@@ -222,10 +230,10 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
         });
         pendingMobileRef.current = null;
         if (result.success) onSuccess(pending.username, pending.password);
-        else setError(result.message || 'No se pudo activar el plan.');
+        else setError(result.message || t('welcome.planActivateFailed'));
       } catch (e) {
         console.error(e);
-        setError('Error al activar el plan. Contacta a soporte.');
+        setError(t('welcome.planActivateError'));
         pendingMobileRef.current = null;
       }
     });
@@ -237,7 +245,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
     setError('');
     if (!step1Valid || !step2Valid || isFree || !acceptTerms || !isNativeMobile) return;
     if (!isPlanAvailableForPurchase(selectedPlan)) {
-      setError('Este plan no está disponible para compra in-app en tu dispositivo.');
+      setError(t('signup.planNotAvailableInApp'));
       return;
     }
     setLoading(true);
@@ -269,7 +277,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
         setError('');
       } else {
         pendingMobileRef.current = null;
-        setError(result.message || 'No se pudo abrir la tienda.');
+        setError(result.message || t('errors.storeOpenFailed'));
       }
     } catch (err: unknown) {
       pendingMobileRef.current = null;
@@ -277,7 +285,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
       const code = err && typeof (err as { code?: string }).code === 'string' ? (err as { code: string }).code : '';
       const msg = raw && raw !== code && !/^internal$|^functions\/internal$/i.test(raw)
         ? raw
-        : 'No se pudo procesar el pago. Comprueba tu conexión e intenta de nuevo, o contacta a soporte si el problema continúa.';
+        : t('signup.paymentFailed');
       setError(msg);
     } finally {
       setLoading(false);
@@ -292,7 +300,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
       const transactions = await getActivePlayTransactions();
       const barberiaTx = transactions.find((t) => t.productIdentifier.includes('barberia')) ?? transactions[0];
       if (!isTransactionActivatable(barberiaTx)) {
-        setError('No se encontraron compras activas para restaurar.');
+        setError(t('errors.noPurchasesToRestore'));
         return;
       }
       const u = username.trim().toLowerCase();
@@ -323,11 +331,11 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
         username: u,
       });
       if (result.success) onSuccess(u, password);
-      else setError(result.message || 'No se pudo restaurar la compra.');
+      else setError(result.message || t('errors.restoreFailed'));
     } catch (err: unknown) {
       const msg = err && typeof (err as { message?: string }).message === 'string'
         ? (err as { message: string }).message
-        : 'Error al restaurar compras.';
+        : t('signup.restorePurchasesError');
       setError(msg);
     } finally {
       setLoading(false);
@@ -344,9 +352,9 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
           <div className="w-14 h-14 bg-[#F5B301] rounded-xl flex items-center justify-center mx-auto">
             <Scissors size={28} className="text-slate-900" />
           </div>
-          <h1 className="text-xl font-bold text-white">Acceso para barberos</h1>
+          <h1 className="text-xl font-bold text-white">{t('signup.barberAccessTitle')}</h1>
           <p className="text-slate-400 text-sm leading-relaxed">
-            El registro de negocios no está disponible en la app móvil. Si ya tienes cuenta, inicia sesión.
+            {t('signup.barberAccessDesc')}
           </p>
           <button
             type="button"
@@ -354,11 +362,11 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
             className="w-full min-h-[48px] flex items-center justify-center gap-2 py-3 rounded-xl text-slate-900 font-semibold"
             style={{ backgroundColor: primary }}
           >
-            <LogIn size={20} /> Iniciar sesión
+            <LogIn size={20} /> {t('common.login')}
           </button>
           {onGoBack && (
             <button type="button" onClick={onGoBack} className="text-slate-500 hover:text-white text-sm">
-              Volver
+              {t('common.back')}
             </button>
           )}
         </div>
@@ -400,7 +408,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                     type="button"
                     onClick={onGoBack}
                     className="flex items-center justify-center min-h-[44px] min-w-[44px] -ml-1 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors flex-shrink-0"
-                    aria-label="Volver atrás"
+                    aria-label={t('common.back')}
                   >
                     <ChevronLeft size={24} strokeWidth={2.2} />
                   </button>
@@ -413,14 +421,14 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                     <Scissors size={24} className="text-slate-900 sm:w-7 sm:h-7" strokeWidth={2.2} />
                   </div>
                   <div className="min-w-0">
-                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Crear mi negocio</h1>
-                    <p className="text-slate-500 text-sm mt-0.5">Cuenta → Perfil → Confirmación</p>
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">{t('signup.createMyBusiness')}</h1>
+                    <p className="text-slate-500 text-sm mt-0.5">{t('signup.stepsSubtitle')}</p>
                   </div>
                 </div>
               </div>
 
               {/* Stepper horizontal minimalista con transición */}
-              <nav className="flex items-center justify-between mb-6" aria-label="Pasos">
+              <nav className="flex items-center justify-between mb-6" aria-label={t('signup.stepsAriaLabel')}>
                 {([1, 2, 3] as const).map((s) => (
                   <React.Fragment key={s}>
                     <div
@@ -455,11 +463,11 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
             {/* Step 1: Cuenta - 2 columnas en desktop para aprovechar espacio */}
             {step === 1 && (
               <form id="wizard-step1" onSubmit={handleNextFrom1} className="space-y-4 transition-opacity duration-300 ease-out">
-                <h2 className="text-base sm:text-lg font-semibold text-slate-800">Paso 1 – Tu cuenta</h2>
+                <h2 className="text-base sm:text-lg font-semibold text-slate-800">{t('signup.step1Title')}</h2>
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Nombre de usuario (único)</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">{t('signup.usernameLabel')}</label>
                       <div className="relative">
                         <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         <input
@@ -476,24 +484,24 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                             setUsernameTouched(true);
                             if ((username || '').trim()) checkUsername();
                           }}
-                          placeholder="Ej: micuenta"
+                          placeholder={t('signup.usernamePlaceholder')}
                           className="input-modern w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] transition-all duration-200"
                         />
                       </div>
                       {usernameTouched && username.trim() && (
                         <p className="mt-2 text-xs">
                           {checkingUser ? (
-                            <span className="text-slate-500">Comprobando...</span>
+                            <span className="text-slate-500">{t('signup.checkingUsername')}</span>
                           ) : usernameExists === true ? (
-                            <span className="text-red-600 font-medium">Ese usuario ya existe. Elige otro.</span>
+                            <span className="text-red-600 font-medium">{t('signup.usernameTaken')}</span>
                           ) : usernameExists === false ? (
-                            <span className="text-emerald-600 font-medium flex items-center gap-1">Disponible</span>
+                            <span className="text-emerald-600 font-medium flex items-center gap-1">{t('signup.usernameAvailable')}</span>
                           ) : null}
                         </p>
                       )}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Nombre completo</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">{t('signup.fullName')}</label>
                       <div className="relative">
                         <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         <input
@@ -502,7 +510,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                           autoComplete="name"
                           value={name}
                           onChange={(e) => setName(e.target.value)}
-                          placeholder="Tu nombre"
+                          placeholder={t('signup.fullNamePlaceholder')}
                           className="input-modern w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] transition-all duration-200"
                         />
                       </div>
@@ -510,7 +518,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Contraseña</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">{t('common.password')}</label>
                       <div className="relative">
                         <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         <input
@@ -519,13 +527,13 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                           autoComplete="new-password"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder={`Mín. ${MIN_PASSWORD_LENGTH} caracteres`}
+                          placeholder={t('signup.passwordMinPlaceholder', { min: MIN_PASSWORD_LENGTH })}
                           className="input-modern w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] transition-all duration-200"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Confirmar contraseña</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">{t('signup.confirmPassword')}</label>
                       <div className="relative">
                         <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         <input
@@ -534,18 +542,18 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                           autoComplete="new-password"
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="Repite la contraseña"
+                          placeholder={t('signup.confirmPasswordPlaceholder')}
                           className="input-modern w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] transition-all duration-200"
                         />
                       </div>
                       {confirmPassword && password !== confirmPassword && (
-                        <p className="mt-2 text-xs text-red-600 font-medium">No coinciden</p>
+                        <p className="mt-2 text-xs text-red-600 font-medium">{t('signup.passwordMismatchShort')}</p>
                       )}
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Teléfono <span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">{t('common.phone')} <span className="text-red-500">*</span></label>
                       <div className="relative">
                         <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         <input
@@ -554,16 +562,16 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                           autoComplete="tel"
                           value={phone}
                           onChange={(e) => setPhone(e.target.value)}
-                          placeholder="Ej: 809 555 1234"
+                          placeholder={t('common.phonePlaceholder')}
                           className="input-modern w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] transition-all duration-200"
                         />
                       </div>
                       {phone && !phoneValid && (
-                        <p className="mt-2 text-xs text-amber-600 font-medium">Mínimo {MIN_PHONE_DIGITS} dígitos</p>
+                        <p className="mt-2 text-xs text-amber-600 font-medium">{t('signup.phoneMinDigits', { min: MIN_PHONE_DIGITS })}</p>
                       )}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Correo (opcional)</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">{t('signup.emailOptional')}</label>
                       <div className="relative">
                         <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         <input
@@ -571,7 +579,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                           autoComplete="email"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          placeholder="correo@ejemplo.com"
+                          placeholder={t('signup.emailPlaceholder')}
                           className="input-modern w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] transition-all duration-200"
                         />
                       </div>
@@ -584,11 +592,11 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
             {/* Step 2: negocio - 2 columnas en desktop */}
             {step === 2 && (
               <form id="wizard-step2" onSubmit={handleNextFrom2} className="space-y-4 transition-opacity duration-300 ease-out">
-                <h2 className="text-base sm:text-lg font-semibold text-slate-800">Paso 2 – Tu perfil</h2>
+                <h2 className="text-base sm:text-lg font-semibold text-slate-800">{t('signup.step2Title')}</h2>
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Nombre del perfil profesional</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">{t('signup.profileNameLabel')}</label>
                       <div className="relative">
                         <Building2 size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         <input
@@ -596,21 +604,21 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                           required
                           value={barbershopName}
                           onChange={(e) => setBarbershopName(e.target.value)}
-                          placeholder="Ej: Corte & Estilo"
+                          placeholder={t('signup.profileNamePlaceholder')}
                           className="input-modern w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] transition-all duration-200"
                         />
                       </div>
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">País</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">{t('signup.country')}</label>
                     <select
                       required
                       value={country}
                       onChange={(e) => { setCountry(e.target.value); setCity(''); setBarrio(''); }}
                       className="input-modern w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] bg-white"
                     >
-                      <option value="">Selecciona un país</option>
+                      <option value="">{t('signup.selectCountry')}</option>
                       {SUPPORTED_COUNTRIES.map((c) => (
                         <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
                       ))}
@@ -618,7 +626,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Ciudad</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">{t('signup.city')}</label>
                       <select
                         required
                         value={city}
@@ -626,14 +634,14 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                         disabled={!country}
                         className="input-modern w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] bg-white disabled:bg-slate-100"
                       >
-                        <option value="">{country ? 'Selecciona una ciudad' : 'Primero elige el país'}</option>
+                        <option value="">{country ? t('signup.selectCity') : t('signup.selectCountryFirst')}</option>
                         {cityOptions.map((c) => (
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Barrio / Zona</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">{t('signup.neighborhood')}</label>
                       {requiresBarrio ? (
                         <select
                           required
@@ -642,7 +650,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                           disabled={!city}
                           className="input-modern w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] bg-white disabled:bg-slate-100 disabled:text-slate-400"
                         >
-                          <option value="">{city ? 'Selecciona barrio o zona' : 'Primero elige la ciudad'}</option>
+                          <option value="">{city ? t('signup.selectNeighborhood') : t('signup.selectCityFirst')}</option>
                           {barrioOptions.map((b) => (
                             <option key={b} value={b}>{b}</option>
                           ))}
@@ -653,49 +661,49 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                           value={barrio}
                           onChange={(e) => setBarrio(e.target.value)}
                           disabled={!city}
-                          placeholder={city ? 'Opcional (ej: Centro, Ensanche, Zona Norte)' : 'Primero elige la ciudad'}
+                          placeholder={city ? t('signup.neighborhoodOptionalPlaceholder') : t('signup.selectCityFirst')}
                           className="input-modern w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] bg-white disabled:bg-slate-100 disabled:text-slate-400"
                         />
                       )}
                       {!requiresBarrio && city && (
-                        <p className="mt-1 text-xs text-slate-500">Si lo dejas vacío, usaremos la ciudad como zona principal.</p>
+                        <p className="mt-1 text-xs text-slate-500">{t('signup.neighborhoodFallbackHint')}</p>
                       )}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Calle o referencia (opcional)</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">{t('signup.streetOptional')}</label>
                     <div className="relative">
                       <MapPin size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                       <input
                         type="text"
                         value={streetAddress}
                         onChange={(e) => setStreetAddress(e.target.value)}
-                        placeholder="Ej: Calle Principal #12"
+                        placeholder={t('signup.streetPlaceholder')}
                         className="input-modern w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F5B301]/35 focus:border-[#F5B301] transition-all duration-200"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Ubicación exacta del local (recomendado)</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">{t('signup.exactLocationLabel')}</label>
                     <button
                       type="button"
                       onClick={handleDetectShopLocation}
                       disabled={shopLocationLoading}
                       className="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                     >
-                      {shopLocationLoading ? <><Loader2 size={16} className="animate-spin" /> Detectando ubicación...</> : <><MapPin size={16} /> Usar ubicación de este local</>}
+                      {shopLocationLoading ? <><Loader2 size={16} className="animate-spin" /> {t('signup.detectingLocation')}</> : <><MapPin size={16} /> {t('signup.useShopLocation')}</>}
                     </button>
                     {shopLocationMessage && (
                       <p className="mt-2 text-xs text-slate-600">{shopLocationMessage}</p>
                     )}
                     {shopLat != null && shopLng != null && (
                       <p className="mt-1 text-xs text-emerald-700 font-medium">
-                        Coordenadas guardadas: {shopLat.toFixed(5)}, {shopLng.toFixed(5)}
+                        {t('signup.coordinatesSaved', { lat: shopLat.toFixed(5), lng: shopLng.toFixed(5) })}
                       </p>
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Tipo de perfil</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">{t('signup.profileTypeLabel')}</label>
                     <div className="space-y-2">
                       {signupTierOptions.map((opt) => (
                         <label
@@ -716,7 +724,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                           />
                           <div className="flex-1 min-w-0">
                             <span className="font-medium text-slate-800">
-                              {GLOBAL_FREE_MODE && opt.value === PROMOTIONAL_FREE_TIER ? 'Perfil profesional' : opt.label}
+                              {GLOBAL_FREE_MODE && opt.value === PROMOTIONAL_FREE_TIER ? t('signup.professionalProfile') : opt.label}
                             </span>
                             <span className="ml-2 font-bold" style={{ color: primary }}>
                               {formatPlanPrice(opt)}
@@ -734,15 +742,15 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
             {/* Step 3: Pago / Confirmación */}
             {step === 3 && (
               <div className="space-y-4 transition-opacity duration-300 ease-out">
-                <h2 className="text-base sm:text-lg font-semibold text-slate-800">Paso 3 – Confirmación</h2>
+                <h2 className="text-base sm:text-lg font-semibold text-slate-800">{t('signup.step3Title')}</h2>
                 <div className="bg-slate-50/80 rounded-xl p-4 space-y-2 text-sm border border-slate-100">
-                  <p><span className="text-slate-500">Usuario:</span> <strong>{username.trim().toLowerCase()}</strong></p>
-                  <p><span className="text-slate-500">Perfil:</span> <strong>{barbershopName}</strong></p>
-                  <p><span className="text-slate-500">Tipo de perfil:</span> <strong>{planOption?.label ?? selectedPlan}</strong></p>
+                  <p><span className="text-slate-500">{t('signup.userLabel')}</span> <strong>{username.trim().toLowerCase()}</strong></p>
+                  <p><span className="text-slate-500">{t('signup.profileLabel')}</span> <strong>{barbershopName}</strong></p>
+                  <p><span className="text-slate-500">{t('signup.profileTypeSummary')}</span> <strong>{planOption?.label ?? selectedPlan}</strong></p>
                   {!isFree && (
                     <p className="pt-2">
-                      <span className="text-slate-500">Ciclo:</span>{' '}
-                      <strong>{cicloPago === 'anual' ? 'Anual (-40%)' : 'Mensual'}</strong>{' '}
+                      <span className="text-slate-500">{t('signup.cycleLabel')}</span>{' '}
+                      <strong>{cicloPago === 'anual' ? t('signup.annualDiscount') : t('signup.monthly')}</strong>{' '}
                       {planOption && planOption.price > 0 && (
                         <span className="font-bold" style={{ color: primary }}>
                           {cicloPago === 'anual'
@@ -765,7 +773,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                           onChange={() => setCicloPago('mensual')}
                           className="text-[#F5B301] focus:ring-[#F5B301]"
                         />
-                        <span className="text-sm text-slate-700">Mensual</span>
+                        <span className="text-sm text-slate-700">{t('signup.monthly')}</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
@@ -775,7 +783,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                           onChange={() => setCicloPago('anual')}
                           className="text-[#F5B301] focus:ring-[#F5B301]"
                         />
-                        <span className="text-sm text-slate-700">Anual <span className="text-emerald-600 font-medium">-40%</span></span>
+                        <span className="text-sm text-slate-700">{t('signup.annual')} <span className="text-emerald-600 font-medium">-40%</span></span>
                       </label>
                     </div>
                     <label className="flex items-start gap-2 cursor-pointer">
@@ -786,7 +794,11 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                         className="mt-1 rounded border-slate-300 text-[#F5B301] focus:ring-[#F5B301]"
                       />
                       <span className="text-sm text-slate-600">
-                        Acepto los <button type="button" onClick={(e) => { e.preventDefault(); navigateToLegal('terminos'); }} className="text-[#F5B301] hover:underline font-medium">Términos de Servicio</button> y la <button type="button" onClick={(e) => { e.preventDefault(); navigateToLegal('privacidad'); }} className="text-[#F5B301] hover:underline font-medium">Política de Privacidad</button>. Sin pago no se activará la cuenta.
+                        {t('signup.acceptTermsPrefix')}{' '}
+                        <button type="button" onClick={(e) => { e.preventDefault(); navigateToLegal('terminos'); }} className="text-[#F5B301] hover:underline font-medium">{t('signup.termsOfService')}</button>{' '}
+                        {t('signup.acceptTermsAnd')}{' '}
+                        <button type="button" onClick={(e) => { e.preventDefault(); navigateToLegal('privacidad'); }} className="text-[#F5B301] hover:underline font-medium">{t('signup.privacyPolicy')}</button>
+                        {t('signup.acceptTermsSuffix')}
                       </span>
                     </label>
                   </>
@@ -796,10 +808,10 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                   <div className="rounded-xl bg-slate-100 border border-slate-200 p-4 flex flex-col gap-3">
                     <p className="text-slate-700 font-medium flex items-center gap-2">
                       <Smartphone size={20} style={{ color: primary }} />
-                      Pago solo en la app móvil
+                      {t('signup.mobilePaymentOnly')}
                     </p>
                     <p className="text-sm text-slate-600">
-                      Para contratar un plan de pago usa la app en tu móvil: <strong>App Store</strong> en iPhone o <strong>Google Play</strong> en Android.
+                      {t('signup.mobilePaymentDesc')}
                     </p>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <a
@@ -808,7 +820,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                         rel="noopener noreferrer"
                         className="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-black text-white rounded-lg font-medium text-sm hover:bg-slate-800 transition-colors"
                       >
-                        App Store (iPhone)
+                        {t('signup.appStoreLink')}
                       </a>
                       <a
                         href={PLAY_STORE_URL}
@@ -816,7 +828,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                         rel="noopener noreferrer"
                         className="min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg font-medium text-sm hover:bg-emerald-700 transition-colors"
                       >
-                        Google Play (Android)
+                        {t('signup.googlePlayLink')}
                       </a>
                     </div>
                   </div>
@@ -835,14 +847,14 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                     className="btn-primary min-h-[48px] flex-1 sm:order-2 py-3 text-slate-900 font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     style={{ backgroundColor: primary }}
                   >
-                    Continuar <ArrowRight size={20} strokeWidth={2.2} />
+                    {t('common.continue')} <ArrowRight size={20} strokeWidth={2.2} />
                   </button>
                   <button
                     type="button"
                     onClick={onGoToLogin}
                     className="min-h-[48px] px-4 py-3 rounded-xl text-slate-600 hover:text-slate-800 hover:bg-slate-50 text-sm font-medium transition-colors duration-200 sm:order-1"
                   >
-                    <LogIn size={18} className="inline mr-1.5" /> Ya tengo cuenta
+                    <LogIn size={18} className="inline mr-1.5" /> {t('signup.alreadyHaveAccount')}
                   </button>
                 </>
               )}
@@ -855,14 +867,14 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                     className="btn-primary min-h-[48px] flex-1 py-3 text-slate-900 font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     style={{ backgroundColor: primary }}
                   >
-                    Continuar <ArrowRight size={20} strokeWidth={2.2} />
+                    {t('common.continue')} <ArrowRight size={20} strokeWidth={2.2} />
                   </button>
                   <button
                     type="button"
                     onClick={() => setStep(1)}
                     className="min-h-[48px] px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-100 font-medium flex items-center gap-1.5 transition-colors duration-200"
                   >
-                    <ArrowLeft size={18} /> Atrás
+                    <ArrowLeft size={18} /> {t('signup.previous')}
                   </button>
                 </>
               )}
@@ -877,7 +889,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                         className="btn-primary min-h-[48px] flex-1 py-3 text-slate-900 font-semibold rounded-xl transition-all duration-200 disabled:opacity-70 flex items-center justify-center gap-2"
                         style={{ backgroundColor: primary }}
                       >
-                        {loading ? <><Loader2 size={20} className="animate-spin" /> Creando...</> : <>Crear mi cuenta y negocio</>}
+                        {loading ? <><Loader2 size={20} className="animate-spin" /> {t('signup.creating')}</> : <>{t('signup.createAccountAndBusiness')}</>}
                       </button>
                     ) : (
                       <button
@@ -887,13 +899,13 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                         className="btn-primary min-h-[48px] flex-1 py-3 text-slate-900 font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         style={{ backgroundColor: primary }}
                       >
-                        {loading ? <><Loader2 size={20} className="animate-spin" /> Abriendo...</> : isAndroid ? <>Pagar con Google Play</> : <>Pagar con App Store</>}
+                        {loading ? <><Loader2 size={20} className="animate-spin" /> {t('signup.opening')}</> : isAndroid ? <>{t('signup.payWithGooglePlay')}</> : <>{t('signup.payWithAppStore')}</>}
                       </button>
                     )
                   )}
                   {!isFree && isPlanComingSoonOnIOS(selectedPlan) && (
                     <p className="flex-1 text-sm text-slate-500 text-center py-3">
-                      Este plan estará disponible pronto en iOS. Elige el Perfil profesional incluido.
+                      {t('signup.planComingSoonIOS')}
                     </p>
                   )}
                   {!isFree && isIOS && canPurchaseSelectedPlan && (
@@ -903,7 +915,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                       disabled={loading || !step1Valid || !step2Valid}
                       className="min-h-[44px] px-4 py-2.5 text-sm text-slate-600 hover:text-slate-800 underline disabled:opacity-50"
                     >
-                      Restaurar compras
+                      {t('signup.restorePurchases')}
                     </button>
                   )}
                   <button
@@ -911,7 +923,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                     onClick={() => setStep(2)}
                     className="min-h-[48px] px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-100 font-medium flex items-center gap-1.5 transition-colors duration-200"
                   >
-                    <ArrowLeft size={18} /> Atrás
+                    <ArrowLeft size={18} /> {t('signup.previous')}
                   </button>
                 </>
               )}
@@ -921,9 +933,9 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
         </div>
 
         <p className="mt-5 text-center pb-2 text-sm text-slate-500">
-          ¿Ya tienes cuenta?{' '}
+          {t('signup.alreadyHaveAccount')}{' '}
           <button type="button" onClick={onGoToLogin} className="font-medium text-[#F5B301] hover:underline focus:outline-none focus:ring-2 focus:ring-[#F5B301]/30 rounded">
-            Iniciar sesión
+            {t('common.login')}
           </button>
         </p>
       </div>

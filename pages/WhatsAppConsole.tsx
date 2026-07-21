@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/data';
 import { Appointment, Barber, Client, NotificationLog } from '../types';
 import { MessageCircle, CheckCircle, AlertCircle, Clock, Calendar, ExternalLink, User, Scissors, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { useTranslation } from '../i18n';
 
 /** Normaliza teléfono para enlace wa.me: solo dígitos. No se añade prefijo de país; guarda los números con su código (ej. +52 55…) si quieres México. */
 function phoneToWaNumber(phone: string | number | null | undefined): string {
@@ -24,6 +25,7 @@ function isAppointmentPastThreshold(apt: Appointment): boolean {
 }
 
 const WhatsAppConsole: React.FC = () => {
+    const { t, formatDate, formatDateTime } = useTranslation();
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [logs, setLogs] = useState<NotificationLog[]>([]);
@@ -99,27 +101,27 @@ const WhatsAppConsole: React.FC = () => {
 
     const buildMessage = (apt: Appointment, client: Client): string => {
         const posName = getPosName(apt.posId);
-        const fechaStr = new Date(apt.fecha + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-        return `Hola ${client.nombre}, recordatorio: tienes cita el ${fechaStr} a las ${apt.hora} en ${posName}. ¡Te esperamos!`;
+        const fechaStr = formatDate(apt.fecha + 'T12:00:00', { weekday: 'long', day: 'numeric', month: 'long' });
+        return t('whatsapp.reminderMessage', { name: client.nombre, date: fechaStr, time: apt.hora, shop: posName });
     };
 
     const handleOpenWhatsApp = (apt: Appointment) => {
         const client = clients.find(c => c.id === apt.clienteId) ?? resolvedClients[apt.clienteId] ?? null;
         if (!client?.telefono) {
-            alert(`${client?.nombre || 'Cliente desconocido'} no tiene número de teléfono registrado.`);
+            alert(t('whatsapp.noPhoneAlert', { name: client?.nombre || t('whatsapp.unknownClient') }));
             return;
         }
         const msg = buildMessage(apt, client);
         const url = buildWhatsAppLink(client.telefono, msg);
         if (!url) {
-            alert('Número de teléfono inválido.');
+            alert(t('whatsapp.invalidPhone'));
             return;
         }
         window.open(url, '_blank', 'noopener,noreferrer');
     };
 
     const handleCancelAppointment = async (apt: Appointment) => {
-        if (!confirm('¿Cancelar esta cita?')) return;
+        if (!confirm(t('whatsapp.cancelConfirm'))) return;
         await DataService.updateAppointment({ ...apt, estado: 'cancelada' });
         const all = await DataService.getAppointments();
         const filtered = all.filter(a => {
@@ -131,12 +133,17 @@ const WhatsAppConsole: React.FC = () => {
     };
 
     const handleDeleteAppointment = async (apt: Appointment) => {
-        if (!confirm('¿Eliminar esta cita de forma permanente?')) return;
+        if (!confirm(t('whatsapp.deleteConfirm'))) return;
         await DataService.deleteAppointment(apt.id);
         setAppointments(prev => prev.filter(a => a.id !== apt.id));
     };
 
-    const estadoLabel: Record<string, string> = { pendiente: 'PENDIENTE', confirmada: 'CONFIRMADA', cancelada: 'CANCELADA', completada: 'COMPLETADA' };
+    const estadoLabel: Record<string, string> = {
+        pendiente: t('whatsapp.statusPending'),
+        confirmada: t('whatsapp.statusConfirmed'),
+        cancelada: t('whatsapp.statusCancelled'),
+        completada: t('whatsapp.statusCompleted'),
+    };
     const estadoClass: Record<string, string> = {
         pendiente: 'bg-amber-100 text-amber-800',
         confirmada: 'bg-green-100 text-green-800',
@@ -155,18 +162,18 @@ const WhatsAppConsole: React.FC = () => {
     return (
         <div className="space-y-6">
             <h2 className="text-2xl font-bold text-slate-800 flex items-center">
-                <MessageCircle className="mr-2" /> Consola de WhatsApp
+                <MessageCircle className="mr-2" /> {t('whatsapp.title')}
             </h2>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Filtros: día y barbero */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
-                        <Calendar size={20} className="mr-2 text-slate-500" /> Filtros
+                        <Calendar size={20} className="mr-2 text-slate-500" /> {t('whatsapp.filters')}
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Día</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">{t('whatsapp.dayLabel')}</label>
                             <input
                                 type="date"
                                 className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-[#ffd427] focus:border-[#ffd427]"
@@ -177,20 +184,20 @@ const WhatsAppConsole: React.FC = () => {
                         <div>
                             {isBarberUser ? (
                                 <>
-                                    <label className="block text-sm font-medium text-slate-700 mb-2">Envío por barbero</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">{t('whatsapp.barberFilterSelf')}</label>
                                     <div className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 text-slate-700 font-medium">
-                                        Mis clientes agendados (solo citas conmigo)
+                                        {t('whatsapp.myClientsOnly')}
                                     </div>
                                 </>
                             ) : (
                                 <>
-                                    <label className="block text-sm font-medium text-slate-700 mb-2">Barbero</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">{t('whatsapp.barberFilterLabel')}</label>
                                     <select 
                                         className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-[#ffd427] focus:border-[#ffd427]"
                                         value={selectedBarberId}
                                         onChange={e => setSelectedBarberId(Number(e.target.value))}
                                     >
-                                        <option value="0">Todos</option>
+                                        <option value="0">{t('whatsapp.allBarbers')}</option>
                                         {barbers.map(b => (
                                             <option key={b.id} value={b.id}>{b.name}</option>
                                         ))}
@@ -209,7 +216,7 @@ const WhatsAppConsole: React.FC = () => {
                         className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
                     >
                         <h3 className="text-lg font-bold text-slate-800 flex items-center">
-                            <Clock size={20} className="mr-2 text-slate-500" /> Historial de Envíos
+                            <Clock size={20} className="mr-2 text-slate-500" /> {t('whatsapp.sendHistory')}
                             {logs.length > 0 && (
                                 <span className="ml-2 text-sm font-normal text-slate-500">({logs.length})</span>
                             )}
@@ -219,7 +226,7 @@ const WhatsAppConsole: React.FC = () => {
                     {historyOpen && (
                         <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar px-4 pb-4 min-h-[12rem] max-h-96">
                             {logs.length === 0 ? (
-                                <div className="text-center text-slate-400 py-10">Sin registros recientes</div>
+                                <div className="text-center text-slate-400 py-10">{t('whatsapp.noRecentLogs')}</div>
                             ) : (
                                 logs.map(log => {
                                     const client = clients.find(c => c.id === log.clientId) ?? resolvedClients[log.clientId] ?? null;
@@ -229,8 +236,8 @@ const WhatsAppConsole: React.FC = () => {
                                                 {log.status === 'sent' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
                                             </div>
                                             <div>
-                                                <p className="text-sm font-medium text-slate-800">Para: {client?.nombre || 'Cliente desconocido'}</p>
-                                                <p className="text-xs text-slate-500 mb-1">{new Date(log.timestamp).toLocaleString()}</p>
+                                                <p className="text-sm font-medium text-slate-800">{t('whatsapp.toClient', { name: client?.nombre || t('whatsapp.unknownClient') })}</p>
+                                                <p className="text-xs text-slate-500 mb-1">{formatDateTime(log.timestamp)}</p>
                                                 <p className="text-xs text-slate-600 italic">"{log.message}"</p>
                                             </div>
                                         </div>
@@ -246,11 +253,11 @@ const WhatsAppConsole: React.FC = () => {
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                 <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
                     <MessageCircle size={20} className="mr-2 text-green-600" />
-                    {isBarberUser ? 'Mis clientes agendados – Enviar desde tu WhatsApp' : 'Citas del día – Enviar desde tu WhatsApp'}
+                    {isBarberUser ? t('whatsapp.staffListTitle') : t('whatsapp.adminListTitle')}
                 </h3>
                 {appointmentsWithClient.length === 0 ? (
                     <p className="text-slate-500 text-center py-6">
-                        {isBarberUser ? 'No tienes citas agendadas para el día seleccionado.' : 'No hay citas para el día seleccionado.'}
+                        {isBarberUser ? t('whatsapp.noAppointmentsStaff') : t('whatsapp.noAppointmentsAdmin')}
                     </p>
                 ) : (
                     <ul className="space-y-3">
@@ -280,20 +287,20 @@ const WhatsAppConsole: React.FC = () => {
                                                 </div>
                                                 <div className="flex items-center gap-1.5 text-slate-800 font-medium">
                                                     <User size={16} className="text-slate-500 shrink-0" />
-                                                    {client?.nombre ?? 'Cliente desconocido'}
+                                                    {client?.nombre ?? t('whatsapp.unknownClient')}
                                                 </div>
                                                 <div className="flex items-center gap-1.5 text-slate-600 text-sm mt-0.5">
                                                     <Scissors size={14} className="text-slate-400 shrink-0" />
                                                     {serviceNames}
                                                 </div>
-                                                <p className="text-sm text-slate-500 mt-0.5">Barbero: {barber?.name ?? '—'}</p>
+                                                <p className="text-sm text-slate-500 mt-0.5">{t('whatsapp.barberLabel', { name: barber?.name ?? '—' })}</p>
                                             </div>
                                             <div className="flex items-center gap-2 shrink-0">
                                                 <button
                                                     type="button"
                                                     onClick={() => handleOpenWhatsApp(apt)}
                                                     disabled={!hasPhone}
-                                                    title={hasPhone ? 'Abrir WhatsApp' : 'Sin teléfono'}
+                                                    title={hasPhone ? t('whatsapp.openWhatsApp') : t('whatsapp.noPhone')}
                                                     className="p-2.5 rounded-lg border-2 border-green-400 text-green-600 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 transition-colors"
                                                 >
                                                     <MessageCircle size={22} />
@@ -301,7 +308,7 @@ const WhatsAppConsole: React.FC = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => apt.estado === 'cancelada' ? handleDeleteAppointment(apt) : handleCancelAppointment(apt)}
-                                                    title={apt.estado === 'cancelada' ? 'Eliminar cita' : 'Cancelar cita'}
+                                                    title={apt.estado === 'cancelada' ? t('whatsapp.deleteAppointment') : t('whatsapp.cancelAppointment')}
                                                     className="p-2.5 rounded-lg border-2 border-slate-200 text-slate-500 hover:bg-slate-100 hover:border-slate-300 transition-colors"
                                                 >
                                                     <Trash2 size={20} />
