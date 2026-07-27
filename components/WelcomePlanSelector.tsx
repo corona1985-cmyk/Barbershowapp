@@ -18,7 +18,7 @@ import { SUPPORTED_COUNTRIES } from '../constants/regions';
 import { formatSignupAddress, getBarriosForCity, getCitiesForCountry } from '../utils/posLocation';
 import { navigateToLegal } from '../utils/legal';
 import { ALLOW_NATIVE_BARBER_SIGNUP } from '../config/app';
-import { isIOSAccountCreationAllowed } from '../utils/platform';
+import { isIOSAccountCreationAllowed, isIOSBarberSignupAllowed } from '../utils/platform';
 import { useTranslation } from '../i18n';
 
 type Step = 'who' | 'barber_plan' | 'barber_registered' | 'barber_contact' | 'client_registered' | 'client_new';
@@ -43,7 +43,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
     const tierOptions = useMemo(() => getTierOptions(t), [t]);
     const isNativeMobile = Capacitor.isNativePlatform();
     const canCreateAccount = isIOSAccountCreationAllowed();
-    const canSelfSignupBarber = (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && canCreateAccount;
+    const canSelfSignupBarber = (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && canCreateAccount && isIOSBarberSignupAllowed();
     const [step, setStep] = useState<Step>('who');
     const [userType, setUserType] = useState<UserType | null>(null);
     const [showSelfSignup, setShowSelfSignup] = useState(false);
@@ -534,8 +534,8 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                 </div>
 
 
-                {/* Paso 1: ¿Barbero o Cliente? — móvil sin autoregistro: solo login + cliente */}
-                {!showSelfSignup && step === 'who' && isNativeMobile && !ALLOW_NATIVE_BARBER_SIGNUP && (
+                {/* Paso 1: ¿Barbero o Cliente? — móvil sin autoregistro de barbero: solo login + cliente */}
+                {!showSelfSignup && step === 'who' && isNativeMobile && !canSelfSignupBarber && (
                     <div className="max-w-lg mx-auto space-y-4">
                         <p className="text-white text-center text-lg font-semibold mb-2">Bienvenido a BarberShow</p>
                         <p className="text-slate-400 text-center text-sm mb-6">
@@ -567,7 +567,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                     </div>
                 )}
 
-                {!showSelfSignup && step === 'who' && (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && (
+                {!showSelfSignup && step === 'who' && (!isNativeMobile || canSelfSignupBarber) && (
                     <>
                         <p className="text-white text-center text-lg font-semibold mb-5">{t('welcome.title')}</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 max-w-lg mx-auto">
@@ -605,7 +605,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                                 <span className="text-slate-400 text-sm text-center leading-snug">{t('welcome.iAmClientDesc')}</span>
                             </button>
                         </div>
-                        {(!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && (
+                        {canSelfSignupBarber && (
                         <p className="text-center">
                             <button
                                 type="button"

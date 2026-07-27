@@ -47,7 +47,7 @@ import { initLocalNotifications, syncAppointmentNotifications, stopAppointmentNo
 import LegalDocumentPage from './pages/LegalDocumentPage';
 import { getLegalDocumentFromUrl, navigateToLegal, LegalDocumentType } from './utils/legal';
 import { GLOBAL_FREE_MODE } from './config/app';
-import { isIOSAccountCreationAllowed, isIOSPlatform } from './utils/platform';
+import { isIOSAccountCreationAllowed, isIOSBarberSignupAllowed, isIOSPlatform } from './utils/platform';
 import { useTranslation, translate } from './i18n';
 import LanguageSwitcher from './components/LanguageSwitcher';
 
@@ -988,7 +988,7 @@ const App: React.FC = () => {
 
     // 6. BIENVENIDA (tipo de barbería + contacto) o LOGIN
     if (!isAuthenticated) {
-        if (isBarberRegistering && isIOSAccountCreationAllowed()) {
+        if (isBarberRegistering && isIOSBarberSignupAllowed()) {
             return guestShell(
                 <>
                     <AdMobBanner showAds={true} />
@@ -1145,6 +1145,7 @@ const App: React.FC = () => {
                                     <button type="button" onClick={() => setIsRegistering(true)} className="w-full min-h-[44px] flex items-center justify-center text-slate-600 font-medium hover:underline hover:text-[#e6be23] rounded-lg active:bg-slate-50">
                                         <UserPlus size={18} className="mr-2" /> {t('auth.createClientFree')}
                                     </button>
+                                    {isIOSBarberSignupAllowed() && (
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -1156,6 +1157,7 @@ const App: React.FC = () => {
                                     >
                                         <Scissors size={18} className="mr-2" /> {t('auth.createBarberProfile')}
                                     </button>
+                                    )}
                                 </div>
                                 )}
 

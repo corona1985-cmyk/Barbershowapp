@@ -9,8 +9,8 @@ import { formatSignupAddress, getBarriosForCity, getCitiesForCountry } from '../
 import { requestUserLocationWithPermission } from '../utils/geolocation';
 import { initPlayBilling, purchasePlan, addPlayPurchaseListener, getActivePlayTransactions, isPlanAvailableForPurchase, isTransactionActivatable, getTransactionForPlan, isNativePaymentAvailable } from '../services/playBilling';
 import { navigateToLegal } from '../utils/legal';
-import { ALLOW_NATIVE_BARBER_SIGNUP, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER, IOS_IAP_TIERS } from '../config/app';
-import { isIOSAccountCreationAllowed, isIOSPlatform } from '../utils/platform';
+import { ALLOW_NATIVE_BARBER_SIGNUP, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER, IOS_IAP_TIERS, APP_STORE_URL, PLAY_STORE_URL } from '../config/app';
+import { isIOSAccountCreationAllowed, isIOSBarberSignupAllowed, isIOSPlatform } from '../utils/platform';
 import { useTranslation } from '../i18n';
 
 const TIER_OPTION_DEFS: { value: AccountTier; tierKey: 'basic' | 'solo' | 'barberia' | 'multisede'; price: number }[] = [
@@ -30,9 +30,6 @@ export interface SelfServiceBarberSignupProps {
 }
 
 const MIN_PHONE_DIGITS = 8;
-
-const APP_STORE_URL = 'https://apps.apple.com/app/barbershow/id123456789';
-const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.barbershow.app';
 
 const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuccess, onGoToLogin, onGoBack }) => {
   const { t } = useTranslation();
@@ -82,7 +79,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const isNativeMobile = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform();
   const isAndroid = typeof Capacitor !== 'undefined' && Capacitor.getPlatform() === 'android';
   const isIOS = isIOSPlatform();
-  const canSelfSignupBarber = (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && isIOSAccountCreationAllowed();
+  const canSelfSignupBarber = (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && isIOSAccountCreationAllowed() && isIOSBarberSignupAllowed();
 
   const isPlanComingSoonOnIOS = (tier: AccountTier) =>
     isIOS && tier !== 'gratuito' && !IOS_IAP_TIERS.includes(tier);

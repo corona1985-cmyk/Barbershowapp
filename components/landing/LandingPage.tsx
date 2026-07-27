@@ -7,9 +7,22 @@ import {
     Zap, ChevronRight, UserCircle, Search, UserPlus,
 } from 'lucide-react';
 import { CONTACT, getTierOptions } from '../../constants/plans';
+import { APP_STORE_URL, PLAY_STORE_URL } from '../../config/app';
 import HeroMockup from './HeroMockup';
 import { navigateToLegal } from '../../utils/legal';
 import { useTranslation } from '../../i18n';
+
+const AppleIcon: React.FC<{ size?: number }> = ({ size = 22 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+    </svg>
+);
+
+const GooglePlayIcon: React.FC<{ size?: number }> = ({ size = 22 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <path d="M3.18 23.04c.4.22.9.21 1.3-.02l11.43-6.52-2.74-2.74L3.18 23.04zm16.32-9.3 2.55-1.45c1.03-.59 1.03-1.55 0-2.14L19.5 8.7l-2.9 2.9 2.9 2.14zM3.18.96 12.97 9.5l2.74-2.74L4.48.98C4.08.75 3.58.74 3.18.96zM13.17 12.3 3.18 23.04V.96l9.99 11.34z" />
+    </svg>
+);
 
 export interface LandingPageProps {
     onGetStarted: () => void;
@@ -290,6 +303,41 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 </button>
                                 )}
                             </div>
+                            {!isNativeMobile && (
+                                <div className="mt-8">
+                                    <p className="text-slate-500 text-sm font-medium uppercase tracking-wider mb-3">
+                                        {t('landing.hero.downloadApp')}
+                                    </p>
+                                    <div className="flex flex-col sm:flex-row gap-3">
+                                        <a
+                                            href={APP_STORE_URL}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-3 px-5 py-3 bg-black hover:bg-slate-900 border border-white/20 rounded-xl transition-colors"
+                                            aria-label={t('landing.hero.appStore')}
+                                        >
+                                            <AppleIcon size={28} />
+                                            <span className="text-left leading-tight">
+                                                <span className="block text-[10px] text-slate-400 uppercase tracking-wide">{t('landing.hero.downloadOn')}</span>
+                                                <span className="block text-base font-semibold text-white">{t('landing.hero.appStore')}</span>
+                                            </span>
+                                        </a>
+                                        <a
+                                            href={PLAY_STORE_URL}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-3 px-5 py-3 bg-black hover:bg-slate-900 border border-white/20 rounded-xl transition-colors"
+                                            aria-label={t('landing.hero.googlePlay')}
+                                        >
+                                            <GooglePlayIcon size={26} />
+                                            <span className="text-left leading-tight">
+                                                <span className="block text-[10px] text-slate-400 uppercase tracking-wide">{t('landing.hero.getItOn')}</span>
+                                                <span className="block text-base font-semibold text-white">{t('landing.hero.googlePlay')}</span>
+                                            </span>
+                                        </a>
+                                    </div>
+                                </div>
+                            )}
                             {onGoToBarberias && (
                                 <div className="mt-8 pt-6 border-t border-white/10">
                                     <p className="text-slate-500 text-base mb-3 flex items-center gap-2">

@@ -600,7 +600,12 @@
       "description": "Agende consultas, gerencie clientes, processe vendas, administre sua equipe e faça seu negócio crescer em uma única plataforma.",
       "createShop": "Criar minha barbearia",
       "viewPlans": "Ver planos",
-      "notBarber": "Não é barbeiro? Busque barbearias registradas e agende sua consulta online."
+      "notBarber": "Não é barbeiro? Busque barbearias registradas e agende sua consulta online.",
+      "downloadApp": "Baixe o app",
+      "appStore": "App Store",
+      "googlePlay": "Google Play",
+      "downloadOn": "Baixar na",
+      "getItOn": "Disponível no"
     },
     "clients": {
       "badge": "Para clientes",

@@ -600,7 +600,12 @@
       "description": "Schedule appointments, manage clients, process sales, manage your team, and grow your business from a single platform.",
       "createShop": "Create my barbershop",
       "viewPlans": "View plans",
-      "notBarber": "Not a barber? Browse registered barbershops and book your appointment online."
+      "notBarber": "Not a barber? Browse registered barbershops and book your appointment online.",
+      "downloadApp": "Download the app",
+      "appStore": "App Store",
+      "googlePlay": "Google Play",
+      "downloadOn": "Download on the",
+      "getItOn": "Get it on"
     },
     "clients": {
       "badge": "For clients",

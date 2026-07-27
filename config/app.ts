@@ -7,6 +7,10 @@ import type { AccountTier, PosPlan } from '../types';
 
 export const DEFAULT_PUBLIC_APP_URL = 'https://barbershow.net';
 
+/** Enlaces de descarga de la app nativa. */
+export const APP_STORE_URL = 'https://apps.apple.com/us/app/barbershow/id6766656155';
+export const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.barbershow.app';
+
 /**
  * Modo promocional global: evita pantallas de suscripción vencida y bloqueos por plan.
  * Desactivado: Plan Barbería se cobra vía App Store / Google Play.
@@ -16,8 +20,11 @@ export const GLOBAL_FREE_MODE = true;
 /** Permite autoregistro de barberías en app móvil nativa (con IAP cuando aplique). */
 export const ALLOW_NATIVE_BARBER_SIGNUP = true;
 
-/** Desactiva autoregistro en iOS (App Store). Android y web sin cambios. */
-export const ALLOW_IOS_ACCOUNT_CREATION = false;
+/** Permite creación de cuentas de cliente en iOS. Android y web sin cambios. */
+export const ALLOW_IOS_ACCOUNT_CREATION = true;
+
+/** Autoregistro de barberos/barberías en iOS (App Store). Desactivado: solo clientes. */
+export const ALLOW_IOS_BARBER_SIGNUP = false;
 
 /**
  * Tier otorgado sin pago mientras GLOBAL_FREE_MODE esté activo.

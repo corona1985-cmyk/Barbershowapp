@@ -600,7 +600,12 @@
       "description": "Agenda citas, gestiona clientes, procesa ventas, administra tu equipo y haz crecer tu negocio desde una sola plataforma.",
       "createShop": "Crear mi barbería",
       "viewPlans": "Ver planes",
-      "notBarber": "¿No eres barbero? Busca barberías registradas y agenda tu cita en línea."
+      "notBarber": "¿No eres barbero? Busca barberías registradas y agenda tu cita en línea.",
+      "downloadApp": "Descarga la app",
+      "appStore": "App Store",
+      "googlePlay": "Google Play",
+      "downloadOn": "Descargar en",
+      "getItOn": "Disponible en"
     },
     "clients": {
       "badge": "Para clientes",
