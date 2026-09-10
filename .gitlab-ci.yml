@@ -1,0 +1,28 @@
+stages:
+  - test
+
+security:rules-lock:
+  stage: test
+  image: node:22
+  script:
+    - node scripts/assert-rtdb-rules-locked.mjs
+    - npm ci --prefix functions
+    - npm run build --prefix functions
+    - node --test tests/functions.helpers.test.mjs tests/functions.authz.test.mjs
+  rules:
+    - if: $CI_PIPELINE_SOURCE
+
+security:rtdb-emulator:
+  stage: test
+  image: node:22
+  allow_failure: false
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq openjdk-17-jre-headless >/dev/null
+    - npm ci
+    - npm ci --prefix functions
+    - npm run build --prefix functions
+  script:
+    - node scripts/assert-rtdb-rules-locked.mjs
+    - npx firebase emulators:exec --only database --project demo-barbershow "node --test tests/rtdb.rules.test.mjs"
+  rules:
+    - if: $CI_PIPELINE_SOURCE

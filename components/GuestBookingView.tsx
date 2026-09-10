@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { DataService } from '../services/data';
 import { Appointment, Barber, BarberGalleryPhoto, Service } from '../types';
 import { MapPin, ArrowLeft, CheckCircle, ImageIcon } from 'lucide-react';
 import { useTranslation } from '../i18n';
+import { createGuestAppointment, getPublicBookingCatalog } from '../services/firebase';
 
 interface GuestBookingViewProps {
     posId: number;
@@ -32,26 +32,35 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
     const [guestBarberGallery, setGuestBarberGallery] = useState<BarberGalleryPhoto[]>([]);
     const [dataLoading, setDataLoading] = useState(true);
 
+    const [galleries, setGalleries] = useState<Record<string, BarberGalleryPhoto[]>>({});
+
     useEffect(() => {
         setDataLoading(true);
         setError('');
-        const prev = DataService.getActivePosId();
-        DataService.setActivePosId(posId);
-        Promise.all([
-            DataService.getServices(),
-            DataService.getBarbers(),
-            DataService.getAppointments(),
-        ])
-            .then(([s, b, a]) => {
-                setServices(s);
-                const active = b.filter((x) => x.active);
+        getPublicBookingCatalog(posId)
+            .then((catalog) => {
+                setServices(catalog.services);
+                const active = catalog.barbers.filter((x) => x.active);
                 setBarbers(active);
-                setAppointments(a);
+                setAppointments(catalog.busySlots.map((s, idx) => ({
+                    id: idx,
+                    posId,
+                    clienteId: 0,
+                    barberoId: Number(s.barberoId),
+                    fecha: String(s.fecha),
+                    hora: String(s.hora),
+                    servicios: [],
+                    notas: '',
+                    duracionTotal: Number(s.duracionTotal || 30),
+                    total: 0,
+                    estado: (s.estado as Appointment['estado']) || 'confirmada',
+                    fechaCreacion: '',
+                })));
+                setGalleries(catalog.galleries || {});
                 if (active.length > 0) setSelectedBarberId(active[0].id);
             })
             .catch(() => setError(t('errors.loadDataFailed')))
             .finally(() => setDataLoading(false));
-        return () => { DataService.setActivePosId(prev); };
     }, [posId]);
 
     const activeBarbers = useMemo(() => barbers.filter((b) => b.active), [barbers]);
@@ -60,9 +69,8 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
     useEffect(() => {
         const defaultId = barbers.filter((b) => b.active)[0]?.id ?? 0;
         const bid = selectedBarberId || defaultId;
-        if (bid) DataService.getBarberGallery(bid).then(setGuestBarberGallery).catch(() => setGuestBarberGallery([]));
-        else setGuestBarberGallery([]);
-    }, [selectedBarberId, barbers]);
+        setGuestBarberGallery(bid ? (galleries[String(bid)] || []) : []);
+    }, [selectedBarberId, barbers, galleries]);
 
     const getTodayLocal = (): string => {
         const d = new Date();
@@ -168,29 +176,14 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
         }
         setLoading(true);
         try {
-            const client = await DataService.addClientOrGetExisting({
-                nombre: nombre.trim(),
-                telefono: telefono.trim(),
-                email: '',
-                ultimaVisita: 'N/A',
-                notas: 'Reserva sin cuenta (invitado)',
-                fechaRegistro: new Date().toISOString().split('T')[0],
-                puntos: 0,
-                status: 'active',
-            });
-            const total = selectedServices.length > 0 ? selectedServices.reduce((acc, s) => acc + s.price, 0) : 0;
-            await DataService.addAppointment({
+            await createGuestAppointment({
                 posId,
-                clienteId: client.id,
                 barberoId: barberId,
                 fecha: selectedDate,
                 hora: selectedTime,
+                nombre: nombre.trim(),
+                telefono: telefono.trim(),
                 servicios: selectedServices,
-                notas: '',
-                duracionTotal,
-                total,
-                estado: 'confirmada',
-                fechaCreacion: new Date().toISOString(),
             });
             setDone(true);
         } catch (e) {

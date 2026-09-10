@@ -7,7 +7,7 @@ import { completeSelfSignupFree, createPendingBarberSignupMobile, activatePlanFr
 import { SUPPORTED_COUNTRIES } from '../constants/regions';
 import { formatSignupAddress, getBarriosForCity, getCitiesForCountry } from '../utils/posLocation';
 import { requestUserLocationWithPermission } from '../utils/geolocation';
-import { initPlayBilling, purchasePlan, addPlayPurchaseListener, getActivePlayTransactions, isPlanAvailableForPurchase, isTransactionActivatable, getTransactionForPlan, isNativePaymentAvailable } from '../services/playBilling';
+import { initPlayBilling, purchasePlan, addPlayPurchaseListener, getActivePlayTransactions, isPlanAvailableForPurchase, isTransactionActivatable, getTransactionForPlan, isNativePaymentAvailable, iapActivationPayload } from '../services/playBilling';
 import { navigateToLegal } from '../utils/legal';
 import { ALLOW_NATIVE_BARBER_SIGNUP, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER, IOS_IAP_TIERS, APP_STORE_URL, PLAY_STORE_URL } from '../config/app';
 import { isIOSAccountCreationAllowed, isIOSBarberSignupAllowed, isIOSPlatform } from '../utils/platform';
@@ -216,15 +216,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
           pendingMobileRef.current = null;
           return;
         }
-        const result = await activatePlanFromPlay({
-          purchaseToken: tx!.purchaseToken,
-          productId: tx!.productIdentifier,
-          expiryDate: tx!.expiryDate,
-          email: email.trim() || username.trim() + '@barbershow.app',
-          nombreNegocio: barbershopName.trim(),
-          nombreRepresentante: name.trim(),
-          username: pending.username,
-        });
+        const result = await activatePlanFromPlay(iapActivationPayload(tx!));
         pendingMobileRef.current = null;
         if (result.success) onSuccess(pending.username, pending.password);
         else setError(result.message || t('welcome.planActivateFailed'));
@@ -320,13 +312,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
           ciclo: barberiaTx!.productIdentifier.includes('yearly') ? 'anual' : 'mensual',
         });
       }
-      const result = await activatePlanFromPlay({
-        purchaseToken: barberiaTx!.purchaseToken,
-        productId: barberiaTx!.productIdentifier,
-        expiryDate: barberiaTx!.expiryDate,
-        email: email.trim() || u + '@barbershow.app',
-        username: u,
-      });
+      const result = await activatePlanFromPlay(iapActivationPayload(barberiaTx!));
       if (result.success) onSuccess(u, password);
       else setError(result.message || t('errors.restoreFailed'));
     } catch (err: unknown) {

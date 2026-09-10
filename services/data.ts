@@ -1,8 +1,8 @@
-import { ref, get, set, update, remove, query, orderByChild, equalTo } from 'firebase/database';
-import { db } from './firebase';
-import { hashPassword, verifyPassword, isStoredHash } from './passwordHash';
+import { ref, get, set, remove, query, orderByChild, equalTo } from 'firebase/database';
+import { db, getAuthIdToken, loginWithPassword, upsertStaffUser, deleteStaffUser, updateMyProfile, adminUpsertPointOfSale, adminDeletePointOfSale, adminSetPosPlan, checkUsernameAvailable } from './firebase';
+import { getCachedClaims } from './session';
 import { Capacitor } from '@capacitor/core';
-import { getFreeSignupTierAndPlan, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER, PROMO_GRACE_PERIOD_DAYS } from '../config/app';
+import { GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER, PROMO_GRACE_PERIOD_DAYS, getFreeSignupTierAndPlan } from '../config/app';
 import {
   Client,
   Product,
@@ -40,38 +40,18 @@ function withTimeout<T>(promise: Promise<T>, ms: number = FIREBASE_TIMEOUT_MS, o
   ]);
 }
 
-/** Caché breve de claves en /users para búsqueda case-insensitive (ej. Yendrick vs yendrick). */
-let usernameKeysCache: { keys: string[]; ts: number } | null = null;
-const USERNAME_KEYS_TTL_MS = 30_000;
-
-async function listUserKeys(): Promise<string[]> {
-  if (usernameKeysCache && Date.now() - usernameKeysCache.ts < USERNAME_KEYS_TTL_MS) {
-    return usernameKeysCache.keys;
-  }
-  const response = await withTimeout(
-    fetch(`${RTDB_BASE_URL}/${ROOT}/users.json?shallow=true`),
-    FIREBASE_TIMEOUT_MS,
-    'listUserKeys'
-  );
-  if (!response.ok) {
-    throw new Error(`listUserKeys HTTP ${response.status}`);
-  }
-  const data = (await response.json()) as Record<string, unknown> | null;
-  const keys = data ? Object.keys(data) : [];
-  usernameKeysCache = { keys, ts: Date.now() };
-  return keys;
-}
-
-function invalidateUsernameKeysCache(): void {
-  usernameKeysCache = null;
+async function authQuery(): Promise<string> {
+  const token = await getAuthIdToken();
+  if (!token) throw new Error('Sesión no autenticada.');
+  return `auth=${encodeURIComponent(token)}`;
 }
 
 /** Resuelve la clave real en RTDB ignorando mayúsculas/minúsculas. */
 async function resolveUsernameKey(username: string): Promise<string | null> {
   const searchLower = String(username || '').trim().toLowerCase();
   if (!searchLower) return null;
-  const keys = await listUserKeys();
-  return keys.find((k) => k.toLowerCase() === searchLower) ?? null;
+  const user = await readNode<SystemUser>(`${ROOT}/users/${searchLower}`, 'resolveUsernameKey');
+  return user ? searchLower : null;
 }
 
 /** Evita cargar en memoria fotos base64 enormes durante el login (ralentizan o agotan el timeout). */
@@ -87,41 +67,11 @@ function withoutOversizedProfileBlob(user: SystemUser): SystemUser {
   return user;
 }
 
-/** Carga solo campos necesarios para login (evita descargar photoUrl base64 de varios MB). */
-async function loadUserForAuth(dbKey: string): Promise<SystemUser | null> {
-  const base = `${ROOT}/users/${dbKey}`;
-  const [password, role, status, name, posId, permissions, active, accountStatus, barberId, clientId] =
-    await Promise.all([
-      readNode<string>(`${base}/password`, 'authPassword'),
-      readNode<string>(`${base}/role`, 'authRole'),
-      readNode<string>(`${base}/status`, 'authStatus'),
-      readNode<string>(`${base}/name`, 'authName'),
-      readNode<number | null>(`${base}/posId`, 'authPosId'),
-      readNode<SystemUser['permissions']>(`${base}/permissions`, 'authPermissions'),
-      readNode<boolean>(`${base}/active`, 'authActive'),
-      readNode<string>(`${base}/accountStatus`, 'authAccountStatus'),
-      readNode<number>(`${base}/barberId`, 'authBarberId'),
-      readNode<number>(`${base}/clientId`, 'authClientId'),
-    ]);
-  if (role == null && password == null && name == null) return null;
-  return {
-    username: dbKey,
-    password: password ?? '',
-    role: (role ?? 'cliente') as SystemUser['role'],
-    name: name ?? dbKey,
-    status: status ?? 'active',
-    posId: posId ?? undefined,
-    permissions,
-    active,
-    accountStatus,
-    barberId,
-    clientId,
-  } as SystemUser;
-}
-
-async function nativeRtdbGet<T>(path: string, operation: string): Promise<T | null> {
+async function nativeRtdbGet<T>(path: string, operation: string, extraQuery = ''): Promise<T | null> {
+  const auth = await authQuery();
+  const qs = extraQuery ? `?${auth}&${extraQuery}` : `?${auth}`;
   const response = await withTimeout(
-    fetch(`${RTDB_BASE_URL}/${path}.json`, { method: 'GET' }),
+    fetch(`${RTDB_BASE_URL}/${path}.json${qs}`, { method: 'GET' }),
     FIREBASE_TIMEOUT_MS,
     `${operation}.nativeFetch`
   );
@@ -132,29 +82,15 @@ async function nativeRtdbGet<T>(path: string, operation: string): Promise<T | nu
 }
 
 async function nativeRtdbSet(path: string, value: unknown, operation: string): Promise<void> {
+  const auth = await authQuery();
   const response = await withTimeout(
-    fetch(`${RTDB_BASE_URL}/${path}.json`, {
+    fetch(`${RTDB_BASE_URL}/${path}.json?${auth}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(value),
     }),
     FIREBASE_TIMEOUT_MS,
     `${operation}.nativeSet`
-  );
-  if (!response.ok) {
-    throw new Error(`${operation} HTTP ${response.status}`);
-  }
-}
-
-async function nativeRtdbUpdate(path: string, value: Record<string, unknown>, operation: string): Promise<void> {
-  const response = await withTimeout(
-    fetch(`${RTDB_BASE_URL}/${path}.json`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(value),
-    }),
-    FIREBASE_TIMEOUT_MS,
-    `${operation}.nativePatch`
   );
   if (!response.ok) {
     throw new Error(`${operation} HTTP ${response.status}`);
@@ -171,19 +107,14 @@ async function readNode<T>(path: string, operation: string): Promise<T | null> {
 
 async function readCollectionByPos<T extends { posId?: number }>(collection: string, posId: number, operation: string): Promise<T[]> {
   if (Capacitor.isNativePlatform()) {
-    const all = await nativeRtdbGet<Record<string, T> | null>(`${ROOT}/${collection}`, operation);
-    return snapshotToArray<T>(all).filter((item) => item.posId === posId);
+    const extra = `orderBy=${encodeURIComponent('"posId"')}&equalTo=${posId}`;
+    const all = await nativeRtdbGet<Record<string, T> | null>(`${ROOT}/${collection}`, operation, extra);
+    return snapshotToArray<T>(all);
   }
   const q = query(ref(db, ROOT + '/' + collection), orderByChild('posId'), equalTo(posId));
   const snap = await withTimeout(get(q), FIREBASE_TIMEOUT_MS, operation);
   return snapshotToArray<T>(snap.val());
 }
-
-// Solo usuarios mínimos para poder acceder y crear sedes/barberos desde la app. El resto está en la base de datos (ver database-seed.json).
-const INITIAL_USERS_MINIMAL: SystemUser[] = [
-  { username: 'master', role: 'platform_owner', name: 'Master Admin', password: 'root', posId: null, status: 'active' },
-  { username: 'superadmin', role: 'superadmin', name: 'Super Admin Global', password: 'admin', permissions: { canManageUsers: true, canViewReports: true }, status: 'active' },
-];
 
 const DEFAULT_SETTINGS: AppSettings = {
   taxRate: 0,
@@ -468,22 +399,30 @@ function toObjectByUsername(users: SystemUser[]): Record<string, SystemUser> {
   return o;
 }
 
-function snapshotToArray<T extends { id?: number }>(val: unknown): T[] {
+function snapshotToArray<T>(val: unknown): T[] {
   if (val == null || typeof val !== 'object') return [];
   const obj = val as Record<string, T | null | undefined>;
   return Object.keys(obj)
     .filter((k) => obj[k] != null)
     .map((k) => {
       const item = obj[k]!;
-      const id = typeof item.id === 'number' ? item.id : Number(k) || k;
-      return { ...item, id } as T;
+      if (item && typeof item === 'object') {
+        const rec = item as T & { id?: number };
+        const id = typeof rec.id === 'number' ? rec.id : Number(k) || k;
+        return { ...rec, id } as T;
+      }
+      return item as T;
     });
 }
 
 function snapshotToUsers(val: unknown): SystemUser[] {
   if (val == null) return [];
   const obj = val as Record<string, SystemUser>;
-  return Object.values(obj);
+  return Object.values(obj).map((u) => {
+    const copy = { ...u };
+    delete (copy as Record<string, unknown>).password;
+    return copy;
+  });
 }
 
 export function isAccountDeactivated(user: SystemUser | null | undefined): boolean {
@@ -516,9 +455,10 @@ function cacheInvalidate(prefix: string) {
   });
 }
 
-/** Lanza si el rol actual no está en la lista permitida. Usar antes de operaciones sensibles. */
+/** Lanza si el rol actual no está en la lista permitida. Usar solo como UX; las Rules/Functions autorizan. */
 function requireRole(allowedRoles: string[]): void {
-  const role = DataService.getCurrentUserRole();
+  const claims = getCachedClaims();
+  const role = claims?.role === 'empleado' ? 'barbero' : (claims?.role || DataService.getCurrentUserRole());
   const normalized = role === 'empleado' ? 'barbero' : role;
   if (!allowedRoles.includes(normalized)) {
     throw new Error('No tienes permiso para realizar esta acción.');
@@ -527,46 +467,7 @@ function requireRole(allowedRoles: string[]): void {
 
 export const DataService = {
   initialize: async (): Promise<void> => {
-    const snap = await get(ref(db, ROOT + '/pointsOfSale'));
-    if (!snap.exists()) {
-      await set(ref(db, ROOT + '/pointsOfSale'), {});
-      await set(ref(db, ROOT + '/clients'), {});
-      await set(ref(db, ROOT + '/products'), {});
-      await set(ref(db, ROOT + '/services'), {});
-      await set(ref(db, ROOT + '/barbers'), {});
-      await set(ref(db, ROOT + '/appointments'), {});
-      await set(ref(db, ROOT + '/sales'), {});
-      await set(ref(db, ROOT + '/finances'), {});
-      await set(ref(db, ROOT + '/users'), toObjectByUsername(INITIAL_USERS_MINIMAL));
-      await set(ref(db, ROOT + '/notificationLogs'), {});
-      await set(ref(db, ROOT + '/auditLogs'), {});
-      await set(ref(db, ROOT + '/financialTransactions'), {});
-      await set(ref(db, ROOT + '/globalSettings'), DEFAULT_GLOBAL_SETTINGS);
-      await set(ref(db, ROOT + '/userCart'), []);
-    }
-    // Asegurar que al menos master y superadmin existan (por si la BD ya tenía datos sin users)
-    const usersSnap = await get(ref(db, ROOT + '/users'));
-    const currentUsers = usersSnap.val() || {};
-    const updates: Record<string, SystemUser> = {};
-    for (const u of INITIAL_USERS_MINIMAL) {
-      if (!currentUsers[u.username]) {
-        updates[u.username] = { ...u, status: u.status || 'active', loginAttempts: 0 };
-      }
-    }
-    if (Object.keys(updates).length > 0) {
-      await update(ref(db, ROOT + '/users'), updates);
-      invalidateUsernameKeysCache();
-    }
-
-    if (GLOBAL_FREE_MODE) {
-      DataService.migrateGratuitoPosToPromotionalTier()
-        .then((result) => {
-          if (result.updated > 0) {
-            console.info(`[BarberShow] Migración promocional: ${result.updated} sede(s) actualizadas a Plan Barbería.`);
-          }
-        })
-        .catch((err) => console.warn('[BarberShow] Migración promocional omitida o fallida:', err));
-    }
+    return;
   },
 
   /**
@@ -583,33 +484,20 @@ export const DataService = {
       return { updated: 0, posIds: [], message: 'El tier promocional configurado no es Plan Barbería.' };
     }
 
-    const snap = await get(ref(db, ROOT + '/pointsOfSale'));
-    if (!snap.exists()) {
-      return { updated: 0, posIds: [], message: 'No hay sedes registradas.' };
-    }
-
-    const raw = snap.val() as Record<string, PointOfSale>;
+    const list = await DataService.getPointsOfSale();
     const posIds: number[] = [];
-    const flatUpdates: Record<string, unknown> = {};
-
-    for (const [id, pos] of Object.entries(raw)) {
-      const posData = pos as PointOfSale;
-      if (posData.tier !== 'gratuito') continue;
-      const numericId = Number(id);
-      posIds.push(numericId);
-      flatUpdates[`${ROOT}/pointsOfSale/${id}/tier`] = tier;
-      flatUpdates[`${ROOT}/pointsOfSale/${id}/plan`] = plan;
+    for (const pos of list) {
+      if (pos.tier !== 'gratuito') continue;
+      await adminSetPosPlan(pos.id, tier, plan);
+      posIds.push(pos.id);
     }
 
     if (posIds.length === 0) {
       return { updated: 0, posIds: [], message: 'No hay sedes con Plan Gratuito pendientes de migrar.' };
     }
 
-    await update(ref(db), flatUpdates);
     cacheInvalidate('pointsOfSale');
-
-    const details = `Migración promocional: ${posIds.length} sede(s) de gratuito → ${tier} (plan ${plan}). IDs: ${posIds.join(', ')}`;
-    await DataService.logAuditAction('migration_promotional_tier', 'system', details).catch(() => {});
+    await DataService.logAuditAction('migration_promotional_tier', 'system', `Migración promocional: ${posIds.length} sede(s).`).catch(() => {});
 
     return {
       updated: posIds.length,
@@ -627,36 +515,25 @@ export const DataService = {
       return { updated: 0, posIds: [], message: 'El modo promocional sigue activo (GLOBAL_FREE_MODE = true).' };
     }
 
-    const snap = await get(ref(db, ROOT + '/pointsOfSale'));
-    if (!snap.exists()) {
-      return { updated: 0, posIds: [], message: 'No hay sedes registradas.' };
-    }
-
-    const raw = snap.val() as Record<string, PointOfSale>;
+    const list = await DataService.getPointsOfSale();
     const posIds: number[] = [];
-    const flatUpdates: Record<string, unknown> = {};
     const graceEnd = new Date();
     graceEnd.setDate(graceEnd.getDate() + PROMO_GRACE_PERIOD_DAYS);
     const graceIso = graceEnd.toISOString();
 
-    for (const [id, pos] of Object.entries(raw)) {
-      const posData = pos as PointOfSale;
-      if (posData.tier !== 'barberia') continue;
-      if (posData.subscriptionExpiresAt) continue;
-      const numericId = Number(id);
-      posIds.push(numericId);
-      flatUpdates[`${ROOT}/pointsOfSale/${id}/subscriptionExpiresAt`] = graceIso;
+    for (const pos of list) {
+      if (pos.tier !== 'barberia') continue;
+      if (pos.subscriptionExpiresAt) continue;
+      await adminSetPosPlan(pos.id, pos.tier || 'barberia', pos.plan || 'pro', graceIso);
+      posIds.push(pos.id);
     }
 
     if (posIds.length === 0) {
       return { updated: 0, posIds: [], message: 'No hay sedes Barbería sin fecha de vencimiento.' };
     }
 
-    await update(ref(db), flatUpdates);
     cacheInvalidate('pointsOfSale');
-
-    const details = `Gracia promocional: ${posIds.length} sede(s) Barbería con vencimiento ${graceIso}. IDs: ${posIds.join(', ')}`;
-    await DataService.logAuditAction('migration_promo_grace', 'system', details).catch(() => {});
+    await DataService.logAuditAction('migration_promo_grace', 'system', `Gracia promocional: ${posIds.length} sede(s).`).catch(() => {});
 
     return {
       updated: posIds.length,
@@ -669,21 +546,35 @@ export const DataService = {
   getActivePosId: () => ACTIVE_POS_ID,
 
   getPointsOfSale: async (): Promise<PointOfSale[]> => {
+    const claims = getCachedClaims();
     const key = 'pointsOfSale';
     const cached = cacheGet<PointOfSale[]>(key);
     if (cached) return cached;
-    const isNative = Capacitor.isNativePlatform();    let raw: Record<string, PointOfSale> | null = null;
+    const isNative = Capacitor.isNativePlatform();
+    let raw: Record<string, PointOfSale> | PointOfSale | null = null;
     try {
-      raw = isNative
-        ? await nativeRtdbGet<Record<string, PointOfSale> | null>(`${ROOT}/pointsOfSale`, 'getPointsOfSale')
-        : (await withTimeout(
-            get(ref(db, ROOT + '/pointsOfSale')),
-            FIREBASE_TIMEOUT_MS,
-            'getPointsOfSale'
-          )).val();
-    } catch (err) {      throw err;
+      if (claims && (claims.role === 'platform_owner' || claims.role === 'superadmin' || claims.role === 'support' || claims.role === 'financial' || claims.role === 'commercial')) {
+        raw = isNative
+          ? await nativeRtdbGet<Record<string, PointOfSale> | null>(`${ROOT}/pointsOfSale`, 'getPointsOfSale')
+          : (await withTimeout(get(ref(db, ROOT + '/pointsOfSale')), FIREBASE_TIMEOUT_MS, 'getPointsOfSale')).val();
+      } else if (claims?.username) {
+        const byOwner = isNative
+          ? await nativeRtdbGet<Record<string, PointOfSale> | null>(`${ROOT}/pointsOfSale`, 'getPointsOfSale.owner', `orderBy=${encodeURIComponent('"ownerId"')}&equalTo=${encodeURIComponent(`"${claims.username}"`)}`)
+          : (await withTimeout(get(query(ref(db, ROOT + '/pointsOfSale'), orderByChild('ownerId'), equalTo(claims.username))), FIREBASE_TIMEOUT_MS, 'getPointsOfSale.owner')).val();
+        const ownId = claims.posId;
+        const own = ownId != null
+          ? (isNative
+            ? await nativeRtdbGet<PointOfSale | null>(`${ROOT}/pointsOfSale/${ownId}`, 'getPointsOfSale.one')
+            : (await withTimeout(get(ref(db, ROOT + '/pointsOfSale/' + ownId)), FIREBASE_TIMEOUT_MS, 'getPointsOfSale.one')).val())
+          : null;
+        raw = { ...(byOwner || {}) };
+        if (own) (raw as Record<string, PointOfSale>)[String(own.id || ownId)] = own;
+      }
+    } catch (err) {
+      throw err;
     }
-    const arr = snapshotToArray<PointOfSale>(raw);    const out = arr.map((p) => ({ ...p, id: Number(p.id), plan: p.plan || 'basic', tier: p.tier ?? 'barberia' }));
+    const arr = snapshotToArray<PointOfSale>(raw);
+    const out = arr.map((p) => ({ ...p, id: Number(p.id), plan: p.plan || 'basic', tier: p.tier ?? 'barberia' }));
     cacheSet(key, out);
     return out;
   },
@@ -707,43 +598,52 @@ export const DataService = {
   },
 
   addPointOfSale: async (pos: Omit<PointOfSale, 'id'>): Promise<PointOfSale> => {
-    const hasCoords = typeof pos.lat === 'number' && Number.isFinite(pos.lat) && typeof pos.lng === 'number' && Number.isFinite(pos.lng);
-    const newPos: PointOfSale = {
-      ...pos,
-      id: generateUniqueId(),
-      isActive: true,
-      locationUpdatedAt: hasCoords ? (pos.locationUpdatedAt || new Date().toISOString()) : pos.locationUpdatedAt,
-    };
-    await update(ref(db, ROOT + '/pointsOfSale/' + newPos.id), newPos);
-    await set(ref(db, ROOT + '/settings/' + newPos.id), { ...DEFAULT_SETTINGS, posId: newPos.id, storeName: newPos.name });
-    await DataService.logAuditAction('create_pos', 'master', `Created POS: ${newPos.name}`, newPos.id);
-    return newPos;
+    const result = await adminUpsertPointOfSale({ ...pos });
+    cacheInvalidate('pointsOfSale');
+    return result.pos;
   },
 
   updatePointOfSale: async (pos: PointOfSale): Promise<void> => {
-    const hasCoords = typeof pos.lat === 'number' && Number.isFinite(pos.lat) && typeof pos.lng === 'number' && Number.isFinite(pos.lng);
-    const toWrite: Record<string, unknown> = {
-      ...pos,
-      locationUpdatedAt: hasCoords ? (pos.locationUpdatedAt || new Date().toISOString()) : pos.locationUpdatedAt,
-    };
-    Object.keys(toWrite).forEach((k) => { if (toWrite[k] === undefined) delete toWrite[k]; });
-    await set(ref(db, ROOT + '/pointsOfSale/' + pos.id), toWrite);
-    await DataService.logAuditAction('update_pos', 'master', `Updated POS: ${pos.name}`, pos.id);
+    const claims = getCachedClaims();
+    if (claims?.role === 'platform_owner' || claims?.role === 'superadmin') {
+      await adminUpsertPointOfSale(pos as unknown as Record<string, unknown>);
+    } else {
+      const { tier: _t, plan: _p, isActive: _a, subscriptionExpiresAt: _s, ownerId: _o, ...rest } = pos as PointOfSale & Record<string, unknown>;
+      const current = (await DataService.getPointsOfSale()).find((p) => p.id === pos.id);
+      const toWrite = {
+        ...current,
+        ...rest,
+        id: pos.id,
+        tier: current?.tier,
+        plan: current?.plan,
+        isActive: current?.isActive,
+        subscriptionExpiresAt: current?.subscriptionExpiresAt,
+        ownerId: current?.ownerId,
+      };
+      Object.keys(toWrite).forEach((k) => { if ((toWrite as Record<string, unknown>)[k] === undefined) delete (toWrite as Record<string, unknown>)[k]; });
+      await set(ref(db, ROOT + '/pointsOfSale/' + pos.id), toWrite);
+    }
+    cacheInvalidate('pointsOfSale');
   },
 
   deletePointOfSale: async (id: number): Promise<void> => {
-    await remove(ref(db, ROOT + '/pointsOfSale/' + id));
-    await remove(ref(db, ROOT + '/settings/' + id));
-    await DataService.logAuditAction('delete_pos', 'master', `Deleted POS ID: ${id}`);
+    await adminDeletePointOfSale(id);
+    cacheInvalidate('pointsOfSale');
   },
 
   getUsers: async (): Promise<SystemUser[]> => {
-    const raw = await readNode<Record<string, SystemUser>>(`${ROOT}/users`, 'getUsers');
+    const posId = ACTIVE_POS_ID ?? getCachedClaims()?.posId ?? null;
+    if (posId == null) return [];
+    let raw: Record<string, SystemUser> | null;
+    if (Capacitor.isNativePlatform()) {
+      raw = await nativeRtdbGet<Record<string, SystemUser> | null>(`${ROOT}/users`, 'getUsers', `orderBy=${encodeURIComponent('"posId"')}&equalTo=${posId}`);
+    } else {
+      const q = query(ref(db, ROOT + '/users'), orderByChild('posId'), equalTo(posId));
+      raw = (await withTimeout(get(q), FIREBASE_TIMEOUT_MS, 'getUsers')).val();
+    }
     const users = snapshotToUsers(raw);
     const sedeRoles: UserRole[] = ['admin', 'dueno', 'barbero', 'empleado', 'cliente'];
-    const isSedeStaff = (u: SystemUser) => sedeRoles.includes(u.role) && u.posId === ACTIVE_POS_ID;
-    if (ACTIVE_POS_ID) return users.filter(isSedeStaff);
-    return users.filter((u) => sedeRoles.includes(u.role));
+    return users.filter((u) => sedeRoles.includes(u.role) && u.posId === posId);
   },
 
   getAllUsersGlobal: async (): Promise<SystemUser[]> => {
@@ -762,7 +662,7 @@ export const DataService = {
 
   /** true si el username ya existe (insensible a mayúsculas). */
   isUsernameTaken: async (username: string): Promise<boolean> => {
-    return (await resolveUsernameKey(username)) != null;
+    return checkUsernameAvailable(username);
   },
 
   /** Busca usuario por username (insensible a mayúsculas) sin modificar datos. */
@@ -775,334 +675,29 @@ export const DataService = {
     return withoutOversizedProfileBlob({ ...user, username: user.username || dbKey });
   },
 
-  /** Completa el autoregistro con plan gratuito sin Cloud Functions: crea usuario admin + POS en Realtime Database. */
-  completeSelfSignupFree: async (params: {
-    username: string;
-    password: string;
-    name: string;
-    phone: string;
-    email?: string;
-    barbershopName: string;
-    address: string;
-    country: string;
-    city: string;
-    barrio: string;
-    lat?: number;
-    lng?: number;
-  }): Promise<{ success: true }> => {
-    const MIN_PHONE_DIGITS = 8;
-    const username = String(params.username ?? '').trim().toLowerCase();
-    const password = params.password ?? '';
-    const name = String(params.name ?? '').trim();
-    const phone = String(params.phone ?? '').trim().replace(/\D/g, '');
-    const email = params.email != null ? String(params.email).trim() || undefined : undefined;
-    const barbershopName = String(params.barbershopName ?? '').trim();
-    const address = String(params.address ?? '').trim();
-    const country = String(params.country ?? '').trim().toUpperCase();
-    const city = String(params.city ?? '').trim();
-    const barrioInput = String(params.barrio ?? '').trim();
-    const barrio = barrioInput || city;
-    const lat = typeof params.lat === 'number' && Number.isFinite(params.lat) ? params.lat : undefined;
-    const lng = typeof params.lng === 'number' && Number.isFinite(params.lng) ? params.lng : undefined;
-
-    if (!username) throw new Error('El nombre de usuario es obligatorio.');
-    if (!password || password.length < 6) throw new Error('La contraseña es obligatoria (mín. 6 caracteres).');
-    if (!name) throw new Error('El nombre completo es obligatorio.');
-    if (phone.length < MIN_PHONE_DIGITS) throw new Error(`El teléfono debe tener al menos ${MIN_PHONE_DIGITS} dígitos.`);
-    if (!barbershopName) throw new Error('El nombre de la barbería es obligatorio.');
-    if (!country) throw new Error('El país es obligatorio.');
-    if (!city) throw new Error('La ciudad es obligatoria.');
-    if (!barrio) throw new Error('Debes indicar una ciudad o zona para la sede.');
-
-    if (await DataService.isUsernameTaken(username)) {
-      throw new Error('Ese nombre de usuario ya existe. Elige otro.');
-    }
-
-    const posId = generateUniqueId();
-    const hashedPassword = await hashPassword(password);
-    const { tier: signupTier, plan: signupPlan } = getFreeSignupTierAndPlan();
-
-    const isNative = Capacitor.isNativePlatform();
-    const posPayload: Record<string, unknown> = {
-      id: posId,
-      name: barbershopName,
-      address,
-      country,
-      city,
-      barrio,
-      lat,
-      lng,
-      locationUpdatedAt: lat != null && lng != null ? new Date().toISOString() : undefined,
-      ownerId: username,
-      isActive: true,
-      tier: signupTier,
-      plan: signupPlan,
-    };
-    Object.keys(posPayload).forEach((k) => { if (posPayload[k] === undefined) delete posPayload[k]; });
-    if (isNative) {
-      await nativeRtdbSet(`${ROOT}/pointsOfSale/${posId}`, posPayload, 'completeSelfSignupFree.pointsOfSale');
-    } else {
-      await withTimeout(
-        set(ref(db, ROOT + '/pointsOfSale/' + posId), posPayload),
-        FIREBASE_TIMEOUT_MS,
-        'completeSelfSignupFree.pointsOfSale'
-      );
-    }
-
-    const settingsPayload = { ...DEFAULT_SETTINGS, posId, storeName: barbershopName };
-    if (isNative) {
-      await nativeRtdbSet(`${ROOT}/settings/${posId}`, settingsPayload, 'completeSelfSignupFree.settings');
-    } else {
-      await withTimeout(
-        set(ref(db, ROOT + '/settings/' + posId), settingsPayload),
-        FIREBASE_TIMEOUT_MS,
-        'completeSelfSignupFree.settings'
-      );
-    }
-
-    // El dueño que crea su barbería queda también como barbero de la sede (para que aparezca en la agenda).
-    const barberId = generateUniqueId();
-    const barberPayload = { id: barberId, posId, name, specialty: 'Barbero', active: true };
-    if (isNative) {
-      await nativeRtdbSet(`${ROOT}/barbers/${barberId}`, barberPayload, 'completeSelfSignupFree.barber');
-    } else {
-      await withTimeout(
-        set(ref(db, ROOT + '/barbers/' + barberId), barberPayload),
-        FIREBASE_TIMEOUT_MS,
-        'completeSelfSignupFree.barber'
-      );
-    }
-
-    const newUser: Record<string, unknown> = {
-      username,
-      role: 'admin',
-      name,
-      posId,
-      barberId,
-      password: hashedPassword,
-      status: 'active',
-      loginAttempts: 0,
-    };
-    if (email) newUser.email = email;
-    if (isNative) {
-      await nativeRtdbSet(`${ROOT}/users/${username}`, newUser, 'completeSelfSignupFree.user');
-    } else {
-      await withTimeout(
-        set(ref(db, ROOT + '/users/' + username), newUser),
-        FIREBASE_TIMEOUT_MS,
-        'completeSelfSignupFree.user'
-      );
-    }
-
-    return { success: true };
-  },
-
-  /**
-   * Crea usuario y POS pendientes de pago in-app (sin Cloud Functions).
-   * Tras la compra en App Store / Google Play, llamar activatePlanFromPlay.
-   */
-  createPendingBarberSignupMobile: async (params: {
-    username: string;
-    password: string;
-    name: string;
-    phone: string;
-    email?: string;
-    barbershopName: string;
-    address: string;
-    country?: string;
-    city?: string;
-    barrio?: string;
-    lat?: number;
-    lng?: number;
-    plan: 'solo' | 'barberia' | 'multisede';
-  }): Promise<{ success: true }> => {
-    const MIN_PHONE_DIGITS = 8;
-    const username = String(params.username ?? '').trim().toLowerCase();
-    const password = params.password ?? '';
-    const name = String(params.name ?? '').trim();
-    const phone = String(params.phone ?? '').trim().replace(/\D/g, '');
-    const email = params.email != null ? String(params.email).trim() || undefined : undefined;
-    const barbershopName = String(params.barbershopName ?? '').trim();
-    const address = String(params.address ?? '').trim();
-    const plan = params.plan;
-    const country = params.country?.trim().toUpperCase();
-    const city = params.city?.trim();
-    const barrio = params.barrio?.trim();
-    const lat = typeof params.lat === 'number' && Number.isFinite(params.lat) ? params.lat : undefined;
-    const lng = typeof params.lng === 'number' && Number.isFinite(params.lng) ? params.lng : undefined;
-
-    if (!username) throw new Error('El nombre de usuario es obligatorio.');
-    if (!password || password.length < 6) throw new Error('La contraseña es obligatoria (mín. 6 caracteres).');
-    if (!name) throw new Error('El nombre completo es obligatorio.');
-    if (phone.length < MIN_PHONE_DIGITS) throw new Error(`El teléfono debe tener al menos ${MIN_PHONE_DIGITS} dígitos.`);
-    if (!barbershopName) throw new Error('El nombre de la barbería es obligatorio.');
-    if (!address) throw new Error('La dirección es obligatoria.');
-    if (!['solo', 'barberia', 'multisede'].includes(plan)) throw new Error('Plan de pago no válido.');
-
-    if (await DataService.isUsernameTaken(username)) {
-      throw new Error('Ese nombre de usuario ya existe. Elige otro.');
-    }
-
-    const posId = generateUniqueId();
-    const hashedPassword = await hashPassword(password);
-    const isNative = Capacitor.isNativePlatform();
-
-    const posPayload: Record<string, unknown> = {
-      id: posId,
-      name: barbershopName,
-      address,
-      country,
-      city,
-      barrio,
-      lat,
-      lng,
-      locationUpdatedAt: lat != null && lng != null ? new Date().toISOString() : undefined,
-      ownerId: username,
-      isActive: false,
-      tier: plan,
-      plan: plan === 'solo' ? 'basic' : 'pro',
-    };
-    Object.keys(posPayload).forEach((k) => { if (posPayload[k] === undefined) delete posPayload[k]; });
-
-    if (isNative) {
-      await nativeRtdbSet(`${ROOT}/pointsOfSale/${posId}`, posPayload, 'createPendingBarberSignupMobile.pos');
-    } else {
-      await withTimeout(
-        set(ref(db, ROOT + '/pointsOfSale/' + posId), posPayload),
-        FIREBASE_TIMEOUT_MS,
-        'createPendingBarberSignupMobile.pos'
-      );
-    }
-
-    const barberId = generateUniqueId();
-    const barberPayload = { id: barberId, posId, name, specialty: 'Barbero', active: true };
-    if (isNative) {
-      await nativeRtdbSet(`${ROOT}/barbers/${barberId}`, barberPayload, 'createPendingBarberSignupMobile.barber');
-    } else {
-      await withTimeout(
-        set(ref(db, ROOT + '/barbers/' + barberId), barberPayload),
-        FIREBASE_TIMEOUT_MS,
-        'createPendingBarberSignupMobile.barber'
-      );
-    }
-
-    const newUser: Record<string, unknown> = {
-      username,
-      role: 'admin',
-      name,
-      posId,
-      barberId,
-      password: hashedPassword,
-      status: 'pending_payment',
-      loginAttempts: 0,
-    };
-    if (email) newUser.email = email;
-    if (isNative) {
-      await nativeRtdbSet(`${ROOT}/users/${username}`, newUser, 'createPendingBarberSignupMobile.user');
-    } else {
-      await withTimeout(
-        set(ref(db, ROOT + '/users/' + username), newUser),
-        FIREBASE_TIMEOUT_MS,
-        'createPendingBarberSignupMobile.user'
-      );
-    }
-
-    return { success: true };
-  },
-
-  /**
-   * Activa el plan tras compra in-app (sin Cloud Functions).
-   * Actualiza POS y usuario con tier, plan y subscriptionExpiresAt.
-   */
-  activatePlanFromPlay: async (params: {
-    productId: string;
-    expiryDate?: string;
-    username: string;
-  }): Promise<{ success: boolean; message?: string }> => {
-    const username = String(params.username ?? '').trim().toLowerCase();
-    const productId = String(params.productId ?? '').trim();
-    const expiryDateRaw = params.expiryDate?.trim();
-
-    if (!username) return { success: false, message: 'Falta username.' };
-    if (!productId) return { success: false, message: 'Falta productId de la compra.' };
-
-    const { getTierFromProductId, computeFallbackExpiry } = await import('./playBilling');
-    const tierMeta = getTierFromProductId(productId);
-    if (!tierMeta) return { success: false, message: 'Product ID no reconocido: ' + productId };
-
-    const dbKey = await resolveUsernameKey(username);
-    if (!dbKey) return { success: false, message: 'Usuario no encontrado.' };
-
-    const userSnap = await withTimeout(get(ref(db, ROOT + '/users/' + dbKey)), FIREBASE_TIMEOUT_MS, 'activatePlanFromPlay.user');
-    if (!userSnap.exists()) return { success: false, message: 'Usuario no encontrado.' };
-
-    const userData = userSnap.val() as { posId?: number };
-    const posId = userData.posId;
-    if (posId == null) return { success: false, message: 'Usuario sin barbería asignada.' };
-
-    let expiresAt: string;
-    if (expiryDateRaw) {
-      const parsed = new Date(expiryDateRaw);
-      if (Number.isNaN(parsed.getTime())) return { success: false, message: 'Fecha de vencimiento inválida.' };
-      expiresAt = parsed.toISOString();
-    } else {
-      expiresAt = computeFallbackExpiry(productId);
-    }
-
-    const posUpdates = {
-      isActive: true,
-      tier: tierMeta.tier,
-      plan: tierMeta.plan,
-      subscriptionExpiresAt: expiresAt,
-    };
-    const userUpdates = { status: 'active' as const };
-
-    const isNative = Capacitor.isNativePlatform();
-    if (isNative) {
-      await nativeRtdbUpdate(`${ROOT}/pointsOfSale/${posId}`, posUpdates, 'activatePlanFromPlay.pos');
-      await nativeRtdbUpdate(`${ROOT}/users/${dbKey}`, userUpdates, 'activatePlanFromPlay.user');
-    } else {
-      await withTimeout(update(ref(db, ROOT + '/pointsOfSale/' + posId), posUpdates), FIREBASE_TIMEOUT_MS, 'activatePlanFromPlay.pos');
-      await withTimeout(update(ref(db, ROOT + '/users/' + dbKey), userUpdates), FIREBASE_TIMEOUT_MS, 'activatePlanFromPlay.user');
-    }
-
-    cacheInvalidate('pointsOfSale');
-    invalidateUsernameKeysCache();
-    return { success: true };
-  },
+  /* Signup/IAP client writes removed: use Cloud Functions in services/firebase.ts */
 
   /** Autentica con usuario y contraseña. Verifica hash; no devuelve la contraseña. Lanza Error('NO_PASSWORD_SET') si el usuario no tiene contraseña asignada. */
   authenticate: async (username: string, password: string): Promise<SystemUser | null> => {
-    const dbKey = await resolveUsernameKey(username);
-    if (!dbKey) return null;
-    const user = await loadUserForAuth(dbKey);
-    if (!user) return null;
-    if (user.status === 'suspended' || user.status === 'locked') return null;
-    if (isAccountDeactivated(user)) {
-      throw new Error('ACCOUNT_DEACTIVATED');
+    try {
+      const result = await loginWithPassword(username, password);
+      const user = result.user as unknown as SystemUser;
+      const updated = { ...user };
+      delete (updated as Record<string, unknown>).password;
+      DataService.logAuditAction('login', user.username, 'User Logged In', user.posId ?? undefined).catch(() => {});
+      return updated as SystemUser;
+    } catch (e: unknown) {
+      const err = e as { code?: string; message?: string };
+      const msg = String(err.message || '');
+      if (msg.includes('ACCOUNT_DEACTIVATED')) throw new Error('ACCOUNT_DEACTIVATED');
+      if (msg.includes('NO_PASSWORD_SET')) throw new Error('NO_PASSWORD_SET');
+      if (err.code === 'functions/unauthenticated' || msg.toLowerCase().includes('incorrectos')) return null;
+      throw e;
     }
-    const storedPassword = user.password;
-    if (storedPassword === undefined || storedPassword === null || storedPassword === '') {
-      throw new Error('NO_PASSWORD_SET');
-    }
-    const valid = await verifyPassword(password, storedPassword);
-    if (!valid) return null;
-    const updated = { ...user, lastLogin: new Date().toISOString(), loginAttempts: 0 };
-    delete (updated as Record<string, unknown>).password;
-    // Escribir lastLogin sin reenviar blobs enormes (ej. photoUrl base64 en el nodo de usuario)
-    const loginPatch: Record<string, unknown> = { lastLogin: updated.lastLogin, loginAttempts: 0 };
-    if (typeof user.password === 'string') loginPatch.password = user.password;
-    update(ref(db, ROOT + '/users/' + dbKey), loginPatch).catch(() => {});
-    DataService.logAuditAction('login', dbKey, 'User Logged In', user.posId ?? undefined).catch(() => {});
-    return updated as SystemUser;
   },
 
-  authenticateMaster: async (username: string): Promise<SystemUser | null> => {
-    if (username === 'master') {
-      await DataService.logAuditAction('master_login', 'master', 'Platform Owner Access');
-      return { username: 'master', role: 'platform_owner', name: 'Master Admin', posId: null, lastLogin: new Date().toISOString(), ip: '10.0.0.1' };
-    }
-    return null;
+  authenticateMaster: async (_username: string): Promise<SystemUser | null> => {
+    throw new Error('Usa authenticateMasterWithPassword. Este atajo ya no es válido.');
   },
 
   getCurrentUser: (): SystemUser | null => {
@@ -1129,15 +724,8 @@ export const DataService = {
   updateCurrentUserProfile: async (updates: { name?: string; photoUrl?: string | null }): Promise<void> => {
     const current = DataService.getCurrentUser();
     if (!current?.username) throw new Error('No hay sesión iniciada.');
-    const snap = await get(ref(db, ROOT + '/users/' + current.username));
-    if (!snap.exists()) throw new Error('Usuario no encontrado.');
-    const existing = snap.val() as Record<string, unknown>;
-    const merged = { ...existing };
-    if (updates.name !== undefined) merged.name = updates.name;
-    if (updates.photoUrl !== undefined) merged.photoUrl = updates.photoUrl || null;
-    Object.keys(merged).forEach((k) => { if (merged[k] === undefined) delete merged[k]; });
-    await set(ref(db, ROOT + '/users/' + current.username), merged);
-    const nextUser = { ...current, name: (merged.name as string) ?? current.name, photoUrl: (merged.photoUrl as string) ?? current.photoUrl };
+    await updateMyProfile(updates);
+    const nextUser = { ...current, ...updates };
     try {
       localStorage.setItem('currentUser', JSON.stringify(nextUser));
     } catch (_) {}
@@ -1145,11 +733,9 @@ export const DataService = {
 
   getCurrentUserRole: (): string => {
     try {
-      const userStr = localStorage.getItem('currentUser');
-      if (!userStr) return '';
-      const parsed = JSON.parse(userStr);
-      const role = parsed?.role ?? '';
-      return role === 'empleado' ? 'barbero' : role;
+      const claims = getCachedClaims();
+      if (claims?.role) return claims.role === 'empleado' ? 'barbero' : String(claims.role);
+      return '';
     } catch {
       return '';
     }
@@ -1157,6 +743,10 @@ export const DataService = {
 
   /** Id del barbero (tabla Barber) cuando el usuario es rol barbero; null en caso contrario. */
   getCurrentBarberId: (): number | null => {
+    const claims = getCachedClaims();
+    if (claims && (claims.role === 'barbero' || claims.role === 'empleado')) {
+      return claims.barberId;
+    }
     const user = DataService.getCurrentUser();
     if (!user || (user.role !== 'barbero' && user.role !== 'empleado')) return null;
     const id = user.barberId;
@@ -1164,42 +754,22 @@ export const DataService = {
   },
 
   saveUser: async (user: SystemUser): Promise<void> => {
-    const currentRole = DataService.getCurrentUserRole();
-    if (currentRole === '') {
-      if (user.role !== 'cliente') throw new Error('No tienes permiso para crear este tipo de usuario.');
-    } else {
-      requireRole(['superadmin', 'admin']);
-    }
-    user.username = (user.username || '').trim();
-    if (!user.username) return;
-    // Solo asignar sede por defecto si no se eligió ninguna (undefined); si es null = explícitamente sin sede
-    if (ACTIVE_POS_ID && user.role !== 'superadmin' && user.posId === undefined && !['support', 'financial', 'commercial'].includes(user.role)) {
-      user.posId = ACTIVE_POS_ID;
-    }
-    const snap = await get(ref(db, ROOT + '/users/' + user.username));
-    const isUpdate = snap.exists();
-    const existing = snap.exists() ? (snap.val() as SystemUser | null) : null;
-    const toWrite: Record<string, unknown> = { ...user, status: user.status || existing?.status || 'active', loginAttempts: user.loginAttempts ?? existing?.loginAttempts ?? 0 };
-    if (isUpdate && existing?.lastLogin) toWrite.lastLogin = existing.lastLogin;
-    if (isUpdate && user.active === undefined && existing?.active !== undefined) toWrite.active = existing.active;
-    if (isUpdate && user.accountStatus === undefined && existing?.accountStatus !== undefined) toWrite.accountStatus = existing.accountStatus;
-    if (isUpdate && user.deactivatedAt === undefined && existing?.deactivatedAt !== undefined) toWrite.deactivatedAt = existing.deactivatedAt;
-    // Al editar, si no se envió contraseña no sobrescribir la existente
-    if (isUpdate && (user.password === undefined || user.password === null || user.password === '')) {
-      if (existing?.password) toWrite.password = existing.password;
-    } else if (toWrite.password && String(toWrite.password).trim() !== '' && !isStoredHash(String(toWrite.password))) {
-      toWrite.password = await hashPassword(String(toWrite.password));
-    }
-    await set(ref(db, ROOT + '/users/' + user.username), toWrite);
-    invalidateUsernameKeysCache();
-    await DataService.logAuditAction(isUpdate ? 'update_user' : 'create_user', 'admin', `User: ${user.username}`, user.posId ?? undefined);
+    const payload: Record<string, unknown> = {
+      username: (user.username || '').trim().toLowerCase(),
+      role: user.role,
+      name: user.name,
+      posId: user.posId ?? null,
+      barberId: user.barberId ?? null,
+      clientId: user.clientId ?? null,
+      permissions: user.permissions,
+    };
+    if (user.password) payload.password = user.password;
+    await upsertStaffUser(payload);
+    cacheInvalidate('users');
   },
 
   deleteUser: async (username: string): Promise<void> => {
-    requireRole(['superadmin']);
-    await remove(ref(db, ROOT + '/users/' + username));
-    invalidateUsernameKeysCache();
-    await DataService.logAuditAction('delete_user', 'admin', `Deleted user: ${username}`);
+    await deleteStaffUser(username);
   },
 
   /** Barbería preferida del cliente (por QR o elección). Al iniciar sesión se abre esa barbería. Solo clientes. */
@@ -1230,11 +800,7 @@ export const DataService = {
 
   getSettings: async (): Promise<AppSettings> => {
     if (ACTIVE_POS_ID == null) return DEFAULT_SETTINGS;
-    let posSettings = await readNode<AppSettings>(`${ROOT}/settings/${ACTIVE_POS_ID}`, 'getSettings.byPos');
-    if (posSettings == null) {
-      const obj = (await readNode<Record<string, AppSettings>>(`${ROOT}/settings`, 'getSettings.legacy')) || {};
-      posSettings = obj[String(ACTIVE_POS_ID)];
-    }
+    const posSettings = await readNode<AppSettings>(`${ROOT}/settings/${ACTIVE_POS_ID}`, 'getSettings.byPos');
     return posSettings || DEFAULT_SETTINGS;
   },
 
@@ -1333,8 +899,7 @@ export const DataService = {
   findClientByPhone: async (phone: string): Promise<Client | null> => {
     const normalized = String(phone ?? '').replace(/\D/g, '');
     if (normalized.length < 6) return null;
-    const clientsRaw = await readNode<Record<string, Client>>(`${ROOT}/clients`, 'findClientByPhone');
-    const arr = snapshotToArray<Client>(clientsRaw) || [];
+    const arr = await DataService.getClients();
     const found = arr.find((c) => String(c.telefono || '').replace(/\D/g, '') === normalized);
     return found ? { ...found, id: Number(found.id) } : null;
   },
@@ -1504,10 +1069,9 @@ export const DataService = {
   setProducts: async (data: Product[]): Promise<void> => {
     requireRole(['admin', 'superadmin', 'barbero']);
     if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa.');
-    const snap = await get(ref(db, ROOT + '/products'));
-    const all: Record<string, Product> = snap.val() || {};
-    const merged = { ...all, ...toObjectById(data) };
-    await set(ref(db, ROOT + '/products'), merged);
+    for (const product of data) {
+      await set(ref(db, ROOT + '/products/' + product.id), { ...product, posId: product.posId || ACTIVE_POS_ID });
+    }
   },
 
   addProduct: async (product: Omit<Product, 'id' | 'posId' | 'barberId'>): Promise<Product> => {
@@ -1767,14 +1331,28 @@ export const DataService = {
   getAppointments: async (): Promise<Appointment[]> => {
     if (ACTIVE_POS_ID == null) return [];
     const role = DataService.getCurrentUserRole();
+    const claims = getCachedClaims();
     const barberId = DataService.getCurrentBarberId();
     if ((role === 'barbero' || role === 'empleado') && barberId == null) return [];
-    const key = `appointments_${ACTIVE_POS_ID}_${barberId ?? 'all'}`;
+    const key = `appointments_${ACTIVE_POS_ID}_${barberId ?? 'all'}_${claims?.clientId ?? ''}`;
     const cached = cacheGet<Appointment[]>(key);
     if (cached) return cached;
-    let arr = (await readCollectionByPos<Appointment>('appointments', ACTIVE_POS_ID, 'getAppointments'))
-      .map((a) => ({ ...a, id: Number(a.id) }));
-    if (barberId != null) arr = arr.filter((a) => a.barberoId === barberId);
+    let arr: Appointment[];
+    if (role === 'cliente' && claims?.clientId != null) {
+      if (Capacitor.isNativePlatform()) {
+        const extra = `orderBy=${encodeURIComponent('"clienteId"')}&equalTo=${claims.clientId}`;
+        const raw = await nativeRtdbGet<Record<string, Appointment> | null>(`${ROOT}/appointments`, 'getAppointments.client', extra);
+        arr = snapshotToArray<Appointment>(raw).map((a) => ({ ...a, id: Number(a.id) }));
+      } else {
+        const q = query(ref(db, ROOT + '/appointments'), orderByChild('clienteId'), equalTo(claims.clientId));
+        const snap = await withTimeout(get(q), FIREBASE_TIMEOUT_MS, 'getAppointments.client');
+        arr = snapshotToArray<Appointment>(snap.val()).map((a) => ({ ...a, id: Number(a.id) }));
+      }
+    } else {
+      arr = (await readCollectionByPos<Appointment>('appointments', ACTIVE_POS_ID, 'getAppointments'))
+        .map((a) => ({ ...a, id: Number(a.id) }));
+      if (barberId != null) arr = arr.filter((a) => a.barberoId === barberId);
+    }
     cacheSet(key, arr);
     return arr;
   },
@@ -1820,17 +1398,9 @@ export const DataService = {
   /** @deprecated Usar addAppointment / updateAppointment / deleteAppointment para no sobrecargar con muchas sedes. */
   setAppointments: async (data: Appointment[]): Promise<void> => {
     requireRole(['admin', 'superadmin', 'barbero']);
-    const snap = await get(ref(db, ROOT + '/appointments'));
-    const all: Record<string, Appointment> = snap.val() || {};
-    const barberId = DataService.getCurrentBarberId();
-    let toMerge = data;
-    if (ACTIVE_POS_ID != null && barberId != null) {
-      const othersSamePos = Object.entries(all).filter(([, a]) => a.posId === ACTIVE_POS_ID && a.barberoId !== barberId);
-      toMerge = [...Object.values(Object.fromEntries(othersSamePos)), ...data];
+    for (const apt of data) {
+      await set(ref(db, ROOT + '/appointments/' + apt.id), apt);
     }
-    const other = Object.fromEntries(Object.entries(all).filter(([, a]) => a.posId !== ACTIVE_POS_ID));
-    const merged = { ...other, ...toObjectById(toMerge) };
-    await set(ref(db, ROOT + '/appointments'), merged);
     cacheInvalidate('appointments');
     cacheInvalidate('clientsActivity');
   },
@@ -1888,18 +1458,10 @@ export const DataService = {
   setSales: async (data: Sale[]): Promise<void> => {
     requireRole(['admin', 'superadmin', 'barbero']);
     if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa. No se puede registrar la venta.');
-    const snap = await get(ref(db, ROOT + '/sales'));
-    const all: Record<string, Sale> = snap.val() || {};
-    const barberId = DataService.getCurrentBarberId();
-    const currentPosId = ACTIVE_POS_ID;
-    let toMerge: Sale[] = data.map((s) => ({ ...s, posId: s.posId || currentPosId, barberoId: barberId ?? s.barberoId ?? undefined }));
-    if (currentPosId != null && barberId != null) {
-      const othersSamePos = Object.entries(all).filter(([, s]) => s.posId === currentPosId && (s.barberoId ?? null) !== barberId);
-      toMerge = [...Object.values(Object.fromEntries(othersSamePos)), ...toMerge] as Sale[];
+    for (const sale of data) {
+      const s = { ...sale, posId: sale.posId || ACTIVE_POS_ID };
+      await set(ref(db, ROOT + '/sales/' + s.id), s);
     }
-    const other = Object.fromEntries(Object.entries(all).filter(([, s]) => s.posId !== currentPosId));
-    const merged = { ...other, ...toObjectById(toMerge) };
-    await set(ref(db, ROOT + '/sales'), merged);
     cacheInvalidate('sales');
     cacheInvalidate('clientsActivity');
   },
@@ -1928,11 +1490,9 @@ export const DataService = {
 
   setFinances: async (data: FinanceRecord[]): Promise<void> => {
     requireRole(['admin', 'superadmin', 'barbero']);
-    const snap = await get(ref(db, ROOT + '/finances'));
-    const all: Record<string, FinanceRecord> = snap.val() || {};
-    const other = Object.fromEntries(Object.entries(all).filter(([, f]) => f.posId !== ACTIVE_POS_ID));
-    const merged = { ...other, ...toObjectById(data) };
-    await set(ref(db, ROOT + '/finances'), merged);
+    for (const record of data) {
+      await set(ref(db, ROOT + '/finances/' + record.id), record);
+    }
   },
 
   logNotification: async (log: Omit<NotificationLog, 'id'>): Promise<void> => {

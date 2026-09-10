@@ -178,10 +178,26 @@ export async function getTransactionForPlan(
   return transactions.find((t) => t.productIdentifier === productId) ?? transactions[0] ?? null;
 }
 
-/** Indica si la transacción tiene datos suficientes para activar en backend. */
+/** Indica si la transacción tiene token/recibo para verificar en servidor (no basta expiryDate local). */
 export function isTransactionActivatable(tx: PlayTransaction | null | undefined): boolean {
   if (!tx?.productIdentifier) return false;
-  return !!(tx.purchaseToken || tx.expiryDate);
+  return !!tx.purchaseToken;
+}
+
+/** Payload para activatePlanFromPlay: en iOS el plugin suele poner el recibo en purchaseToken. */
+export function iapActivationPayload(tx: PlayTransaction): {
+  purchaseToken?: string;
+  productId: string;
+  receiptData?: string;
+  platform: string;
+} {
+  const platform = Capacitor.getPlatform();
+  return {
+    productId: tx.productIdentifier,
+    purchaseToken: tx.purchaseToken,
+    receiptData: platform === 'ios' ? tx.purchaseToken : undefined,
+    platform,
+  };
 }
 
 const PRODUCT_ID_TO_TIER: Record<string, AccountTier> = {

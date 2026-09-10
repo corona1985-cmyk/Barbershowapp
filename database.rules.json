@@ -1,1 +1,147 @@
-{"rules":{"barbershow":{".read":"true",".write":"true","clients":{".indexOn":["posId"]},"products":{".indexOn":["posId"]},"services":{".indexOn":["posId"]},"barbers":{".indexOn":["posId"]},"appointments":{".indexOn":["posId"]},"sales":{".indexOn":["posId"]},"finances":{".indexOn":["posId"]},"notificationLogs":{".indexOn":["posId"]}}}}
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "barbershow": {
+      ".read": false,
+      ".write": false,
+      "authSecrets": {
+        ".read": false,
+        ".write": false
+      },
+      "uidIndex": {
+        ".read": false,
+        ".write": false
+      },
+      "rateLimits": {
+        ".read": false,
+        ".write": false
+      },
+      "adminAudit": {
+        ".read": false,
+        ".write": false
+      },
+      "userCart": {
+        ".read": false,
+        ".write": false
+      },
+      "globalSettings": {
+        ".read": true,
+        ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && auth.token.role === 'platform_owner' && newData.hasChildren(['appName', 'supportEmail'])"
+      },
+      "users": {
+        ".indexOn": ["posId"],
+        ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || auth.token.role === 'support' || auth.token.role === 'financial' || auth.token.role === 'commercial' || (query.orderByChild === 'posId' && query.equalTo === auth.token.posId && (auth.token.role === 'admin' || auth.token.role === 'dueno')))",
+        "$username": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.username === $username || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || auth.token.role === 'support' || auth.token.role === 'financial' || auth.token.role === 'commercial' || ((auth.token.role === 'admin' || auth.token.role === 'dueno') && data.child('posId').val() === auth.token.posId))",
+          ".write": false,
+          "password": {
+            ".read": false,
+            ".write": false
+          }
+        }
+      },
+      "pointsOfSale": {
+        ".indexOn": ["ownerId"],
+        ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || auth.token.role === 'support' || auth.token.role === 'financial' || auth.token.role === 'commercial' || (query.orderByChild === 'ownerId' && query.equalTo === auth.token.username))",
+        "$id": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || auth.token.role === 'support' || auth.token.role === 'financial' || auth.token.role === 'commercial' || data.child('id').val() === auth.token.posId || data.child('ownerId').val() === auth.token.username)",
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && data.exists() && newData.exists() && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno') && data.child('id').val() === auth.token.posId)) && newData.child('id').val() === data.child('id').val() && newData.child('tier').val() === data.child('tier').val() && newData.child('plan').val() === data.child('plan').val() && newData.child('isActive').val() === data.child('isActive').val() && newData.child('subscriptionExpiresAt').val() === data.child('subscriptionExpiresAt').val() && newData.child('ownerId').val() === data.child('ownerId').val()"
+        }
+      },
+      "settings": {
+        "$posId": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || auth.token.posId == $posId)",
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && auth.token.posId == $posId)) && newData.hasChildren(['taxRate', 'storeName', 'currencySymbol']) && newData.child('taxRate').isNumber() && newData.child('storeName').isString() && newData.child('storeName').val().length <= 120"
+        }
+      },
+      "clients": {
+        ".indexOn": ["posId"],
+        ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || (query.orderByChild === 'posId' && query.equalTo === auth.token.posId && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado')))",
+        "$id": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || data.child('posId').val() === auth.token.posId || (auth.token.role === 'cliente' && auth.token.clientId == $id))",
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && newData.exists() && newData.hasChildren(['id', 'posId', 'nombre', 'status']) && newData.child('nombre').isString() && newData.child('nombre').val().length > 0 && newData.child('nombre').val().length <= 120 && newData.child('status').val().matches(/^(active|suspended)$/) && ((!data.exists() && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado' || auth.token.role === 'cliente') && newData.child('posId').val() === auth.token.posId))) || (data.exists() && newData.child('id').val() === data.child('id').val() && newData.child('posId').val() === data.child('posId').val() && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && data.child('posId').val() === auth.token.posId) || (auth.token.role === 'cliente' && auth.token.clientId == $id))))"
+        }
+      },
+      "products": {
+        ".indexOn": ["posId"],
+        ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || (query.orderByChild === 'posId' && query.equalTo === auth.token.posId))",
+        "$id": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || data.child('posId').val() === auth.token.posId)",
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && (!newData.exists() ? (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || data.child('posId').val() === auth.token.posId) : (newData.hasChildren(['id', 'posId', 'producto', 'precioVenta']) && newData.child('posId').val() === auth.token.posId && (!data.exists() || data.child('posId').val() === newData.child('posId').val())))"
+        }
+      },
+      "services": {
+        ".indexOn": ["posId"],
+        ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || (query.orderByChild === 'posId' && query.equalTo === auth.token.posId))",
+        "$id": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || data.child('posId').val() === auth.token.posId)",
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && (!newData.exists() ? (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || data.child('posId').val() === auth.token.posId) : (newData.hasChildren(['id', 'posId', 'name', 'price', 'duration']) && newData.child('posId').val() === auth.token.posId && newData.child('price').isNumber() && newData.child('duration').isNumber() && (!data.exists() || data.child('posId').val() === newData.child('posId').val())))"
+        }
+      },
+      "barbers": {
+        ".indexOn": ["posId"],
+        ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || (query.orderByChild === 'posId' && query.equalTo === auth.token.posId))",
+        "$id": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || data.child('posId').val() === auth.token.posId)",
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (!newData.exists() ? (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno') && data.child('posId').val() === auth.token.posId)) : (newData.hasChildren(['id', 'posId', 'name', 'active']) && newData.child('name').isString() && newData.child('name').val().length <= 120 && (!data.exists() || data.child('posId').val() === newData.child('posId').val()) && (((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || newData.child('posId').val() === auth.token.posId)) || ((auth.token.role === 'barbero' || auth.token.role === 'empleado') && auth.token.barberId == $id && newData.child('posId').val() === auth.token.posId && newData.child('active').val() === data.child('active').val() && newData.child('name').val() === data.child('name').val()))))"
+        }
+      },
+      "appointments": {
+        ".indexOn": ["posId", "clienteId"],
+        ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || (query.orderByChild === 'posId' && query.equalTo === auth.token.posId && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado')) || (auth.token.role === 'cliente' && query.orderByChild === 'clienteId' && query.equalTo === auth.token.clientId))",
+        "$id": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || data.child('posId').val() === auth.token.posId || (auth.token.role === 'cliente' && data.child('clienteId').val() === auth.token.clientId))",
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && ((!newData.exists() && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && data.child('posId').val() === auth.token.posId))) || (newData.exists() && newData.hasChildren(['id', 'posId', 'clienteId', 'barberoId', 'fecha', 'hora', 'estado']) && newData.child('estado').val().matches(/^(pendiente|confirmada|completada|cancelada)$/) && ((!data.exists() && auth.token.role === 'cliente' && newData.child('clienteId').val() === auth.token.clientId && newData.child('posId').val() === auth.token.posId && newData.child('estado').val().matches(/^(pendiente|confirmada)$/)) || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || newData.child('posId').val() === auth.token.posId) && (!data.exists() || data.child('posId').val() === newData.child('posId').val()) && (!data.exists() || data.child('estado').val() !== 'completada' || newData.child('estado').val() === 'completada') && (!data.exists() || data.child('estado').val() !== 'cancelada' || newData.child('estado').val() === 'cancelada')))))"
+        }
+      },
+      "sales": {
+        ".indexOn": ["posId"],
+        ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || auth.token.role === 'financial' || (query.orderByChild === 'posId' && query.equalTo === auth.token.posId && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado')))",
+        "$id": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || auth.token.role === 'financial' || data.child('posId').val() === auth.token.posId)",
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && newData.exists() && newData.hasChildren(['id', 'posId', 'total', 'estado']) && newData.child('estado').val().matches(/^(completada|cancelada)$/) && newData.child('total').isNumber() && newData.child('posId').val() === auth.token.posId && (!data.exists() || data.child('posId').val() === newData.child('posId').val())"
+        }
+      },
+      "finances": {
+        ".indexOn": ["posId"],
+        ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || auth.token.role === 'financial' || (query.orderByChild === 'posId' && query.equalTo === auth.token.posId && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado')))",
+        "$id": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || auth.token.role === 'financial' || data.child('posId').val() === auth.token.posId)",
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && newData.exists() && newData.child('posId').val() === auth.token.posId && (!data.exists() || data.child('posId').val() === newData.child('posId').val())"
+        }
+      },
+      "financialTransactions": {
+        ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || auth.token.role === 'financial')",
+        ".write": false
+      },
+      "auditLogs": {
+        ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin')",
+        "$id": {
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && newData.exists() && newData.hasChildren(['id', 'action', 'actor', 'timestamp']) && newData.child('action').isString() && newData.child('action').val().length <= 80 && newData.child('details').isString() && newData.child('details').val().length <= 500 && newData.child('actor').val() === auth.token.username"
+        }
+      },
+      "notificationLogs": {
+        ".indexOn": ["posId"],
+        ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || (query.orderByChild === 'posId' && query.equalTo === auth.token.posId))",
+        "$id": {
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && newData.exists() && newData.child('posId').val() === auth.token.posId"
+        }
+      },
+      "clientPreferences": {
+        "$username": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.username === $username || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin')",
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && auth.token.username === $username && newData.hasChildren(['preferredPosId'])"
+        }
+      },
+      "barberGallery": {
+        "$barberId": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous'",
+          "$photoId": {
+            ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && (!newData.exists() || (newData.child('barberId').val() == $barberId && newData.child('posId').val() === auth.token.posId && ((auth.token.role !== 'barbero' && auth.token.role !== 'empleado') || auth.token.barberId == $barberId)))"
+          }
+        }
+      }
+    }
+  }
+}

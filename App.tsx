@@ -33,7 +33,7 @@ import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { DataService } from './services/data';
 import { isAccountDeactivated } from './services/data';
-import { APP_VERSION, authenticateMasterWithPassword, activatePlanFromPlay } from './services/firebase';
+import { APP_VERSION, authenticateMasterWithPassword, activatePlanFromPlay, listPublicShops, registerClientAccount, switchActivePos, signOutSession, auth } from './services/firebase';
 import {
     initPlayBilling,
     isNativePaymentAvailable,
@@ -42,6 +42,7 @@ import {
     getTransactionForPlan,
     getActivePlayTransactions,
     isTransactionActivatable,
+    iapActivationPayload,
 } from './services/playBilling';
 import { initLocalNotifications, syncAppointmentNotifications, stopAppointmentNotifications } from './services/notifications';
 import LegalDocumentPage from './pages/LegalDocumentPage';
@@ -63,6 +64,24 @@ const ViewFallback = () => (
         <div className="w-12 h-12 border-4 border-[#ffd427] border-t-transparent rounded-full animate-spin" />
     </div>
 );
+
+function parseSessionUserRole(value: string | undefined): UserRole | null {
+    const role = value === 'empleado' ? 'barbero' : value;
+    switch (role) {
+        case 'superadmin':
+        case 'admin':
+        case 'dueno':
+        case 'barbero':
+        case 'cliente':
+        case 'platform_owner':
+        case 'support':
+        case 'financial':
+        case 'commercial':
+            return role;
+        default:
+            return null;
+    }
+}
 
 const App: React.FC = () => {
     const { t, formatDate } = useTranslation();
@@ -141,6 +160,11 @@ const App: React.FC = () => {
     }, []);
 
     const handleSwitchPos = async (posId: number): Promise<AccountTier> => {
+        try {
+            await switchActivePos(posId);
+        } catch (e) {
+            console.warn('switchActivePos', e);
+        }
         DataService.setActivePosId(posId);
         setCurrentPosId(posId);
         try {
@@ -239,12 +263,7 @@ const App: React.FC = () => {
                     pendingRenewalRef.current = null;
                     return;
                 }
-                const result = await activatePlanFromPlay({
-                    purchaseToken: tx!.purchaseToken,
-                    productId: tx!.productIdentifier,
-                    expiryDate: tx!.expiryDate,
-                    username: pending.username,
-                });
+                const result = await activatePlanFromPlay(iapActivationPayload(tx!));
                 pendingRenewalRef.current = null;
                 setRenewalLoading(false);
                 if (result.success) {
@@ -330,7 +349,9 @@ const App: React.FC = () => {
 
         (async () => {
             try {
-                if (!user) {
+                await auth.authStateReady();
+                if (!user || !auth.currentUser) {
+                    if (user && !auth.currentUser) localStorage.removeItem('currentUser');
                     setShowLoginScreen(false);
                     setShowBarberiasGuest(false);
                     const params = new URLSearchParams(window.location.search);
@@ -338,7 +359,7 @@ const App: React.FC = () => {
                     if (refPosId) {
                         const id = Number(refPosId);
                         setGuestBookingPos({ id, name: 'Cargando...' });
-                        DataService.getPointsOfSale()
+                        listPublicShops()
                             .then((posList) => {
                                 const found = posList.find(p => p.id === id);
                                 if (found) {
@@ -369,7 +390,7 @@ const App: React.FC = () => {
                     setIsLoadingSession(false);
                     return;
                 }
-                if (!userData || typeof userData !== 'object' || !userData.role) {
+                if (!userData || typeof userData !== 'object' || !userData.role || !userData.username) {
                     localStorage.removeItem('currentUser');
                     setShowLoginScreen(false);
                     setShowBarberiasGuest(false);
@@ -377,7 +398,8 @@ const App: React.FC = () => {
                     setIsLoadingSession(false);
                     return;
                 }
-                const freshUser = userData.username ? await DataService.getUserByUsername(userData.username) : null;
+                const sessionUsername = userData.username;
+                const freshUser = await DataService.getUserByUsername(sessionUsername);
                 if (isAccountDeactivated(freshUser)) {
                     localStorage.removeItem('currentUser');
                     setIsAuthenticated(false);
@@ -393,11 +415,19 @@ const App: React.FC = () => {
                     return;
                 }
                 const resolvedUser = (freshUser ?? userData) as { role?: string; name?: string; username?: string; posId?: number; photoUrl?: string; barberId?: number; clientId?: number };
-                const role = resolvedUser.role === 'empleado' ? 'barbero' : resolvedUser.role;
+                const role = parseSessionUserRole(resolvedUser.role ?? userData.role);
+                if (!role) {
+                    localStorage.removeItem('currentUser');
+                    setShowLoginScreen(false);
+                    setShowBarberiasGuest(false);
+                    setGuestBookingPos(null);
+                    setIsLoadingSession(false);
+                    return;
+                }
                 setIsAuthenticated(true);
                 setUserRole(role);
                 setFullName(resolvedUser.name ?? '');
-                setUsername(resolvedUser.username ?? '');
+                setUsername(resolvedUser.username ?? sessionUsername);
                 setUserPhotoUrl((resolvedUser as any).photoUrl ?? '');
 
                 if (role === 'platform_owner') {
@@ -409,7 +439,7 @@ const App: React.FC = () => {
                     setCurrentView('admin_pos');
                 } else {
                     if (role === 'cliente') {
-                        const preferred = await DataService.getClientPreferredPos(userData.username);
+                        const preferred = await DataService.getClientPreferredPos(sessionUsername);
                         setPreferredPosId(preferred);
                         const params = new URLSearchParams(window.location.search);
                         const refPosId = params.get('ref_pos');
@@ -417,7 +447,7 @@ const App: React.FC = () => {
                             const posList = await DataService.getPointsOfSale();
                             const found = posList.find(p => p.id === Number(refPosId));
                             if (found) {
-                                await DataService.setClientPreferredPos(userData.username, found.id);
+                                await DataService.setClientPreferredPos(sessionUsername, found.id);
                                 setPreferredPosId(found.id);
                                 await handleSwitchPos(found.id);
                                 setCurrentView('appointments');
@@ -435,7 +465,7 @@ const App: React.FC = () => {
                                 await handleSwitchPos(preferred);
                                 setCurrentView('appointments');
                             } else {
-                                await DataService.setClientPreferredPos(userData.username, null);
+                                await DataService.setClientPreferredPos(sessionUsername, null);
                                 setPreferredPosId(null);
                                 DataService.setActivePosId(null);
                                 setCurrentPosId(null);
@@ -614,28 +644,14 @@ const App: React.FC = () => {
             return;
         }
         try {
-            if (await DataService.isUsernameTaken(userTrim)) {
-                setLoginError(translate('errors.usernameExists'));
-                return;
-            }
             const targetPosId = referralPos ? referralPos.id : 1;
-            const prevPosId = DataService.getActivePosId();
-            DataService.setActivePosId(targetPosId);
-            const client = await DataService.addClientOrGetExisting({
-                nombre: nameTrim,
-                telefono: regPhone.trim(),
-                email: `${userTrim}@example.com`,
-                notas: referralPos ? translate('auth.registeredViaQr', { name: referralPos.name }) : translate('auth.selfServiceNotes'),
-                fechaRegistro: new Date().toISOString().split('T')[0],
-                puntos: 0,
-                status: 'active',
-                whatsappOptIn: true,
-                ultimaVisita: 'N/A'
+            await registerClientAccount({
+                username: userTrim,
+                password: regPassword,
+                name: nameTrim,
+                phone: regPhone.trim(),
+                posId: targetPosId,
             });
-            const newUser: SystemUser = { username: userTrim, password: regPassword, name: nameTrim, role: 'cliente', posId: targetPosId, clientId: client.id };
-            await DataService.saveUser(newUser);
-            await DataService.setClientPreferredPos(userTrim, targetPosId);
-            DataService.setActivePosId(prevPosId);
             setRegSuccess(true);
             setTimeout(() => {
                 setRegSuccess(false);
@@ -692,6 +708,7 @@ const App: React.FC = () => {
     const handleLogout = () => {
         stopAppointmentNotifications().catch(() => {});
         localStorage.removeItem('currentUser');
+        signOutSession().catch(() => {});
         setIsAuthenticated(false);
         setUsername('');
         setPassword('');
@@ -732,12 +749,7 @@ const App: React.FC = () => {
                 setRenewalError(translate('errors.noPurchasesToRestore'));
                 return;
             }
-            const result = await activatePlanFromPlay({
-                purchaseToken: barberiaTx!.purchaseToken,
-                productId: barberiaTx!.productIdentifier,
-                expiryDate: barberiaTx!.expiryDate,
-                username: username.trim().toLowerCase(),
-            });
+            const result = await activatePlanFromPlay(iapActivationPayload(barberiaTx!));
             if (result.success && currentPosId) {
                 await handleSwitchPos(currentPosId);
             } else {
@@ -950,7 +962,7 @@ const App: React.FC = () => {
                     <ClientDiscovery
                         guestMode
                         onSwitchPos={(id) => {
-                            DataService.getPointsOfSale().then((list) => {
+                            listPublicShops().then((list) => {
                                 const pos = list.find(p => p.id === id);
                                 if (pos) {
                                     setReferralPos(pos);

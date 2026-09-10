@@ -11,9 +11,18 @@ node_modules
 dist
 dist-ssr
 *.local
+.firebase
+firebase-debug.log
+ui-debug.log
+database-debug.log
 
 # Credenciales Twilio (no subir a Git)
 configurar-twilio.ps1
+
+# Secretos locales (conserva .env.example y .env.development sin secretos)
+.env
+.env.local
+.env.*.local
 
 # Editor directories and files
 .vscode/*

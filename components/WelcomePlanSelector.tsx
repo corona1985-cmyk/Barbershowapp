@@ -12,6 +12,7 @@ import {
     addPlayPurchaseListener,
     getTransactionForPlan,
     isTransactionActivatable,
+    iapActivationPayload,
 } from '../services/playBilling';
 import { CONTACT, getTierOptions } from '../constants/plans';
 import { SUPPORTED_COUNTRIES } from '../constants/regions';
@@ -88,14 +89,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                     pendingPlayRef.current = null;
                     return;
                 }
-                const result = await activatePlanFromPlay({
-                    purchaseToken: tx!.purchaseToken,
-                    productId: tx!.productIdentifier,
-                    expiryDate: tx!.expiryDate,
-                    email: pending.email,
-                    nombreNegocio: pending.nombreNegocio || undefined,
-                    nombreRepresentante: pending.nombreRepresentante || undefined,
-                });
+                const result = await activatePlanFromPlay(iapActivationPayload(tx!));
                 pendingPlayRef.current = null;
                 if (result.success) alert(t('welcome.planActivated'));
                 else alert(result.message || t('welcome.planActivateFailed'));

@@ -1,123 +1,187 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getDatabase } from 'firebase/database';
-import { getAuth, signInAnonymously } from 'firebase/auth';
-import { initializeFirestore } from 'firebase/firestore';
+import { getDatabase, connectDatabaseEmulator } from 'firebase/database';
+import {
+  getAuth,
+  signInAnonymously,
+  signInWithCustomToken,
+  signOut,
+  connectAuthEmulator,
+  onAuthStateChanged,
+} from 'firebase/auth';
+import { initializeFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getAnalytics, isSupported, logEvent } from 'firebase/analytics';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { Capacitor } from '@capacitor/core';
-const firebaseConfig = {
-  apiKey: "AIzaSyDDHc3BVRBU8CE2SRPhIzqK0aLQ_gcgAhA",
-  authDomain: "gen-lang-client-0624135070.firebaseapp.com",
-  databaseURL: "https://gen-lang-client-0624135070-default-rtdb.firebaseio.com",
-  projectId: "gen-lang-client-0624135070",
-  storageBucket: "gen-lang-client-0624135070.firebasestorage.app",
-  messagingSenderId: "826588844097",
-  appId: "1:826588844097:web:4e5db3f03d7bb52ec7b6c0",
-  measurementId: "G-1QKXNNZCWM"
-};
+import { FUNCTIONS_REGION, getFirebaseWebConfig, getRecaptchaSiteKey, useFirebaseEmulators } from '../config/firebaseEnv';
+import { clearSessionClaims, parseTokenClaims, setCachedClaims, type SessionClaims } from './session';
+import type { PointOfSale, Service, Barber, BarberGalleryPhoto, Appointment } from '../types';
 
+const firebaseConfig = getFirebaseWebConfig();
 const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+
 export const db = getDatabase(app);
 export const auth = getAuth(app);
-// En WebViews nativos (Capacitor/iOS) el transporte WebChannel de Firestore suele quedarse
-// colgado; forzamos long-polling para evitar timeouts. En web usamos autodetección.
 export const firestore = initializeFirestore(
   app,
   Capacitor.isNativePlatform()
     ? { experimentalForceLongPolling: true }
     : { experimentalAutoDetectLongPolling: true }
 );
+export const functions = getFunctions(app, FUNCTIONS_REGION);
+
+const usingEmulators = useFirebaseEmulators();
+if (usingEmulators && typeof window !== 'undefined' && !(window as unknown as { __bsEmu?: boolean }).__bsEmu) {
+  (window as unknown as { __bsEmu?: boolean }).__bsEmu = true;
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectDatabaseEmulator(db, '127.0.0.1', 9000);
+  connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+  connectFirestoreEmulator(firestore, '127.0.0.1', 8080);
+}
+
+const recaptchaKey = getRecaptchaSiteKey();
+if (typeof window !== 'undefined' && recaptchaKey && !usingEmulators) {
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(recaptchaKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch {
+    // App Check opcional hasta configurar la clave
+  }
+}
 
 export const APP_VERSION = '1.0.10';
 
-/** Región donde están desplegadas las Cloud Functions (debe coincidir con functions/src). */
-const FUNCTIONS_REGION = 'us-central1';
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    clearSessionClaims();
+    return;
+  }
+  try {
+    const token = await user.getIdTokenResult();
+    setCachedClaims(parseTokenClaims(token.claims as Record<string, unknown>));
+  } catch {
+    clearSessionClaims();
+  }
+});
 
-/** Garantiza una sesión anónima para servicios que requieren auth, sin tocar el login principal. */
+export async function getAuthIdToken(): Promise<string | null> {
+  if (!auth.currentUser) return null;
+  return auth.currentUser.getIdToken();
+}
+
+export async function applyCustomToken(customToken: string): Promise<SessionClaims | null> {
+  const cred = await signInWithCustomToken(auth, customToken);
+  const token = await cred.user.getIdTokenResult(true);
+  const claims = parseTokenClaims(token.claims as Record<string, unknown>);
+  setCachedClaims(claims);
+  return claims;
+}
+
+export async function refreshSessionClaims(): Promise<SessionClaims | null> {
+  if (!auth.currentUser) {
+    clearSessionClaims();
+    return null;
+  }
+  const token = await auth.currentUser.getIdTokenResult(true);
+  const claims = parseTokenClaims(token.claims as Record<string, unknown>);
+  setCachedClaims(claims);
+  return claims;
+}
+
+export async function signOutSession(): Promise<void> {
+  clearSessionClaims();
+  await signOut(auth).catch(() => undefined);
+}
+
+/** Garantiza una sesión anónima solo para flujos que aún la requieren (no RTDB de negocio). */
 export async function ensureAnonymousAuth(): Promise<void> {
   if (auth.currentUser) return;
   await signInAnonymously(auth);
 }
 
-/** Obtiene Analytics solo si está soportado en este runtime. */
 export async function getAnalyticsIfSupported() {
   if (!(await isSupported())) return null;
   return getAnalytics(app);
 }
 
-/** Registra eventos de Analytics de forma segura y silenciosa. */
 export async function logAnalyticsEvent(name: string, params: Record<string, unknown>): Promise<void> {
   try {
     const analytics = await getAnalyticsIfSupported();
     if (!analytics) return;
     logEvent(analytics, name, params);
   } catch {
-    // Fallback silencioso: la app no debe depender de Analytics para completar el flujo.
+    // no-op
   }
 }
 
-/** Envía un mensaje de WhatsApp desde la app (requiere Cloud Function + Twilio configurados). */
+function callable<Req, Res>(name: string) {
+  return httpsCallable<Req, Res>(functions, name);
+}
+
 export async function sendWhatsAppFromApp(to: string, body: string): Promise<{ success: boolean; sid?: string }> {
-  const functions = getFunctions(app, FUNCTIONS_REGION);
-  const sendMessage = httpsCallable<{ to: string; body: string }, { success: boolean; sid?: string }>(functions, 'sendWhatsAppMessage');
-  const result = await sendMessage({ to, body });
+  const fn = callable<{ to: string; body: string }, { success: boolean; sid?: string }>('sendWhatsAppMessage');
+  const result = await fn({ to, body });
   return result.data;
 }
 
-/** Resultado de login Master (validado en servidor; la contraseña no se comprueba en el cliente). */
 export interface MasterAuthResult {
+  customToken?: string;
   user: { username: string; role: 'platform_owner'; name: string; posId: number | null };
 }
 
-/** Valida usuario y contraseña Master en Cloud Function. Usar para login Master en lugar de comprobar en frontend. */
 export async function authenticateMasterWithPassword(username: string, password: string): Promise<MasterAuthResult> {
-  const functions = getFunctions(app, FUNCTIONS_REGION);
-  const fn = httpsCallable<{ username: string; password: string }, MasterAuthResult>(functions, 'authenticateMasterWithPassword');
+  const fn = callable<{ username: string; password: string }, MasterAuthResult>('authenticateMasterWithPassword');
   const result = await fn({ username: username.trim(), password });
+  if (result.data.customToken) await applyCustomToken(result.data.customToken);
   return result.data;
 }
 
-/** Proveedor de pago para el checkout del plan. La Cloud Function puede crear sesión en Stripe, Mercado Pago o PayPal. */
 export type PlanCheckoutProvider = 'stripe' | 'mercadopago' | 'paypal';
 
-/** Crea sesión de pago para un plan (Stripe, Mercado Pago o PayPal). La Cloud Function createPlanCheckout debe existir y devolver { url: string }. */
 export async function createPlanCheckout(params: {
   plan: string;
   ciclo: 'mensual' | 'anual';
   email: string;
   nombreNegocio?: string;
   nombreRepresentante?: string;
-  /** Opcional: elegir proveedor de pago. Si no se envía, el backend usa su default (ej. Stripe). */
   provider?: PlanCheckoutProvider;
 }): Promise<{ url: string }> {
-  const functions = getFunctions(app, FUNCTIONS_REGION);
-  const fn = httpsCallable<typeof params, { url: string }>(functions, 'createPlanCheckout');
+  const fn = callable<typeof params, { url: string }>('createPlanCheckout');
   const result = await fn(params);
   return result.data;
 }
 
-/** Activa el plan en Firebase tras una compra in-app (App Store / Google Play). Sin Cloud Functions. */
+export async function loginWithPassword(username: string, password: string): Promise<{ user: Record<string, unknown> }> {
+  const fn = callable<{ username: string; password: string }, { customToken: string; user: Record<string, unknown> }>('loginWithPassword');
+  const result = await fn({ username, password });
+  await applyCustomToken(result.data.customToken);
+  return { user: result.data.user };
+}
+
+export async function checkUsernameAvailable(username: string): Promise<boolean> {
+  const fn = callable<{ username: string }, { taken: boolean }>('checkUsernameAvailable');
+  const result = await fn({ username });
+  return result.data.taken;
+}
+
 export async function activatePlanFromPlay(params: {
   purchaseToken?: string;
   productId: string;
-  email?: string;
-  nombreNegocio?: string;
-  nombreRepresentante?: string;
-  expiryDate?: string;
-  username?: string;
+  receiptData?: string;
+  platform?: string;
 }): Promise<{ success: boolean; message?: string }> {
-  if (!params.username?.trim()) {
-    return { success: false, message: 'Falta username.' };
+  const fn = callable<typeof params, { success: boolean }>('activatePlanFromPlay');
+  try {
+    const result = await fn(params);
+    await refreshSessionClaims();
+    return result.data;
+  } catch (err) {
+    return { success: false, message: err instanceof Error ? err.message : 'No se pudo activar el plan.' };
   }
-  const { DataService } = await import('./data');
-  return DataService.activatePlanFromPlay({
-    productId: params.productId,
-    expiryDate: params.expiryDate,
-    username: params.username,
-  });
 }
 
-/** Payload para completar autoregistro gratuito (plan gratuito). */
 export interface CompleteSelfSignupFreeParams {
   username: string;
   password: string;
@@ -133,13 +197,13 @@ export interface CompleteSelfSignupFreeParams {
   lng?: number;
 }
 
-/** Completa el autoregistro con plan gratuito: crea usuario y barbería en Realtime Database (sin Cloud Functions). */
 export async function completeSelfSignupFree(params: CompleteSelfSignupFreeParams): Promise<{ success: true }> {
-  const { DataService } = await import('./data');
-  return DataService.completeSelfSignupFree(params);
+  const fn = callable<CompleteSelfSignupFreeParams, { success: true; customToken: string }>('completeSelfSignupFree');
+  const result = await fn(params);
+  if (result.data.customToken) await applyCustomToken(result.data.customToken);
+  return { success: true };
 }
 
-/** Payload para crear signup pendiente y obtener URL de pago. */
 export interface CreatePendingBarberSignupParams {
   username: string;
   password: string;
@@ -157,16 +221,119 @@ export interface CreatePendingBarberSignupParams {
   ciclo: 'mensual' | 'anual';
 }
 
-/** Crea usuario y POS en estado pendiente y devuelve URL de checkout (solo web/Stripe). En móvil no se usa. */
 export async function createPendingBarberSignup(params: CreatePendingBarberSignupParams): Promise<{ url: string }> {
-  const functions = getFunctions(app, FUNCTIONS_REGION);
-  const fn = httpsCallable<CreatePendingBarberSignupParams, { url: string }>(functions, 'createPendingBarberSignup');
+  const fn = callable<CreatePendingBarberSignupParams, { url: string; customToken?: string }>('createPendingBarberSignup');
   const result = await fn(params);
+  if (result.data.customToken) await applyCustomToken(result.data.customToken);
+  return { url: result.data.url };
+}
+
+export async function createPendingBarberSignupMobile(params: CreatePendingBarberSignupParams): Promise<{ success: true }> {
+  const fn = callable<CreatePendingBarberSignupParams, { success: true; customToken: string }>('createPendingBarberSignupMobile');
+  const result = await fn(params);
+  if (result.data.customToken) await applyCustomToken(result.data.customToken);
+  return { success: true };
+}
+
+export async function registerClientAccount(params: {
+  username: string;
+  password: string;
+  name: string;
+  phone: string;
+  posId: number;
+}): Promise<{ user: Record<string, unknown> }> {
+  const fn = callable<typeof params, { customToken: string; user: Record<string, unknown> }>('registerClientAccount');
+  const result = await fn(params);
+  await applyCustomToken(result.data.customToken);
+  return { user: result.data.user };
+}
+
+export async function upsertStaffUser(user: Record<string, unknown>): Promise<void> {
+  const fn = callable<Record<string, unknown>, { success: boolean }>('upsertStaffUser');
+  await fn(user);
+}
+
+export async function deleteStaffUser(username: string): Promise<void> {
+  const fn = callable<{ username: string }, { success: boolean }>('deleteStaffUser');
+  await fn({ username });
+}
+
+export async function updateMyProfile(updates: { name?: string; photoUrl?: string | null }): Promise<void> {
+  const fn = callable<typeof updates, { success: boolean }>('updateMyProfile');
+  await fn(updates);
+}
+
+export async function adminSetPosPlan(posId: number, tier: string, plan: string, subscriptionExpiresAt?: string | null): Promise<void> {
+  const fn = callable<{ posId: number; tier: string; plan: string; subscriptionExpiresAt?: string | null }, { success: boolean }>('adminSetPosPlan');
+  await fn({ posId, tier, plan, subscriptionExpiresAt });
+}
+
+export async function adminUpsertPointOfSale(pos: Record<string, unknown>): Promise<{ pos: PointOfSale }> {
+  const fn = callable<Record<string, unknown>, { pos: PointOfSale }>('adminUpsertPointOfSale');
+  const result = await fn(pos);
   return result.data;
 }
 
-/** Crea usuario y POS en estado pendiente para pago in-app (App Store / Google Play). Sin Cloud Functions. */
-export async function createPendingBarberSignupMobile(params: CreatePendingBarberSignupParams): Promise<{ success: true }> {
-  const { DataService } = await import('./data');
-  return DataService.createPendingBarberSignupMobile(params);
+export async function adminDeletePointOfSale(posId: number): Promise<void> {
+  const fn = callable<{ posId: number }, { success: boolean }>('adminDeletePointOfSale');
+  await fn({ posId });
+}
+
+export async function switchActivePos(posId: number): Promise<void> {
+  const fn = callable<{ posId: number }, { success: boolean }>('switchActivePos');
+  await fn({ posId });
+  await refreshSessionClaims();
+}
+
+export async function deleteMyAccount(payload: {
+  password: string;
+  reason: string;
+  customReason?: string;
+  improvementFeedback?: string;
+  platform?: string;
+  appVersion?: string;
+}): Promise<void> {
+  const fn = callable<typeof payload, { success: boolean }>('deleteMyAccount');
+  await fn(payload);
+  await signOutSession();
+}
+
+export async function listPublicShops(): Promise<PointOfSale[]> {
+  const fn = callable<Record<string, never>, { shops: PointOfSale[] }>('listPublicShops');
+  const result = await fn({});
+  return result.data.shops || [];
+}
+
+export type PublicBusySlot = Pick<Appointment, 'barberoId' | 'fecha' | 'hora' | 'duracionTotal' | 'estado'>;
+
+export async function getPublicBookingCatalog(posId: number): Promise<{
+  shop: PointOfSale;
+  services: Service[];
+  barbers: Barber[];
+  busySlots: PublicBusySlot[];
+  galleries: Record<string, BarberGalleryPhoto[]>;
+}> {
+  const fn = callable<{ posId: number }, {
+    shop: PointOfSale;
+    services: Service[];
+    barbers: Barber[];
+    busySlots: PublicBusySlot[];
+    galleries: Record<string, BarberGalleryPhoto[]>;
+  }>('getPublicBookingCatalog');
+  const result = await fn({ posId });
+  return result.data;
+}
+
+export async function createGuestAppointment(params: {
+  posId: number;
+  barberoId: number;
+  fecha: string;
+  hora: string;
+  nombre: string;
+  telefono: string;
+  servicios: Service[];
+}): Promise<{ success: true }> {
+  const fn = callable<typeof params, { success: true }>('createGuestAppointment');
+  await fn(params);
+  return { success: true };
 }

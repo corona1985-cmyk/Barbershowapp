@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { DataService } from '../services/data';
+import { listPublicShops } from '../services/firebase';
 import { PointOfSale } from '../types';
 import {
     Scissors, MapPin, ExternalLink, Search, Star, StarOff, Loader2,
@@ -68,7 +68,7 @@ const ClientDiscovery: React.FC<ClientDiscoveryProps> = ({
             const timeoutPromise = new Promise<never>((_, reject) =>
                 setTimeout(() => reject(new Error(t('common.timeout'))), LOAD_TIMEOUT_MS)
             );
-            const list = await Promise.race([DataService.getPointsOfSale(), timeoutPromise]);
+            const list = await Promise.race([listPublicShops(), timeoutPromise]);
             setPosList(Array.isArray(list) ? list.filter((p) => p.isActive !== false) : []);
         } catch (err) {
             console.error('Error cargando barberías:', err);
