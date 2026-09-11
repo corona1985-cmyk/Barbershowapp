@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { AccountTier } from '../types';
-import { Scissors, ArrowLeft, ArrowRight, LogIn, CheckCircle, Loader2, Smartphone, User, Lock, Mail, Phone, MapPin, Building2, ChevronLeft } from 'lucide-react';
+import { Scissors, ArrowLeft, ArrowRight, LogIn, CheckCircle, Loader2, Smartphone, User, Lock, Mail, Phone, MapPin, Building2, ChevronLeft, Calendar, Users, ShoppingBag, BarChart3, MessageCircle, Sparkles } from 'lucide-react';
 import { DataService } from '../services/data';
 import { completeSelfSignupFree, createPendingBarberSignupMobile, activatePlanFromPlay } from '../services/firebase';
 import { SUPPORTED_COUNTRIES } from '../constants/regions';
@@ -327,6 +327,15 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
 
   const primary = '#F5B301';
 
+  const signupBenefits = useMemo(() => [
+    { icon: Calendar, title: t('signup.benefitsPanel.items.0.title'), desc: t('signup.benefitsPanel.items.0.desc') },
+    { icon: Users, title: t('signup.benefitsPanel.items.1.title'), desc: t('signup.benefitsPanel.items.1.desc') },
+    { icon: ShoppingBag, title: t('signup.benefitsPanel.items.2.title'), desc: t('signup.benefitsPanel.items.2.desc') },
+    { icon: BarChart3, title: t('signup.benefitsPanel.items.3.title'), desc: t('signup.benefitsPanel.items.3.desc') },
+    { icon: MessageCircle, title: t('signup.benefitsPanel.items.4.title'), desc: t('signup.benefitsPanel.items.4.desc') },
+    { icon: Sparkles, title: t('signup.benefitsPanel.items.5.title'), desc: t('signup.benefitsPanel.items.5.desc') },
+  ], [t]);
+
   if (!canSelfSignupBarber) {
     return (
       <div className="h-[100dvh] min-h-0 max-h-[100dvh] relative flex flex-col items-center justify-center px-6 font-sans">
@@ -358,8 +367,51 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   }
 
   return (
-    <div className="h-[100dvh] min-h-0 max-h-[100dvh] relative flex flex-col font-sans">
-      {/* Fondo: gradiente oscuro + blur sutil */}
+    <div className="h-[100dvh] min-h-0 max-h-[100dvh] relative flex flex-col lg:flex-row font-sans overflow-hidden">
+      <aside className="hidden lg:flex lg:w-[42%] xl:w-[40%] flex-col bg-slate-900 text-white px-8 xl:px-12 py-8 overflow-y-auto">
+        {onGoBack && (
+          <button
+            type="button"
+            onClick={onGoBack}
+            className="flex items-center gap-1.5 min-h-[44px] text-slate-400 hover:text-white text-sm mb-8 rounded-lg w-fit px-2 -ml-2"
+          >
+            <ArrowLeft size={16} /> {t('common.back')}
+          </button>
+        )}
+        <div className="flex items-center gap-3 mb-8">
+          <div className="w-12 h-12 bg-[#F5B301] rounded-xl flex items-center justify-center">
+            <Scissors size={24} className="text-slate-900" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">{t('common.barberShow')}</h1>
+            <p className="text-slate-400 text-sm">{t('landing.brandTagline')}</p>
+          </div>
+        </div>
+        <span className="inline-flex self-start px-3 py-1 rounded-full bg-[#F5B301]/15 border border-[#F5B301]/30 text-[#F5B301] text-xs font-semibold uppercase tracking-wider mb-4">
+          {t('signup.benefitsPanel.badge')}
+        </span>
+        <h2 className="text-3xl xl:text-4xl font-bold text-white mb-3 leading-tight">
+          {t('signup.benefitsPanel.title')}
+        </h2>
+        <p className="text-slate-300 text-base mb-8 leading-relaxed">
+          {t('signup.benefitsPanel.subtitle')}
+        </p>
+        <ul className="space-y-4 flex-1">
+          {signupBenefits.map((item) => (
+            <li key={item.title} className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+                <item.icon size={18} className="text-[#F5B301]" />
+              </div>
+              <div>
+                <p className="font-semibold text-white text-sm">{item.title}</p>
+                <p className="text-slate-400 text-sm mt-0.5 leading-snug">{item.desc}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </aside>
+
+      <div className="relative flex-1 min-h-0 flex flex-col">
       <div
         className="absolute inset-0 bg-cover bg-center scale-105"
         style={{ backgroundImage: "url('/barbershop-bg.png')", filter: 'blur(12px)' }}
@@ -374,6 +426,21 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
         className="relative z-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col items-center px-4 pt-6 pb-2 sm:px-6 md:px-8 sm:pt-8 sm:pb-4 signup-scroll"
         style={{ overscrollBehavior: 'none' }}
       >
+        <div className="lg:hidden w-full max-w-lg md:max-w-2xl mx-auto mb-4 rounded-2xl border border-white/15 bg-slate-900/75 backdrop-blur-sm p-4 text-white">
+          <span className="inline-flex px-2.5 py-0.5 rounded-full bg-[#F5B301]/15 border border-[#F5B301]/30 text-[#F5B301] text-[11px] font-semibold uppercase tracking-wider">
+            {t('signup.benefitsPanel.badge')}
+          </span>
+          <h2 className="font-bold text-lg mt-2">{t('signup.benefitsPanel.title')}</h2>
+          <p className="text-slate-300 text-sm mt-1 mb-3">{t('signup.benefitsPanel.subtitle')}</p>
+          <ul className="space-y-2">
+            {signupBenefits.slice(0, 4).map((item) => (
+              <li key={item.title} className="flex items-start gap-2 text-sm text-slate-200">
+                <CheckCircle size={16} className="text-[#F5B301] flex-shrink-0 mt-0.5" />
+                <span><span className="font-medium text-white">{item.title}.</span> {item.desc}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
         <div className="w-full max-w-lg md:max-w-2xl mx-auto min-w-0 pb-8">
           {/* Card moderna: más ancha en desktop para aprovechar espacio */}
           <div
@@ -390,7 +457,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
                   <button
                     type="button"
                     onClick={onGoBack}
-                    className="flex items-center justify-center min-h-[44px] min-w-[44px] -ml-1 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors flex-shrink-0"
+                    className="lg:hidden flex items-center justify-center min-h-[44px] min-w-[44px] -ml-1 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors flex-shrink-0"
                     aria-label={t('common.back')}
                   >
                     <ChevronLeft size={24} strokeWidth={2.2} />
@@ -921,6 +988,7 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
             {t('common.login')}
           </button>
         </p>
+      </div>
       </div>
     </div>
   );

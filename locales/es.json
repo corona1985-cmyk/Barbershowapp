@@ -319,6 +319,19 @@
       "solo": { "label": "Perfil individual", "description": "Una persona, un local." },
       "barberia": { "label": "Perfil profesional", "description": "Perfil para gestionar servicios y agenda." },
       "multisede": { "label": "Perfil avanzado", "description": "Varias ubicaciones o equipo ampliado." }
+    },
+    "benefitsPanel": {
+      "badge": "Gratis por ahora",
+      "title": "Crea tu barbería en minutos",
+      "subtitle": "Organiza citas, clientes y ventas en un solo lugar. Sin costo mientras dura la promoción.",
+      "items": {
+        "0": { "title": "Agenda inteligente", "desc": "Citas por barbero, sin choques de horario y con recordatorios." },
+        "1": { "title": "Clientes y fidelización", "desc": "Historial, preferencias y un directorio siempre a mano." },
+        "2": { "title": "Ventas en el mostrador", "desc": "Cobra cortes y productos desde el POS integrado." },
+        "3": { "title": "Reportes claros", "desc": "Ve ventas, citas y el rendimiento de tu equipo." },
+        "4": { "title": "WhatsApp con clientes", "desc": "Recordatorios y mensajes directos desde la app." },
+        "5": { "title": "Sin tarjeta por ahora", "desc": "Empieza gratis. Los planes de pago llegan próximamente." }
+      }
     }
   },
   "notifications": {
@@ -643,7 +656,9 @@
       "perMonth": "/mes",
       "annualDiscount": "Anual −40% → ${price}/mes",
       "startFree": "Empezar Gratis",
-      "choosePlan": "Elegir Plan"
+      "choosePlan": "Elegir Plan",
+      "comingSoon": "Próximamente",
+      "subtitleFreeMode": "Por ahora la app es gratis. Los planes de pago llegan próximamente."
     },
     "cta": {
       "title": "¿Listo para llevar tu barbería al siguiente nivel?",

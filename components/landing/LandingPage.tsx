@@ -7,7 +7,7 @@ import {
     Zap, ChevronRight, UserCircle, Search, UserPlus,
 } from 'lucide-react';
 import { CONTACT, getTierOptions } from '../../constants/plans';
-import { APP_STORE_URL, PLAY_STORE_URL } from '../../config/app';
+import { APP_STORE_URL, PLAY_STORE_URL, GLOBAL_FREE_MODE } from '../../config/app';
 import HeroMockup from './HeroMockup';
 import { navigateToLegal } from '../../utils/legal';
 import { useTranslation } from '../../i18n';
@@ -534,35 +534,42 @@ const LandingPage: React.FC<LandingPageProps> = ({
                         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-3">
                             {t('landing.pricing.title')}
                         </h2>
-                        <p className="text-slate-400 text-lg">{t('landing.pricing.subtitle')}</p>
+                        <p className="text-slate-400 text-lg">
+                            {GLOBAL_FREE_MODE ? t('landing.pricing.subtitleFreeMode') : t('landing.pricing.subtitle')}
+                        </p>
                     </div>
                     <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-7">
                         {tierOptions.map((plan) => {
                             const isPopular = plan.value === 'barberia';
+                            const isComingSoon = GLOBAL_FREE_MODE && plan.price > 0;
                             return (
                                 <div
                                     key={plan.value}
                                     className={`relative flex flex-col rounded-2xl p-7 ${
-                                        isPopular
+                                        isPopular && !isComingSoon
                                             ? 'bg-[#1a1a28] border-2 border-[#ffd427] shadow-xl shadow-[#ffd427]/10'
                                             : 'bg-[#1a1a28] border border-white/5'
                                     }`}
                                 >
-                                    {isPopular && (
+                                    {isComingSoon ? (
+                                        <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-white/10 border border-white/15 text-slate-300 text-sm font-bold uppercase rounded-full">
+                                            {t('landing.pricing.comingSoon')}
+                                        </span>
+                                    ) : isPopular ? (
                                         <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#ffd427] text-slate-900 text-sm font-bold uppercase rounded-full">
                                             {t('landing.pricing.mostPopular')}
                                         </span>
-                                    )}
+                                    ) : null}
                                     <div className="mb-4">
                                         <h3 className="font-bold text-xl">{plan.label}</h3>
                                         <div className="mt-2 flex items-baseline gap-1">
-                                            <span className="text-4xl font-black text-[#ffd427]">
+                                            <span className={`text-4xl font-black ${isComingSoon ? 'text-slate-400' : 'text-[#ffd427]'}`}>
                                                 {plan.price === 0 ? t('landing.pricing.free') : `$${plan.price.toFixed(2)}`}
                                             </span>
                                             {plan.price > 0 && <span className="text-slate-500 text-base">{t('landing.pricing.perMonth')}</span>}
                                         </div>
                                         {plan.price > 0 && (
-                                            <p className="text-sm text-emerald-400 mt-1 font-medium">
+                                            <p className={`text-sm mt-1 font-medium ${isComingSoon ? 'text-slate-500' : 'text-emerald-400'}`}>
                                                 {t('landing.pricing.annualDiscount', { price: (plan.price * 0.6).toFixed(2) })}
                                             </p>
                                         )}
@@ -578,16 +585,23 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                     </ul>
                                     <button
                                         type="button"
-                                        onClick={onGetStarted}
+                                        onClick={isComingSoon ? undefined : onGetStarted}
+                                        disabled={isComingSoon}
                                         className={`w-full py-3.5 rounded-xl font-semibold text-base transition-colors ${
-                                            isPopular
-                                                ? 'bg-[#ffd427] hover:bg-amber-400 text-slate-900'
-                                                : plan.price === 0
-                                                  ? 'border border-white/25 hover:border-white/50 text-white'
-                                                  : 'border border-[#ffd427]/50 hover:bg-[#ffd427]/10 text-[#ffd427]'
+                                            isComingSoon
+                                                ? 'bg-white/5 border border-white/10 text-slate-500 cursor-not-allowed'
+                                                : isPopular
+                                                  ? 'bg-[#ffd427] hover:bg-amber-400 text-slate-900'
+                                                  : plan.price === 0
+                                                    ? 'border border-white/25 hover:border-white/50 text-white'
+                                                    : 'border border-[#ffd427]/50 hover:bg-[#ffd427]/10 text-[#ffd427]'
                                         }`}
                                     >
-                                        {plan.price === 0 ? t('landing.pricing.startFree') : t('landing.pricing.choosePlan')}
+                                        {plan.price === 0
+                                            ? t('landing.pricing.startFree')
+                                            : isComingSoon
+                                              ? t('landing.pricing.comingSoon')
+                                              : t('landing.pricing.choosePlan')}
                                     </button>
                                 </div>
                             );

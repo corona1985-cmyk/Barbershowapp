@@ -988,7 +988,10 @@ const App: React.FC = () => {
             <>
                 <AdMobBanner showAds={true} />
                 <LandingPage
-                    onGetStarted={() => setShowLandingPage(false)}
+                    onGetStarted={() => {
+                        setShowLandingPage(false);
+                        setIsBarberRegistering(true);
+                    }}
                     onGoToLogin={() => { setShowLandingPage(false); openLoginScreen('landing'); }}
                     onGoToBarberias={() => { setShowBarberiasGuest(true); }}
                     onGoToClientRegister={() => openClientRegistration(true, 'landing')}
@@ -1008,8 +1011,11 @@ const App: React.FC = () => {
                             setIsBarberRegistering(false);
                             handleLogin({ preventDefault: () => {} } as React.FormEvent, { username, password });
                         }}
-                        onGoToLogin={() => setIsBarberRegistering(false)}
-                        onGoBack={() => setIsBarberRegistering(false)}
+                        onGoToLogin={() => openLoginScreen(showLoginScreen ? loginReturnTarget : 'landing')}
+                        onGoBack={() => {
+                            setIsBarberRegistering(false);
+                            if (!showLoginScreen && !isNativeApp) setShowLandingPage(true);
+                        }}
                     />
                 </>
             );

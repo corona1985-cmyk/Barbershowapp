@@ -319,6 +319,19 @@
       "solo": { "label": "Individual profile", "description": "One person, one location." },
       "barberia": { "label": "Professional profile", "description": "Profile to manage services and schedule." },
       "multisede": { "label": "Advanced profile", "description": "Multiple locations or a larger team." }
+    },
+    "benefitsPanel": {
+      "badge": "Free for now",
+      "title": "Create your barbershop in minutes",
+      "subtitle": "Manage appointments, clients, and sales in one place. No cost while the promotion lasts.",
+      "items": {
+        "0": { "title": "Smart schedule", "desc": "Appointments by barber, no time conflicts, with reminders." },
+        "1": { "title": "Clients and loyalty", "desc": "History, preferences, and a directory always at hand." },
+        "2": { "title": "Counter sales", "desc": "Charge for cuts and products from the built-in POS." },
+        "3": { "title": "Clear reports", "desc": "See sales, appointments, and your team's performance." },
+        "4": { "title": "WhatsApp with clients", "desc": "Reminders and direct messages from the app." },
+        "5": { "title": "No card needed for now", "desc": "Start free. Paid plans are coming soon." }
+      }
     }
   },
   "notifications": {
@@ -643,7 +656,9 @@
       "perMonth": "/mo",
       "annualDiscount": "Annual −40% → ${price}/mo",
       "startFree": "Start Free",
-      "choosePlan": "Choose Plan"
+      "choosePlan": "Choose Plan",
+      "comingSoon": "Coming soon",
+      "subtitleFreeMode": "The app is free for now. Paid plans are coming soon."
     },
     "cta": {
       "title": "Ready to take your barbershop to the next level?",
