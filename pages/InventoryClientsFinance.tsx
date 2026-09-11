@@ -7,11 +7,26 @@ import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 
 export { default as Clients } from './Clients';
 
+const PRODUCT_CATEGORIES = [
+    'Cuidado capilar',
+    'Cuidado de barba',
+    'Afeitado',
+    'Styling',
+    'Accesorios',
+    'Fragancias',
+    'Tratamientos',
+    'Higiene',
+    'Otros',
+];
+
+const CUSTOM_CATEGORY_VALUE = '__custom__';
+
 // --- Inventory Component ---
 export const Inventory: React.FC = () => {
     const [products, setProducts] = useState<Product[]>([]);
     const [showModal, setShowModal] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
+    const [isCustomCategory, setIsCustomCategory] = useState(false);
     
     // Form State
     const [currentProduct, setCurrentProduct] = useState<Partial<Product>>({
@@ -22,6 +37,13 @@ export const Inventory: React.FC = () => {
         precioVenta: 0,
         estado: 'activo'
     });
+
+    const categoryOptions = Array.from(
+        new Set([
+            ...PRODUCT_CATEGORIES,
+            ...products.map((p) => p.categoria).filter((c): c is string => Boolean(c && c.trim())),
+        ])
+    );
     
     const barberIdForProducts = DataService.getCurrentUserRole() === 'barbero' ? DataService.getCurrentBarberId() ?? undefined : undefined;
     useEffect(() => {
@@ -37,12 +59,15 @@ export const Inventory: React.FC = () => {
             precioVenta: 0,
             estado: 'activo'
         });
+        setIsCustomCategory(false);
         setIsEditing(false);
         setShowModal(true);
     };
 
     const handleEditClick = (product: Product) => {
+        const known = categoryOptions.includes(product.categoria);
         setCurrentProduct(product);
+        setIsCustomCategory(Boolean(product.categoria) && !known);
         setIsEditing(true);
         setShowModal(true);
     };
@@ -204,7 +229,35 @@ export const Inventory: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Categoría</label>
-                                    <input type="text" className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427]" value={currentProduct.categoria} onChange={e => setCurrentProduct({...currentProduct, categoria: e.target.value})} />
+                                    <select
+                                        className="w-full border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
+                                        value={isCustomCategory ? CUSTOM_CATEGORY_VALUE : (currentProduct.categoria || '')}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            if (value === CUSTOM_CATEGORY_VALUE) {
+                                                setIsCustomCategory(true);
+                                                setCurrentProduct({ ...currentProduct, categoria: '' });
+                                                return;
+                                            }
+                                            setIsCustomCategory(false);
+                                            setCurrentProduct({ ...currentProduct, categoria: value });
+                                        }}
+                                    >
+                                        <option value="">Seleccionar categoría</option>
+                                        {categoryOptions.map((category) => (
+                                            <option key={category} value={category}>{category}</option>
+                                        ))}
+                                        <option value={CUSTOM_CATEGORY_VALUE}>Otra...</option>
+                                    </select>
+                                    {isCustomCategory && (
+                                        <input
+                                            type="text"
+                                            className="mt-2 w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
+                                            placeholder="Escribe la categoría"
+                                            value={currentProduct.categoria}
+                                            onChange={(e) => setCurrentProduct({ ...currentProduct, categoria: e.target.value })}
+                                        />
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Stock Actual</label>
