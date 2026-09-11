@@ -28,6 +28,7 @@ import {
   resolveTierFromProductId,
   resolveUsernameKey,
   sanitizePublicShop,
+  sanitizePublicBarber,
   setPasswordHash,
   migratePasswordSecret,
   migrateAllLegacyPasswordSecrets,
@@ -708,17 +709,8 @@ export const getPublicBookingCatalog = onCall(callableOpts, async (request) => {
     barberId: s.barberId ?? null,
   }));
   const barbers = Object.values((barbersSnap.val() || {}) as Record<string, Record<string, unknown>>)
-    .filter((b) => b.active !== false)
-    .map((b) => ({
-      id: Number(b.id),
-      posId,
-      name: b.name,
-      specialty: b.specialty,
-      active: true,
-      workingHours: b.workingHours || null,
-      lunchBreak: b.lunchBreak || null,
-      blockedHours: b.blockedHours || null,
-    }));
+    .map((b) => sanitizePublicBarber(b, posId))
+    .filter((b): b is Record<string, unknown> => b != null);
   const busySlots = Object.values((apptsSnap.val() || {}) as Record<string, Record<string, unknown>>)
     .filter((a) => a.estado !== "cancelada")
     .map((a) => ({

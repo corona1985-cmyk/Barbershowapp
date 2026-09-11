@@ -22,7 +22,15 @@ import {
   AuditLog,
   GlobalSettings,
   UserRole,
+  ProfessionalCertification,
 } from '../types';
+import {
+  PROFILE_LIMITS,
+  sanitizeCertifications,
+  sanitizeHighlights,
+  sanitizeProfileText,
+  sanitizeYearsExperience,
+} from '../utils/professionalProfile';
 
 const ROOT = 'barbershow';
 const RTDB_BASE_URL = 'https://gen-lang-client-0624135070-default-rtdb.firebaseio.com';
@@ -764,6 +772,17 @@ export const DataService = {
     return id != null && id !== undefined ? id : null;
   },
 
+  /** Id de barbero vinculado: staff barbero, o dueño/admin de plan Solo que se registró con perfil de peluquero. */
+  getLinkedBarberId: (): number | null => {
+    const fromRole = DataService.getCurrentBarberId();
+    if (fromRole != null) return fromRole;
+    const claims = getCachedClaims();
+    if (claims?.barberId != null && Number.isFinite(Number(claims.barberId))) return Number(claims.barberId);
+    const user = DataService.getCurrentUser();
+    const id = user?.barberId;
+    return typeof id === 'number' && Number.isFinite(id) ? id : null;
+  },
+
   saveUser: async (user: SystemUser): Promise<void> => {
     const payload: Record<string, unknown> = {
       username: (user.username || '').trim().toLowerCase(),
@@ -1221,6 +1240,69 @@ export const DataService = {
       await withTimeout(set(ref(db, ROOT + '/barbers/' + barber.id), sanitized), FIREBASE_TIMEOUT_MS, 'updateBarber');
     }
     cacheInvalidate('barbers');
+  },
+
+  /** Perfil público del peluquero: especialidad, bio, experiencia y certificaciones. El barbero solo edita el suyo. */
+  updateBarberProfile: async (
+    barberId: number,
+    profile: {
+      specialty?: string;
+      bio?: string;
+      yearsExperience?: number | null;
+      certifications?: ProfessionalCertification[];
+    }
+  ): Promise<void> => {
+    const role = DataService.getCurrentUserRole();
+    const linkedId = DataService.getLinkedBarberId();
+    if (role === 'barbero') {
+      if (linkedId !== barberId) throw new Error('Solo puedes editar tu propio perfil profesional.');
+    } else {
+      requireRole(['admin', 'superadmin', 'dueno']);
+    }
+    const barber = await readNode<Barber>(`${ROOT}/barbers/${barberId}`, 'updateBarberProfile.get');
+    if (!barber) throw new Error('Barbero no encontrado.');
+    if (ACTIVE_POS_ID != null && Number(barber.posId) !== ACTIVE_POS_ID && role !== 'superadmin') {
+      throw new Error('No puedes editar un barbero de otra sede.');
+    }
+    const payload: Record<string, unknown> = { ...barber, id: Number(barber.id), posId: Number(barber.posId) };
+    payload.specialty = sanitizeProfileText(profile.specialty ?? barber.specialty, 120);
+    const bio = sanitizeProfileText(profile.bio, PROFILE_LIMITS.bio);
+    if (bio) payload.bio = bio;
+    else delete payload.bio;
+    const years = sanitizeYearsExperience(profile.yearsExperience);
+    if (years) payload.yearsExperience = years;
+    else delete payload.yearsExperience;
+    const certs = sanitizeCertifications(profile.certifications);
+    if (certs.length) payload.certifications = certs;
+    else delete payload.certifications;
+    const cleaned = JSON.parse(JSON.stringify(payload)) as Record<string, unknown>;
+    if (Capacitor.isNativePlatform()) {
+      await nativeRtdbSet(`${ROOT}/barbers/${barberId}`, cleaned, 'updateBarberProfile');
+    } else {
+      await withTimeout(set(ref(db, ROOT + '/barbers/' + barberId), cleaned), FIREBASE_TIMEOUT_MS, 'updateBarberProfile');
+    }
+    cacheInvalidate('barbers');
+  },
+
+  /** Presentación pública de la sede: about, destacados y certificaciones del negocio. */
+  updateShopPublicProfile: async (
+    posId: number,
+    profile: { about?: string; highlights?: string[]; certifications?: ProfessionalCertification[] }
+  ): Promise<void> => {
+    requireRole(['admin', 'superadmin', 'dueno']);
+    const current = (await DataService.getPointsOfSale()).find((p) => p.id === posId);
+    if (!current) throw new Error('Sede no encontrada.');
+    const about = sanitizeProfileText(profile.about, PROFILE_LIMITS.about);
+    const highlights = sanitizeHighlights(profile.highlights);
+    const certifications = sanitizeCertifications(profile.certifications);
+    const next: PointOfSale = { ...current };
+    if (about) next.about = about;
+    else delete next.about;
+    if (highlights.length) next.highlights = highlights;
+    else delete next.highlights;
+    if (certifications.length) next.certifications = certifications;
+    else delete next.certifications;
+    await DataService.updatePointOfSale(next);
   },
 
   /** El barbero puede actualizar solo su propio horario de trabajo; admin/superadmin pueden actualizar cualquiera. */

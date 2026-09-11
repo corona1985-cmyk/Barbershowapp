@@ -102,6 +102,8 @@ export function posMatchesLocationFilters(
     return (
         pos.name.toLowerCase().includes(q) ||
         (pos.address ?? '').toLowerCase().includes(q) ||
+        (pos.about ?? '').toLowerCase().includes(q) ||
+        (pos.highlights ?? []).some((h) => h.toLowerCase().includes(q)) ||
         (country ?? '').toLowerCase().includes(q) ||
         getCountryName(country ?? '').toLowerCase().includes(q) ||
         (city ?? '').toLowerCase().includes(q) ||

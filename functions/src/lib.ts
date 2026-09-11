@@ -74,6 +74,44 @@ export function resolveTierFromProductId(productId: string): { tier: string; pla
   return null;
 }
 
+function asPublicList(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object") return Object.values(raw as Record<string, unknown>);
+  return [];
+}
+
+export function sanitizePublicCertifications(raw: unknown): { id: string; title: string; issuer?: string; year?: number }[] {
+  const yearMax = new Date().getFullYear() + 1;
+  const out: { id: string; title: string; issuer?: string; year?: number }[] = [];
+  for (const item of asPublicList(raw)) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    const title = String(rec.title || "").trim().slice(0, 120);
+    if (!title) continue;
+    const cert: { id: string; title: string; issuer?: string; year?: number } = {
+      id: String(rec.id || `c${out.length}`).slice(0, 40),
+      title,
+    };
+    const issuer = String(rec.issuer || "").trim().slice(0, 80);
+    if (issuer) cert.issuer = issuer;
+    const year = Number(rec.year);
+    if (Number.isFinite(year) && year >= 1980 && year <= yearMax) cert.year = Math.round(year);
+    out.push(cert);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
+export function sanitizePublicHighlights(raw: unknown): string[] {
+  const out: string[] = [];
+  for (const item of asPublicList(raw)) {
+    const s = String(item || "").trim().slice(0, 48);
+    if (s && !out.some((x) => x.toLowerCase() === s.toLowerCase())) out.push(s);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 export function sanitizePublicShop(pos: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
   if (!pos || pos.isActive === false) return null;
   const id = Number(pos.id);
@@ -88,6 +126,29 @@ export function sanitizePublicShop(pos: Record<string, unknown> | null | undefin
     lat: typeof pos.lat === "number" ? pos.lat : null,
     lng: typeof pos.lng === "number" ? pos.lng : null,
     isActive: pos.isActive !== false,
+    about: typeof pos.about === "string" ? pos.about.trim().slice(0, 800) : "",
+    highlights: sanitizePublicHighlights(pos.highlights),
+    certifications: sanitizePublicCertifications(pos.certifications),
+  };
+}
+
+export function sanitizePublicBarber(b: Record<string, unknown> | null | undefined, posId: number): Record<string, unknown> | null {
+  if (!b || b.active === false) return null;
+  const id = Number(b.id);
+  if (!Number.isFinite(id)) return null;
+  const years = Number(b.yearsExperience);
+  return {
+    id,
+    posId,
+    name: b.name,
+    specialty: typeof b.specialty === "string" ? String(b.specialty).slice(0, 120) : "",
+    active: true,
+    workingHours: b.workingHours || null,
+    lunchBreak: b.lunchBreak || null,
+    blockedHours: b.blockedHours || null,
+    bio: typeof b.bio === "string" ? String(b.bio).trim().slice(0, 800) : "",
+    yearsExperience: Number.isFinite(years) && years > 0 ? Math.min(60, Math.round(years)) : null,
+    certifications: sanitizePublicCertifications(b.certifications),
   };
 }
 

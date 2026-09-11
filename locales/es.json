@@ -150,7 +150,12 @@
     "photoAlt": "Tu foto",
     "photoUrlPlaceholder": "O pega una URL de imagen...",
     "photoHint": "Sube una imagen o pega un enlace.",
-    "workAlt": "Trabajo"
+    "workAlt": "Trabajo",
+    "aboutShop": "Sobre la barbería",
+    "aboutBarber": "Sobre el peluquero",
+    "certifications": "Cursos y certificaciones",
+    "yearsExperience": "{count} años de experiencia",
+    "certsCount": "{count} certificación(es)"
   },
   "settings": {
     "accountTitle": "Ajustes de Cuenta",

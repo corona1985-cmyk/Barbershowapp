@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DataService } from '../services/data';
-import { Appointment, Barber, BarberGalleryPhoto, Client, Service, AppointmentForSale, SaleItem, AccountTier } from '../types';
+import { Appointment, Barber, BarberGalleryPhoto, Client, Service, AppointmentForSale, SaleItem, AccountTier, PointOfSale } from '../types';
 import { ViewState } from '../types';
 import { Calendar, Clock, User, Scissors, Check, X, Trash2, Printer, MessageCircle, MapPin, Loader2, ImageIcon, RefreshCw } from 'lucide-react';
 import { handlePrint } from '../utils/print';
 import { useTranslation } from '../i18n';
+import PublicProfileInfo from '../components/PublicProfileInfo';
 
 interface AppointmentsProps {
     onChangeView?: (view: ViewState) => void;
@@ -37,6 +38,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     const [userRole, setUserRole] = useState<string>('');
     const [selectedBarberForView, setSelectedBarberForView] = useState<number>(0);
     const [currentBarberiaName, setCurrentBarberiaName] = useState<string>('');
+    const [currentPos, setCurrentPos] = useState<PointOfSale | null>(null);
     const [clientBarberGallery, setClientBarberGallery] = useState<BarberGalleryPhoto[]>([]);
     
     // Modal State
@@ -98,6 +100,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             const activePosId = DataService.getActivePosId();
             const pos = posListSafe.find(p => p.id === activePosId);
             setCurrentBarberiaName(pos ? pos.name : '');
+            setCurrentPos(pos || null);
             const activeBarbers = barbersSafe.filter(b => b.active);
             if (activeBarbers.length > 0) setSelectedBarberForView(activeBarbers[0].id);
             if (role === 'cliente') {
@@ -604,6 +607,21 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                         </div>
                     )}
                 </div>
+                <PublicProfileInfo
+                    title={t('profile.aboutShop')}
+                    bio={currentPos?.about}
+                    highlights={currentPos?.highlights}
+                    certifications={currentPos?.certifications}
+                />
+                {currentBarber && (
+                    <PublicProfileInfo
+                        title={t('profile.aboutBarber')}
+                        bio={currentBarber.bio}
+                        specialty={currentBarber.specialty}
+                        yearsExperience={currentBarber.yearsExperience}
+                        certifications={currentBarber.certifications}
+                    />
+                )}
                 <div className="flex justify-between items-center flex-wrap gap-2">
                     <h2 className="text-2xl font-bold text-slate-800">{t('appointments.bookTitle')}</h2>
                     {isPlanGratuito && (
@@ -633,9 +651,15 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                             }`}
                                         >
                                             <span>{b.name}</span>
+                                            {b.specialty?.trim() ? (
+                                                <span className={`text-[10px] mt-1 ${!b.active ? 'text-slate-400' : selectedBarberForView === b.id ? 'text-slate-800' : 'text-slate-500'}`}>
+                                                    {b.specialty}
+                                                </span>
+                                            ) : (
                                             <span className={`text-[10px] mt-1 ${!b.active ? 'text-slate-400' : selectedBarberForView === b.id ? 'text-slate-800' : 'text-green-600'}`}>
                                                 {b.active ? t('appointments.online') : t('appointments.unavailable')}
                                             </span>
+                                            )}
                                         </button>
                                     ))}
                                 </div>

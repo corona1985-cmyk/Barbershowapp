@@ -25,13 +25,32 @@ describe('security helpers', () => {
       subscriptionExpiresAt: '2099-01-01',
       isActive: true,
       city: 'Santo Domingo',
+      about: 'Fade y barba',
+      highlights: ['Fade', 'Barba'],
+      certifications: [{ id: 'c1', title: 'Barbería clásica', issuer: 'Academia', year: 2020 }],
     });
     assert.ok(pub);
     assert.equal(pub.ownerId, undefined);
     assert.equal(pub.plan, undefined);
     assert.equal(pub.tier, undefined);
     assert.equal(pub.name, 'Corte');
+    assert.equal(pub.about, 'Fade y barba');
+    assert.deepEqual(pub.highlights, ['Fade', 'Barba']);
+    assert.equal(pub.certifications[0].title, 'Barbería clásica');
     assert.equal(lib.sanitizePublicShop({ id: 1, isActive: false }), null);
+    const barber = lib.sanitizePublicBarber({
+      id: 3,
+      name: 'Luis',
+      specialty: 'Fade',
+      active: true,
+      bio: '8 años en silla',
+      yearsExperience: 8,
+      certifications: [{ id: 'c2', title: 'Colorimetría' }],
+    }, 9);
+    assert.ok(barber);
+    assert.equal(barber.bio, '8 años en silla');
+    assert.equal(barber.yearsExperience, 8);
+    assert.equal(lib.sanitizePublicBarber({ id: 3, active: false }, 9), null);
   });
 
   it('mapea product IDs de IAP', () => {

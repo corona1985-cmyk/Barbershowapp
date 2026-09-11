@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { DataService } from '../services/data';
-import { AppSettings, SystemUser, Service, UserRole, Barber, BarberWorkingHours, BarberBlockedSlot, BarberGalleryPhoto, AccountTier, PointOfSale } from '../types';
-import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as SettingsIcon, UserCheck, Power, QrCode, Download, Printer, Percent, Clock, CalendarOff, ImagePlus, CreditCard, Loader2, CheckCircle, AlertCircle, X, Copy, Link2, MapPin, FileText, Languages, Users } from 'lucide-react';
+import { AppSettings, SystemUser, Service, UserRole, Barber, BarberWorkingHours, BarberBlockedSlot, BarberGalleryPhoto, AccountTier, PointOfSale, ProfessionalCertification } from '../types';
+import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as SettingsIcon, UserCheck, Power, QrCode, Download, Printer, Percent, Clock, CalendarOff, ImagePlus, CreditCard, Loader2, CheckCircle, AlertCircle, X, Copy, Link2, MapPin, FileText, Languages, Users, Award } from 'lucide-react';
+import CertificationsEditor from '../components/settings/CertificationsEditor';
+import { PROFILE_LIMITS, sanitizeCertifications, sanitizeHighlights } from '../utils/professionalProfile';
 import { Capacitor } from '@capacitor/core';
 import { handlePrintQR as handlePrintQRNative } from '../utils/print';
 import { DEFAULT_PUBLIC_APP_URL, GLOBAL_FREE_MODE, isPromotionalFreeTier } from '../config/app';
@@ -10,7 +12,7 @@ import DeactivateAccountSection from '../components/account/DeactivateAccountSec
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useTranslation } from '../i18n';
 
-type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'account' | 'barbers' | 'taxes' | 'qr' | 'planes' | 'horario' | 'galeria';
+type SettingsTab = 'general' | 'users' | 'services' | 'privacy' | 'account' | 'barbers' | 'taxes' | 'qr' | 'planes' | 'horario' | 'galeria' | 'perfil';
 
 const PLANES_INFO: { value: AccountTier; label: string; description: string; price: number }[] = [
   { value: 'gratuito', label: 'Plan Gratuito', description: 'Solo ver y gestionar citas. Hasta 100 citas al mes.', price: 0 },
@@ -153,7 +155,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
     if (accountTier === 'gratuito') return 'qr';
-    if (DataService.getCurrentUserRole() === 'barbero') return 'services';
+    if (DataService.getCurrentUserRole() === 'barbero') return 'perfil';
     return 'general';
   });
   const [settings, setSettings] = useState<AppSettings>({ taxRate: 0, storeName: '', currencySymbol: '$' });
@@ -187,6 +189,15 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
   const [galleryUploading, setGalleryUploading] = useState(false);
   const [galleryCaption, setGalleryCaption] = useState('');
   const [galleryUrl, setGalleryUrl] = useState('');
+  const [shopAbout, setShopAbout] = useState('');
+  const [shopHighlights, setShopHighlights] = useState<string[]>([]);
+  const [shopCerts, setShopCerts] = useState<ProfessionalCertification[]>([]);
+  const [highlightDraft, setHighlightDraft] = useState('');
+  const [mySpecialty, setMySpecialty] = useState('');
+  const [myBio, setMyBio] = useState('');
+  const [myYears, setMyYears] = useState('');
+  const [myCerts, setMyCerts] = useState<ProfessionalCertification[]>([]);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const showFeedback = (type: 'success' | 'error', message: string) => {
     setFeedback({ type, message });
@@ -218,6 +229,17 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
       }
       setServices(servicesList);
       setBarbers(barbersData);
+      const activeId = DataService.getActivePosId();
+      const pos = posList.find((p) => p.id === activeId);
+      setShopAbout(pos?.about || '');
+      setShopHighlights(sanitizeHighlights(pos?.highlights));
+      setShopCerts(sanitizeCertifications(pos?.certifications));
+      const linkedId = DataService.getLinkedBarberId();
+      const linkedBarber = linkedId != null ? barbersData.find((b: Barber) => b.id === linkedId) : undefined;
+      setMySpecialty(linkedBarber?.specialty || '');
+      setMyBio(linkedBarber?.bio || '');
+      setMyYears(linkedBarber?.yearsExperience ? String(linkedBarber.yearsExperience) : '');
+      setMyCerts(sanitizeCertifications(linkedBarber?.certifications));
       if (role === 'barbero') {
         const myId = DataService.getCurrentBarberId();
         const me = barbersData.find((b: Barber) => b.id === myId);
@@ -260,7 +282,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
 
   useEffect(() => {
     if (!isBarber) return;
-    const allowed: SettingsTab[] = ['services', 'horario', 'galeria', 'taxes', 'qr', 'account'];
+    const allowed: SettingsTab[] = ['perfil', 'services', 'horario', 'galeria', 'taxes', 'qr', 'account'];
     if (!allowed.includes(activeTab)) setActiveTab('services');
   }, [isBarber, activeTab]);
 
@@ -348,14 +370,61 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
       showFeedback('error', 'El nombre del barbero es obligatorio.');
       return;
     }
-    if (currentBarber.id) {
-      await DataService.updateBarber(currentBarber as Barber);
+    const years = currentBarber.yearsExperience != null && Number(currentBarber.yearsExperience) > 0
+      ? Number(currentBarber.yearsExperience)
+      : undefined;
+    const toSave = {
+      ...currentBarber,
+      specialty: (currentBarber.specialty || '').trim(),
+      bio: (currentBarber.bio || '').trim() || undefined,
+      yearsExperience: years,
+      certifications: sanitizeCertifications(currentBarber.certifications),
+    };
+    if (toSave.id) {
+      await DataService.updateBarber(toSave as Barber);
     } else {
-      await DataService.addBarber(currentBarber as Barber);
+      await DataService.addBarber(toSave as Barber);
     }
     await loadData();
     setShowBarberModal(false);
     showFeedback('success', currentBarber.id ? 'Barbero actualizado.' : 'Barbero agregado.');
+  };
+
+  const addHighlight = (list: string[], draft: string, setList: (next: string[]) => void, setDraft: (v: string) => void) => {
+    const next = sanitizeHighlights([...list, draft]);
+    setList(next);
+    setDraft('');
+  };
+
+  const handleSavePublicProfile = async () => {
+    setSavingProfile(true);
+    try {
+      if (!isBarber) {
+        if (activePosId == null) throw new Error('No hay sede activa.');
+        await DataService.updateShopPublicProfile(activePosId, {
+          about: shopAbout,
+          highlights: shopHighlights,
+          certifications: shopCerts,
+        });
+      }
+      const linkedId = DataService.getLinkedBarberId();
+      if (isBarber || linkedId != null) {
+        if (linkedId == null) throw new Error('Pide al administrador que asigne tu usuario a un barbero para publicar tu perfil.');
+        const yearsNum = myYears.trim() === '' ? null : Number(myYears);
+        await DataService.updateBarberProfile(linkedId, {
+          specialty: mySpecialty,
+          bio: myBio,
+          yearsExperience: yearsNum,
+          certifications: myCerts,
+        });
+      }
+      await loadData();
+      showFeedback('success', 'Perfil público guardado. Los clientes ya pueden verlo al agendar.');
+    } catch (err) {
+      showFeedback('error', err instanceof Error ? err.message : 'No se pudo guardar el perfil.');
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handleDeleteBarber = async (id: number) => {
@@ -465,6 +534,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
           id: 'trabajo',
           label: 'Mi trabajo',
           items: [
+            { id: 'perfil', label: 'Mi perfil', icon: Award, hint: 'Lo que ven los clientes' },
             { id: 'services', label: 'Mis servicios', icon: Scissors, hint: 'Precios y duración' },
             { id: 'horario', label: 'Horario', icon: Clock, hint: 'Días, comida y bloqueos' },
             { id: 'galeria', label: 'Galería', icon: ImagePlus, hint: 'Fotos de cortes' },
@@ -483,6 +553,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
     }
     const sedeItems: NavItem[] = [
       { id: 'general', label: 'Negocio', icon: SettingsIcon, hint: 'Nombre, impuestos y QR' },
+      { id: 'perfil', label: 'Perfil público', icon: Award, hint: 'Sobre la barbería y el peluquero' },
       { id: 'services', label: 'Servicios', icon: Scissors, hint: 'Catálogo de la sede' },
     ];
     if (!isNativeApp) {
@@ -505,6 +576,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
   const sedeName = activePos?.name || settings.storeName || 'Sede actual';
   const taxPercent = settings.taxRate ? Math.round(settings.taxRate * 10000) / 100 : 0;
   const myBarberId = DataService.getCurrentBarberId();
+  const linkedBarberId = DataService.getLinkedBarberId();
 
   const applyWeekdaysPreset = () => {
     const hours = { start: '09:00', end: '19:00' };
@@ -771,6 +843,150 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
                 </button>
               </div>
               <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-5">{renderQrPanel(true)}</div>
+            </div>
+          )}
+
+          {activeTab === 'perfil' && (
+            <div className="space-y-8 max-w-2xl">
+              {!isBarber && (
+                <div className="space-y-5">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">La barbería</h3>
+                    <p className="text-sm text-slate-500 mt-0.5">
+                      Así te ven los clientes en descubrir barberías y al agendar. Cuenta qué ofreces y qué te diferencia.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Sobre el negocio</label>
+                    <textarea
+                      className={`${INPUT_CLASS} min-h-[120px] resize-y`}
+                      value={shopAbout}
+                      maxLength={PROFILE_LIMITS.about}
+                      placeholder="Ej. Barbería de barrio con fade, barba y color. Ambiente relajado, cita puntual y productos profesionales."
+                      onChange={(e) => setShopAbout(e.target.value)}
+                    />
+                    <p className="text-xs text-slate-400 mt-1 text-right">{shopAbout.length}/{PROFILE_LIMITS.about}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Lo que ofrece la sede</label>
+                    <p className="text-xs text-slate-500 mb-2">Etiquetas cortas: Fade, Barba, Color, Kids, etc.</p>
+                    {shopHighlights.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {shopHighlights.map((h) => (
+                          <span key={h} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-sm">
+                            {h}
+                            <button
+                              type="button"
+                              onClick={() => setShopHighlights(shopHighlights.filter((x) => x !== h))}
+                              className="text-slate-400 hover:text-red-500"
+                              aria-label={`Quitar ${h}`}
+                            >
+                              <X size={14} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {shopHighlights.length < PROFILE_LIMITS.maxHighlights && (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          className={INPUT_CLASS}
+                          value={highlightDraft}
+                          maxLength={PROFILE_LIMITS.highlight}
+                          placeholder="Ej: Fade, Color, Afeitado clásico"
+                          onChange={(e) => setHighlightDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              addHighlight(shopHighlights, highlightDraft, setShopHighlights, setHighlightDraft);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addHighlight(shopHighlights, highlightDraft, setShopHighlights, setHighlightDraft)}
+                          disabled={!highlightDraft.trim()}
+                          className="shrink-0 min-h-[44px] px-3 rounded-xl bg-slate-100 text-slate-800 font-semibold hover:bg-slate-200 disabled:opacity-40"
+                        >
+                          <Plus size={18} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <CertificationsEditor value={shopCerts} onChange={setShopCerts} />
+                </div>
+              )}
+
+              {(isBarber || linkedBarberId != null) && (
+                <div className="space-y-5">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">{isBarber ? 'Tu perfil de peluquero' : 'Tu perfil profesional'}</h3>
+                    <p className="text-sm text-slate-500 mt-0.5">
+                      Especialidad, experiencia y cursos. El cliente lo ve al elegir barbero.
+                    </p>
+                  </div>
+                  {linkedBarberId == null ? (
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
+                      <strong>Perfil incompleto.</strong> Pide al administrador que asigne tu usuario a un barbero para publicar tu nivel y certificaciones.
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Especialidad</label>
+                        <input
+                          type="text"
+                          className={INPUT_CLASS}
+                          value={mySpecialty}
+                          maxLength={120}
+                          placeholder="Ej: Cortes clásicos, Fade, Barba"
+                          onChange={(e) => setMySpecialty(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Años de experiencia</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={PROFILE_LIMITS.maxYearsExperience}
+                          className={`${INPUT_CLASS} max-w-[10rem]`}
+                          value={myYears}
+                          placeholder="Ej: 8"
+                          onChange={(e) => setMyYears(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Presentación</label>
+                        <textarea
+                          className={`${INPUT_CLASS} min-h-[120px] resize-y`}
+                          value={myBio}
+                          maxLength={PROFILE_LIMITS.bio}
+                          placeholder="Cuéntale al cliente tu estilo, con qué te especializas y cómo trabajas."
+                          onChange={(e) => setMyBio(e.target.value)}
+                        />
+                        <p className="text-xs text-slate-400 mt-1 text-right">{myBio.length}/{PROFILE_LIMITS.bio}</p>
+                      </div>
+                      <CertificationsEditor value={myCerts} onChange={setMyCerts} />
+                    </>
+                  )}
+                </div>
+              )}
+
+              {!isBarber && linkedBarberId == null && accountTier !== 'solo' && (
+                <p className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                  El perfil de cada peluquero del equipo se edita en la pestaña <strong>Barberos</strong>: especialidad, presentación y certificaciones.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={handleSavePublicProfile}
+                disabled={savingProfile}
+                className="inline-flex min-h-[44px] items-center bg-[#ffd427] text-slate-900 px-5 py-2.5 rounded-xl font-bold hover:bg-[#e6be23] disabled:opacity-60"
+              >
+                {savingProfile ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Save size={18} className="mr-2" />}
+                {savingProfile ? 'Guardando…' : 'Publicar perfil'}
+              </button>
             </div>
           )}
 
@@ -1733,6 +1949,35 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
               <label className="block text-sm font-medium mb-1">Especialidad</label>
               <input type="text" className={INPUT_CLASS} value={currentBarber.specialty} onChange={(e) => setCurrentBarber({ ...currentBarber, specialty: e.target.value })} placeholder="Ej: Cortes clásicos, Barba" />
             </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Años de experiencia</label>
+              <input
+                type="number"
+                min={0}
+                max={PROFILE_LIMITS.maxYearsExperience}
+                className={INPUT_CLASS}
+                value={currentBarber.yearsExperience ?? ''}
+                placeholder="Ej: 8"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCurrentBarber({ ...currentBarber, yearsExperience: v === '' ? undefined : Number(v) });
+                }}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Presentación pública</label>
+              <textarea
+                className={`${INPUT_CLASS} min-h-[88px] resize-y`}
+                value={currentBarber.bio || ''}
+                maxLength={PROFILE_LIMITS.bio}
+                placeholder="Estilo, enfoque y lo que el cliente debe saber."
+                onChange={(e) => setCurrentBarber({ ...currentBarber, bio: e.target.value })}
+              />
+            </div>
+            <CertificationsEditor
+              value={sanitizeCertifications(currentBarber.certifications)}
+              onChange={(certs) => setCurrentBarber({ ...currentBarber, certifications: certs })}
+            />
             <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5">
               <label htmlFor="barberActive" className="text-sm font-medium text-slate-700">
                 Disponible para citas

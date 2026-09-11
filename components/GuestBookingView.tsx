@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Appointment, Barber, BarberGalleryPhoto, Service } from '../types';
+import { Appointment, Barber, BarberGalleryPhoto, Service, PointOfSale } from '../types';
 import { MapPin, ArrowLeft, CheckCircle, ImageIcon } from 'lucide-react';
 import { useTranslation } from '../i18n';
 import { createGuestAppointment, getPublicBookingCatalog } from '../services/firebase';
+import PublicProfileInfo from './PublicProfileInfo';
 
 interface GuestBookingViewProps {
     posId: number;
@@ -33,6 +34,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
     const [dataLoading, setDataLoading] = useState(true);
 
     const [galleries, setGalleries] = useState<Record<string, BarberGalleryPhoto[]>>({});
+    const [shop, setShop] = useState<PointOfSale | null>(null);
 
     useEffect(() => {
         setDataLoading(true);
@@ -57,6 +59,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                     fechaCreacion: '',
                 })));
                 setGalleries(catalog.galleries || {});
+                setShop(catalog.shop || null);
                 if (active.length > 0) setSelectedBarberId(active[0].id);
             })
             .catch(() => setError(t('errors.loadDataFailed')))
@@ -276,6 +279,13 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                         <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 min-w-0">
                     {error && <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>}
 
+                    <PublicProfileInfo
+                        title={t('profile.aboutShop')}
+                        bio={shop?.about}
+                        highlights={shop?.highlights}
+                        certifications={shop?.certifications}
+                    />
+
                     {/* Barbero (si hay más de uno) */}
                     {activeBarbers.length > 1 && (
                         <div>
@@ -288,12 +298,25 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                                         onClick={() => setSelectedBarberId(b.id)}
                                         className={`px-4 py-2.5 min-h-[44px] rounded-xl text-sm font-medium ${selectedBarberId === b.id ? 'bg-[#ffd427] text-slate-900' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 active:bg-slate-300'}`}
                                     >
-                                        {b.name}
+                                        <span className="block">{b.name}</span>
+                                        {b.specialty?.trim() && (
+                                            <span className={`block text-[10px] font-normal mt-0.5 ${selectedBarberId === b.id ? 'text-slate-700' : 'text-slate-500'}`}>
+                                                {b.specialty}
+                                            </span>
+                                        )}
                                     </button>
                                 ))}
                             </div>
                         </div>
                     )}
+
+                    <PublicProfileInfo
+                        title={t('profile.aboutBarber')}
+                        bio={activeBarbers.find((b) => b.id === (selectedBarberId || defaultBarberId))?.bio}
+                        specialty={activeBarbers.find((b) => b.id === (selectedBarberId || defaultBarberId))?.specialty}
+                        yearsExperience={activeBarbers.find((b) => b.id === (selectedBarberId || defaultBarberId))?.yearsExperience}
+                        certifications={activeBarbers.find((b) => b.id === (selectedBarberId || defaultBarberId))?.certifications}
+                    />
 
                     {/* Galería del barbero */}
                     {guestBarberGallery.length > 0 && (

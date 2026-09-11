@@ -23,8 +23,8 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.assertUsername = exports.digitsOnly = exports.mintCustomTokenForUser = exports.ensureAuthUser = exports.syncUserClaims = exports.setPasswordHash = exports.migrateAllLegacyPasswordSecrets = exports.migratePasswordSecret = exports.readPasswordHash = exports.inspectPasswordHash = exports.resolvePasswordHashFromSources = exports.resolveUsernameKey = exports.uidForUsername = exports.publicUser = exports.writeAdminAudit = exports.consumeRateLimit = exports.requirePlatformOwner = exports.requirePlatform = exports.requireAuth = exports.claimsFromToken = exports.firestore = exports.db = exports.ipHash = exports.clientIp = exports.sha256Hex = exports.generateUniqueId = exports.verifyPasswordNode = exports.isStoredHash = exports.hashPasswordNode = exports.bufferToHex = exports.sanitizePublicShop = exports.resolveTierFromProductId = exports.canManagePosUsers = exports.isStaffRole = exports.isPlatformRole = exports.assertAppCheck = exports.appCheckEnforced = exports.isEmulator = exports.DEFAULT_SETTINGS = exports.PRODUCT_ID_TO_TIER = exports.APPOINTMENT_STATES = exports.ALL_ROLES = exports.PLATFORM_ROLES = exports.STAFF_ROLES = exports.PAID_PLANS = exports.MIN_PHONE_DIGITS = exports.HASH_BYTES = exports.SALT_BYTES = exports.PBKDF2_ITERATIONS = exports.ROOT = void 0;
-exports.canCallerAssignRole = void 0;
+exports.ensureAuthUser = exports.syncUserClaims = exports.setPasswordHash = exports.migrateAllLegacyPasswordSecrets = exports.migratePasswordSecret = exports.readPasswordHash = exports.inspectPasswordHash = exports.resolvePasswordHashFromSources = exports.resolveUsernameKey = exports.uidForUsername = exports.publicUser = exports.writeAdminAudit = exports.consumeRateLimit = exports.requirePlatformOwner = exports.requirePlatform = exports.requireAuth = exports.claimsFromToken = exports.firestore = exports.db = exports.ipHash = exports.clientIp = exports.sha256Hex = exports.generateUniqueId = exports.verifyPasswordNode = exports.isStoredHash = exports.hashPasswordNode = exports.bufferToHex = exports.sanitizePublicBarber = exports.sanitizePublicShop = exports.sanitizePublicHighlights = exports.sanitizePublicCertifications = exports.resolveTierFromProductId = exports.canManagePosUsers = exports.isStaffRole = exports.isPlatformRole = exports.assertAppCheck = exports.appCheckEnforced = exports.isEmulator = exports.DEFAULT_SETTINGS = exports.PRODUCT_ID_TO_TIER = exports.APPOINTMENT_STATES = exports.ALL_ROLES = exports.PLATFORM_ROLES = exports.STAFF_ROLES = exports.PAID_PLANS = exports.MIN_PHONE_DIGITS = exports.HASH_BYTES = exports.SALT_BYTES = exports.PBKDF2_ITERATIONS = exports.ROOT = void 0;
+exports.canCallerAssignRole = exports.assertUsername = exports.digitsOnly = exports.mintCustomTokenForUser = void 0;
 const crypto = __importStar(require("crypto"));
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
@@ -101,6 +101,52 @@ function resolveTierFromProductId(productId) {
     return null;
 }
 exports.resolveTierFromProductId = resolveTierFromProductId;
+function asPublicList(raw) {
+    if (Array.isArray(raw))
+        return raw;
+    if (raw && typeof raw === "object")
+        return Object.values(raw);
+    return [];
+}
+function sanitizePublicCertifications(raw) {
+    const yearMax = new Date().getFullYear() + 1;
+    const out = [];
+    for (const item of asPublicList(raw)) {
+        if (!item || typeof item !== "object")
+            continue;
+        const rec = item;
+        const title = String(rec.title || "").trim().slice(0, 120);
+        if (!title)
+            continue;
+        const cert = {
+            id: String(rec.id || `c${out.length}`).slice(0, 40),
+            title,
+        };
+        const issuer = String(rec.issuer || "").trim().slice(0, 80);
+        if (issuer)
+            cert.issuer = issuer;
+        const year = Number(rec.year);
+        if (Number.isFinite(year) && year >= 1980 && year <= yearMax)
+            cert.year = Math.round(year);
+        out.push(cert);
+        if (out.length >= 12)
+            break;
+    }
+    return out;
+}
+exports.sanitizePublicCertifications = sanitizePublicCertifications;
+function sanitizePublicHighlights(raw) {
+    const out = [];
+    for (const item of asPublicList(raw)) {
+        const s = String(item || "").trim().slice(0, 48);
+        if (s && !out.some((x) => x.toLowerCase() === s.toLowerCase()))
+            out.push(s);
+        if (out.length >= 8)
+            break;
+    }
+    return out;
+}
+exports.sanitizePublicHighlights = sanitizePublicHighlights;
 function sanitizePublicShop(pos) {
     var _a, _b, _c;
     if (!pos || pos.isActive === false)
@@ -118,9 +164,34 @@ function sanitizePublicShop(pos) {
         lat: typeof pos.lat === "number" ? pos.lat : null,
         lng: typeof pos.lng === "number" ? pos.lng : null,
         isActive: pos.isActive !== false,
+        about: typeof pos.about === "string" ? pos.about.trim().slice(0, 800) : "",
+        highlights: sanitizePublicHighlights(pos.highlights),
+        certifications: sanitizePublicCertifications(pos.certifications),
     };
 }
 exports.sanitizePublicShop = sanitizePublicShop;
+function sanitizePublicBarber(b, posId) {
+    if (!b || b.active === false)
+        return null;
+    const id = Number(b.id);
+    if (!Number.isFinite(id))
+        return null;
+    const years = Number(b.yearsExperience);
+    return {
+        id,
+        posId,
+        name: b.name,
+        specialty: typeof b.specialty === "string" ? String(b.specialty).slice(0, 120) : "",
+        active: true,
+        workingHours: b.workingHours || null,
+        lunchBreak: b.lunchBreak || null,
+        blockedHours: b.blockedHours || null,
+        bio: typeof b.bio === "string" ? String(b.bio).trim().slice(0, 800) : "",
+        yearsExperience: Number.isFinite(years) && years > 0 ? Math.min(60, Math.round(years)) : null,
+        certifications: sanitizePublicCertifications(b.certifications),
+    };
+}
+exports.sanitizePublicBarber = sanitizePublicBarber;
 function bufferToHex(buffer) {
     return buffer.toString("hex");
 }

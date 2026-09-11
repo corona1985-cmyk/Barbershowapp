@@ -33,6 +33,12 @@ export interface PointOfSale {
     tier?: AccountTier;
     /** Fecha límite de la suscripción pagada (ISO string). Si falta = sin vencimiento por pago. Si está en el pasado, la sede se considera vencida y se bloquea el acceso hasta renovar. */
     subscriptionExpiresAt?: string;
+    /** Presentación pública de la barbería (estilo, ambiente, lo que ofrece). */
+    about?: string;
+    /** Especialidades o servicios destacados de la sede, visibles al cliente. */
+    highlights?: string[];
+    /** Cursos, reconocimientos o certificaciones de la barbería. */
+    certifications?: ProfessionalCertification[];
 }
 
 export interface AppSettings {
@@ -170,6 +176,14 @@ export interface BarberBlockedSlot {
     end: string;   // "HH:mm"
 }
 
+/** Curso, diploma o certificación visible en el perfil público. */
+export interface ProfessionalCertification {
+    id: string;
+    title: string;
+    issuer?: string;
+    year?: number;
+}
+
 export interface Barber {
     id: number;
     posId: number;
@@ -182,6 +196,12 @@ export interface Barber {
     blockedHours?: BarberBlockedSlot[];
     /** Horario de comida por día de semana (0-6). Mismo formato que workingHours; si está definido, no se ofrecen slots en ese rango. */
     lunchBreak?: BarberWorkingHours;
+    /** Presentación pública del peluquero (experiencia, estilo, enfoque). */
+    bio?: string;
+    /** Años de experiencia, visibles al cliente. */
+    yearsExperience?: number;
+    /** Cursos y certificaciones del peluquero. */
+    certifications?: ProfessionalCertification[];
 }
 
 /** Foto de un trabajo/corte del barbero para que los clientes la vean. */

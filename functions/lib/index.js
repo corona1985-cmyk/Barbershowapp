@@ -744,17 +744,8 @@ exports.getPublicBookingCatalog = (0, https_1.onCall)(callableOpts, async (reque
         });
     });
     const barbers = Object.values((barbersSnap.val() || {}))
-        .filter((b) => b.active !== false)
-        .map((b) => ({
-        id: Number(b.id),
-        posId,
-        name: b.name,
-        specialty: b.specialty,
-        active: true,
-        workingHours: b.workingHours || null,
-        lunchBreak: b.lunchBreak || null,
-        blockedHours: b.blockedHours || null,
-    }));
+        .map((b) => (0, lib_1.sanitizePublicBarber)(b, posId))
+        .filter((b) => b != null);
     const busySlots = Object.values((apptsSnap.val() || {}))
         .filter((a) => a.estado !== "cancelada")
         .map((a) => ({

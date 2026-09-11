@@ -150,7 +150,12 @@
     "photoAlt": "Your photo",
     "photoUrlPlaceholder": "Or paste an image URL...",
     "photoHint": "Upload an image or paste a link.",
-    "workAlt": "Work"
+    "workAlt": "Work",
+    "aboutShop": "About the shop",
+    "aboutBarber": "About the barber",
+    "certifications": "Courses and certifications",
+    "yearsExperience": "{count} years of experience",
+    "certsCount": "{count} certification(s)"
   },
   "settings": {
     "accountTitle": "Account Settings",
