@@ -652,14 +652,13 @@ const App: React.FC = () => {
                 phone: regPhone.trim(),
                 posId: targetPosId,
             });
-            setRegSuccess(true);
-            setTimeout(() => {
-                setRegSuccess(false);
-                setIsRegistering(false);
-                setUsername(userTrim);
-                setPassword('');
-                setLoginError(translate('auth.registrationSuccessLogin'));
-            }, 2000);
+            setIsRegistering(false);
+            setUsername(userTrim);
+            setPassword(regPassword);
+            await handleLogin({ preventDefault: () => {} } as React.FormEvent, {
+                username: userTrim,
+                password: regPassword,
+            });
         } catch (err) {
             console.error('Error en registro:', err);
             const msg = err instanceof Error ? err.message : String(err);
@@ -991,7 +990,7 @@ const App: React.FC = () => {
                 <LandingPage
                     onGetStarted={() => setShowLandingPage(false)}
                     onGoToLogin={() => { setShowLandingPage(false); openLoginScreen('landing'); }}
-                    onGoToBarberias={() => { setShowLandingPage(false); setShowBarberiasGuest(true); }}
+                    onGoToBarberias={() => { setShowBarberiasGuest(true); }}
                     onGoToClientRegister={() => openClientRegistration(true, 'landing')}
                 />
             </>

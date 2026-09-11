@@ -59,8 +59,13 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
   try {
-    const token = await user.getIdTokenResult();
-    setCachedClaims(parseTokenClaims(token.claims as Record<string, unknown>));
+    let token = await user.getIdTokenResult();
+    let parsed = parseTokenClaims(token.claims as Record<string, unknown>);
+    if (!parsed) {
+      token = await user.getIdTokenResult(true);
+      parsed = parseTokenClaims(token.claims as Record<string, unknown>);
+    }
+    setCachedClaims(parsed);
   } catch {
     clearSessionClaims();
   }

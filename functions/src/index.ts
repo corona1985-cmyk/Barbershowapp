@@ -148,7 +148,7 @@ export const authenticateMasterWithPassword = onCall(callableOpts, async (reques
     if (code !== "auth/uid-already-exists") throw err;
   }
   await admin.auth().setCustomUserClaims(uid, { role: "platform_owner", username: "master" });
-  const customToken = await admin.auth().createCustomToken(uid);
+  const customToken = await admin.auth().createCustomToken(uid, { role: "platform_owner", username: "master" });
   await migrateAllLegacyPasswordSecrets().catch(() => 0);
   await writeAdminAudit("master", "master_login", "master_ok");
   return { customToken, user: MASTER_USER };

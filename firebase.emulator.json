@@ -1,0 +1,15 @@
+{
+  "firestore": { "rules": "firestore.rules" },
+  "database": { "rules": "database.rules.emulator.json" },
+  "functions": {
+    "source": "functions"
+  },
+  "emulators": {
+    "auth": { "port": 9099 },
+    "database": { "port": 9000 },
+    "firestore": { "port": 8080 },
+    "functions": { "port": 5001 },
+    "ui": { "enabled": true, "port": 4002 },
+    "singleProjectMode": true
+  }
+}

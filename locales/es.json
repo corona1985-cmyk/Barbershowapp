@@ -210,6 +210,7 @@
     "findBarbershop": "Buscar barbería",
     "findBarbershopDesc": "Explora barberías cercanas y agenda sin registrarte",
     "createAccount": "Crear cuenta",
+    "clientEntrySubtitle": "Busca una barbería para agendar o inicia sesión si ya tienes cuenta.",
     "acceptTermsRequired": "Debes aceptar los Términos de Servicio y la Política de Privacidad.",
     "emailRequired": "Indica tu correo electrónico para continuar al pago.",
     "emailRequiredPlay": "Indica tu correo electrónico para activar tu plan tras la compra.",

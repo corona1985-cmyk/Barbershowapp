@@ -40,17 +40,27 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
         try {
             const barberId = DataService.getCurrentBarberId();
             const productsLoader = barberId != null ? DataService.getProducts(barberId) : DataService.getProducts();
-            const loadPromise = Promise.all([
-                DataService.getClients(),
-                DataService.getAppointments(),
-                DataService.getSales(),
-                productsLoader,
-                DataService.getPointsOfSale(),
-            ]);
             const timeoutPromise = new Promise<never>((_, reject) =>
                 setTimeout(() => reject(new Error(t('common.timeout'))), LOAD_TIMEOUT_MS)
             );
-            const [clients, appointments, sales, products, posList] = await Promise.race([loadPromise, timeoutPromise]);
+            const settled = await Promise.race([
+                Promise.allSettled([
+                    DataService.getClients(),
+                    DataService.getAppointments(),
+                    DataService.getSales(),
+                    productsLoader,
+                    DataService.getPointsOfSale(),
+                ]),
+                timeoutPromise,
+            ]);
+            if (!Array.isArray(settled)) {
+                throw new Error(t('common.timeout'));
+            }
+            const [clients, appointments, sales, products, posList] = settled.map((item) =>
+                item.status === 'fulfilled' ? item.value : []
+            ) as [Client[], Appointment[], Awaited<ReturnType<typeof DataService.getSales>>, Awaited<ReturnType<typeof DataService.getProducts>>, PointOfSale[]];
+            const anyOk = settled.some((item) => item.status === 'fulfilled');
+            if (!anyOk) throw new Error(t('dashboard.loadFailed'));
             const clientsSafe = Array.isArray(clients) ? clients : [];
             const appointmentsSafe = Array.isArray(appointments) ? appointments : [];
             const salesSafe = Array.isArray(sales) ? sales : [];

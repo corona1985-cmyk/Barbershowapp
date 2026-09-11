@@ -399,8 +399,18 @@ async function ensureAuthUser(username, displayName, existingUid) {
 exports.ensureAuthUser = ensureAuthUser;
 async function mintCustomTokenForUser(usernameKey, user) {
     const uid = await ensureAuthUser(usernameKey, String(user.name || usernameKey), user.authUid ? String(user.authUid) : null);
-    await syncUserClaims(uid, user, usernameKey);
-    const customToken = await admin.auth().createCustomToken(uid);
+    const claims = await syncUserClaims(uid, user, usernameKey);
+    const extra = {
+        role: claims.role,
+        username: claims.username,
+    };
+    if (claims.posId != null && Number.isFinite(claims.posId))
+        extra.posId = claims.posId;
+    if (claims.barberId != null && Number.isFinite(claims.barberId))
+        extra.barberId = claims.barberId;
+    if (claims.clientId != null && Number.isFinite(claims.clientId))
+        extra.clientId = claims.clientId;
+    const customToken = await admin.auth().createCustomToken(uid, extra);
     return { customToken, user: publicUser(user, usernameKey) };
 }
 exports.mintCustomTokenForUser = mintCustomTokenForUser;

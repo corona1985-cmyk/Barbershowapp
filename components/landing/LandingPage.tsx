@@ -154,26 +154,23 @@ const LandingPage: React.FC<LandingPageProps> = ({
     return (
         <div className="min-h-screen bg-[#12121c] text-white scroll-smooth text-[17px] lg:text-[18px]">
             {/* Navbar */}
-            <header className="fixed top-0 left-0 right-0 z-50 bg-[#12121c]/90 backdrop-blur-md border-b border-white/5 safe-area-top">
+            <header className="fixed top-0 left-0 right-0 z-50 bg-[#12121c]/90 backdrop-blur-md border-b border-white/5 safe-area-top text-sm">
                 <div className={container}>
-                    <div className="flex items-center justify-between h-18 lg:h-20">
-                        <button type="button" onClick={() => scrollTo('inicio')} className="flex items-center gap-3 group">
-                            <div className="w-12 h-12 bg-[#ffd427] rounded-xl flex items-center justify-center shadow-lg shadow-[#ffd427]/20">
-                                <Scissors size={24} className="text-slate-900" />
+                    <div className="flex items-center justify-between h-14">
+                        <button type="button" onClick={() => scrollTo('inicio')} className="flex items-center gap-2 group">
+                            <div className="w-8 h-8 bg-[#ffd427] rounded-lg flex items-center justify-center shadow-md shadow-[#ffd427]/20">
+                                <Scissors size={16} className="text-slate-900" />
                             </div>
-                            <div className="text-left hidden sm:block">
-                                <span className="font-bold text-white text-xl leading-tight block">BarberShow</span>
-                                <span className="text-xs text-slate-500 uppercase tracking-wider">{t('landing.brandTagline')}</span>
-                            </div>
+                            <span className="font-bold text-white text-[15px] leading-none hidden sm:block">BarberShow</span>
                         </button>
 
-                        <nav className="hidden lg:flex items-center gap-1">
+                        <nav className="hidden lg:flex items-center gap-0.5">
                             {navLinks.map((link) => (
                                 <button
                                     key={link.id}
                                     type="button"
                                     onClick={() => scrollTo(link.id)}
-                                    className={`relative px-4 py-2.5 text-base font-medium transition-colors ${
+                                    className={`relative px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
                                         activeNav === link.id ? 'text-white' : 'text-slate-400 hover:text-white'
                                     }`}
                                 >
@@ -185,30 +182,39 @@ const LandingPage: React.FC<LandingPageProps> = ({
                             ))}
                         </nav>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                            {onGoToBarberias && (
+                            <button
+                                type="button"
+                                onClick={handleGoToBarberias}
+                                className="hidden lg:inline-flex items-center gap-1 px-2.5 py-1.5 border border-[#ffd427]/50 hover:bg-[#ffd427]/10 text-[#ffd427] font-semibold text-[13px] rounded-lg transition-colors"
+                            >
+                                <Search size={13} /> {t('landing.nav.bookAppointment')}
+                            </button>
+                            )}
                             {!isNativeMobile && (
                             <button
                                 type="button"
                                 onClick={onGetStarted}
-                                className="hidden sm:inline-flex items-center gap-1.5 px-5 py-2.5 bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base rounded-xl transition-colors"
+                                className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-[13px] rounded-lg transition-colors"
                             >
-                                {t('landing.startFree')} <ArrowRight size={18} />
+                                {t('landing.startFree')} <ArrowRight size={14} />
                             </button>
                             )}
                             <button
                                 type="button"
                                 onClick={onGoToLogin}
-                                className="hidden sm:inline-flex items-center gap-1.5 px-5 py-2.5 border border-white/25 hover:border-white/50 text-white font-semibold text-base rounded-xl transition-colors"
+                                className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 border border-white/25 hover:border-white/50 text-white font-semibold text-[13px] rounded-lg transition-colors"
                             >
                                 {t('common.login')}
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                                className="lg:hidden p-2 text-slate-400 hover:text-white rounded-lg"
+                                className="lg:hidden p-1.5 text-slate-400 hover:text-white rounded-lg"
                                 aria-label={t('common.openMenu')}
                             >
-                                {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                                {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
                             </button>
                         </div>
                     </div>
@@ -256,7 +262,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
             </header>
 
             {/* Hero */}
-            <section id="inicio" className="relative pt-28 lg:pt-36 pb-20 lg:pb-28 overflow-hidden">
+            <section id="inicio" className="relative pt-24 lg:pt-28 pb-20 lg:pb-28 overflow-hidden">
                 <div className="absolute inset-0 pointer-events-none opacity-[0.04]" aria-hidden>
                     <Scissors className="absolute top-32 right-20 w-32 h-32 rotate-12" strokeWidth={0.5} />
                     <Scissors className="absolute bottom-20 left-10 w-24 h-24 -rotate-45" strokeWidth={0.5} />
@@ -274,7 +280,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                             <p className="text-slate-400 text-lg sm:text-xl leading-relaxed mb-8 max-w-2xl">
                                 {t('landing.hero.description')}
                             </p>
-                            <div className="flex flex-col sm:flex-row gap-4">
+                            <div className="flex flex-col sm:flex-row flex-wrap gap-4">
                                 {!isNativeMobile && (
                                 <>
                                 <button
@@ -284,6 +290,15 @@ const LandingPage: React.FC<LandingPageProps> = ({
                                 >
                                     {t('landing.hero.createShop')} <ArrowRight size={20} />
                                 </button>
+                                {onGoToBarberias && (
+                                <button
+                                    type="button"
+                                    onClick={handleGoToBarberias}
+                                    className="inline-flex items-center justify-center gap-2 px-8 py-4 text-base border border-[#ffd427]/50 hover:bg-[#ffd427]/10 text-[#ffd427] font-semibold rounded-xl transition-colors"
+                                >
+                                    <Search size={18} /> {t('landing.searchAndBook')}
+                                </button>
+                                )}
                                 <button
                                     type="button"
                                     onClick={() => scrollTo('planes')}

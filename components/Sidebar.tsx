@@ -41,9 +41,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
             icon: <LayoutDashboard size={18} />,
             items: [
                 { id: 'admin_pos', label: t('nav.globalPos'), icon: <MapPin size={18} />, roles: ['superadmin'] },
-                { id: 'dashboard', label: t('nav.dashboard'), icon: <LayoutDashboard size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
+                { id: 'dashboard', label: t('nav.dashboard'), icon: <LayoutDashboard size={18} />, roles: ['superadmin', 'admin', 'dueno', 'barbero'] },
                 { id: 'client_discovery', label: t('nav.discoverBarbershops'), icon: <Globe size={18} />, roles: ['cliente'] },
-                { id: 'client_profile', label: t('nav.myProfile'), icon: <User size={18} />, roles: ['cliente', 'superadmin', 'admin', 'barbero'] },
+                { id: 'client_profile', label: t('nav.myProfile'), icon: <User size={18} />, roles: ['cliente', 'superadmin', 'admin', 'dueno', 'barbero'] },
                 { id: 'qr_scanner', label: t('nav.scanQr'), icon: <QrCode size={18} />, roles: ['cliente'] },
             ]
         },
@@ -52,12 +52,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
             label: t('nav.operations'),
             icon: <Briefcase size={18} />,
             items: [
-                { id: 'sales', label: t('nav.salesPos'), icon: <DollarSign size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
+                { id: 'sales', label: t('nav.salesPos'), icon: <DollarSign size={18} />, roles: ['superadmin', 'admin', 'dueno', 'barbero'] },
                 { id: 'shop', label: t('nav.onlineShop'), icon: <ShoppingBag size={18} />, roles: ['cliente'] },
-                { id: 'appointments', label: t('nav.appointments'), icon: <Calendar size={18} />, roles: ['superadmin', 'admin', 'barbero', 'cliente'] },
-                { id: 'calendar', label: t('nav.monthlyCalendar'), icon: <Calendar size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
-                { id: 'whatsapp_console', label: t('nav.whatsappConsole'), icon: <MessageCircle size={18} />, roles: ['barbero', 'admin'] },
-                { id: 'clients', label: t('nav.clients'), icon: <Users size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
+                { id: 'appointments', label: t('nav.appointments'), icon: <Calendar size={18} />, roles: ['superadmin', 'admin', 'dueno', 'barbero', 'cliente'] },
+                { id: 'calendar', label: t('nav.monthlyCalendar'), icon: <Calendar size={18} />, roles: ['superadmin', 'admin', 'dueno', 'barbero'] },
+                { id: 'whatsapp_console', label: t('nav.whatsappConsole'), icon: <MessageCircle size={18} />, roles: ['barbero', 'admin', 'dueno'] },
+                { id: 'clients', label: t('nav.clients'), icon: <Users size={18} />, roles: ['superadmin', 'admin', 'dueno', 'barbero'] },
             ]
         },
         {
@@ -65,12 +65,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
             label: t('nav.administration'),
             icon: <BarChart2 size={18} />,
             items: [
-                { id: 'inventory', label: t('nav.inventory'), icon: <Package size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
-                { id: 'finance', label: t('nav.finance'), icon: <DollarSign size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
-                { id: 'reports', label: t('nav.reports'), icon: <FileText size={18} />, roles: ['superadmin', 'admin'] },
-                { id: 'sales_records', label: t('nav.salesRecords'), icon: <ListChecks size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
+                { id: 'inventory', label: t('nav.inventory'), icon: <Package size={18} />, roles: ['superadmin', 'admin', 'dueno', 'barbero'] },
+                { id: 'finance', label: t('nav.finance'), icon: <DollarSign size={18} />, roles: ['superadmin', 'admin', 'dueno', 'barbero'] },
+                { id: 'reports', label: t('nav.reports'), icon: <FileText size={18} />, roles: ['superadmin', 'admin', 'dueno'] },
+                { id: 'sales_records', label: t('nav.salesRecords'), icon: <ListChecks size={18} />, roles: ['superadmin', 'admin', 'dueno', 'barbero'] },
                 { id: 'user_admin', label: t('nav.userAdmin'), icon: <Shield size={18} />, roles: ['superadmin'] },
-                { id: 'settings', label: t('nav.settings'), icon: <Settings size={18} />, roles: ['superadmin', 'admin', 'barbero'] },
+                { id: 'settings', label: t('nav.settings'), icon: <Settings size={18} />, roles: ['superadmin', 'admin', 'dueno', 'barbero'] },
             ]
         }
     ], [t]);

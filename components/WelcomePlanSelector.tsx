@@ -22,7 +22,7 @@ import { ALLOW_NATIVE_BARBER_SIGNUP } from '../config/app';
 import { isIOSAccountCreationAllowed, isIOSBarberSignupAllowed } from '../utils/platform';
 import { useTranslation } from '../i18n';
 
-type Step = 'who' | 'barber_plan' | 'barber_registered' | 'barber_contact' | 'client_registered' | 'client_new';
+type Step = 'who' | 'barber_plan' | 'barber_registered' | 'barber_contact';
 type UserType = 'barbero' | 'cliente';
 
 interface WelcomePlanSelectorProps {
@@ -120,15 +120,26 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
         onGoToLogin();
     };
 
+    /** Cliente: ir directo a barberías (o registro/login si no hay listado). */
+    const handleClientClick = () => {
+        setUserType('cliente');
+        if (onGoToBarberias) {
+            onGoToBarberias();
+        } else if (canCreateAccount && onGoToClientRegister) {
+            onGoToClientRegister();
+        } else {
+            onGoToLogin();
+        }
+    };
+
     const goBack = () => {
-        if (step === 'barber_plan' || step === 'client_registered') {
+        if (step === 'barber_plan') {
             setStep('who');
             setUserType(null);
         } else if (step === 'barber_registered') {
             setStep('barber_plan');
             setSelectedPlan(null);
         } else if (step === 'barber_contact') { setStep('barber_plan'); setSelectedPlan(null); }
-        else if (step === 'client_new') setStep('client_registered');
     };
 
     const getSolicitudBody = () =>
@@ -528,31 +539,39 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                 </div>
 
 
-                {/* Paso 1: ¿Barbero o Cliente? — móvil sin autoregistro de barbero: solo login + cliente */}
+                {/* Paso 1 (nativo sin alta de barbero): buscar barbería o entrar a la cuenta */}
                 {!showSelfSignup && step === 'who' && isNativeMobile && !canSelfSignupBarber && (
                     <div className="max-w-lg mx-auto space-y-4">
                         <p className="text-white text-center text-lg font-semibold mb-2">Bienvenido a BarberShow</p>
                         <p className="text-slate-400 text-center text-sm mb-6">
-                            {canCreateAccount
-                                ? 'Inicia sesión o regístrate como cliente para reservar citas.'
-                                : 'Inicia sesión para reservar citas o agenda como invitado.'}
+                            {t('welcome.clientEntrySubtitle')}
                         </p>
+                        {onGoToBarberias && (
+                        <button
+                            type="button"
+                            onClick={handleClientClick}
+                            className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base transition-colors active:scale-[0.98]"
+                        >
+                            <Store size={20} />
+                            {t('welcome.findBarbershop')}
+                        </button>
+                        )}
                         <button
                             type="button"
                             onClick={onGoToLogin}
-                            className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base transition-colors active:scale-[0.98]"
+                            className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-base transition-colors active:bg-white/20"
                         >
                             <LogIn size={20} />
                             {t('common.login')}
                         </button>
-                        {canCreateAccount && (
+                        {canCreateAccount && onGoToClientRegister && (
                         <button
                             type="button"
-                            onClick={() => { setUserType('cliente'); setStep('client_registered'); }}
-                            className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-base transition-colors active:bg-white/20"
+                            onClick={onGoToClientRegister}
+                            className="w-full min-h-[44px] flex items-center justify-center gap-2 py-3 text-slate-400 hover:text-[#ffd427] text-sm font-medium transition-colors"
                         >
-                            <UserCircle size={20} />
-                            {t('welcome.registerClient')}
+                            <UserPlus size={18} />
+                            {t('welcome.createAccount')}
                         </button>
                         )}
                         <p className="text-xs text-slate-500 text-center mt-4 px-2 leading-relaxed">
@@ -580,16 +599,7 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                             </button>
                             <button
                                 type="button"
-                                onClick={() => {
-                                    if (canCreateAccount) {
-                                        setUserType('cliente');
-                                        setStep('client_registered');
-                                    } else if (onGoToBarberias) {
-                                        onGoToBarberias();
-                                    } else {
-                                        onGoToLogin();
-                                    }
-                                }}
+                                onClick={handleClientClick}
                                 className="flex flex-col items-center gap-3 min-h-[120px] py-5 px-5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 transition-colors group active:bg-white/20"
                             >
                                 <div className="w-11 h-11 rounded-lg bg-[#ffd427]/20 flex items-center justify-center group-hover:bg-[#ffd427]/30">
@@ -707,82 +717,11 @@ const WelcomePlanSelector: React.FC<WelcomePlanSelectorProps> = ({ onGoToLogin, 
                     </div>
                 )}
 
-                {/* Cliente: ¿Ya registrado o nuevo? — mismo equilibrio */}
-                {step === 'client_registered' && (
-                    <div className="max-w-lg mx-auto">
-                        <button type="button" onClick={goBack} className="flex items-center gap-1.5 min-h-[44px] text-slate-400 hover:text-white text-sm mb-4 rounded-lg w-fit px-2 -ml-2 active:bg-white/10">
-                            <ArrowLeft size={16} /> Volver
-                        </button>
-                        <p className="text-white text-center text-lg font-semibold mb-5">¿Ya estás registrado o eres nuevo?</p>
-                        <div className="space-y-4 mb-6">
-                            <button
-                                type="button"
-                                onClick={onGoToLogin}
-                                className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base transition-colors active:scale-[0.98]"
-                            >
-                                <LogIn size={20} />
-                                Ya estoy registrado
-                            </button>
-                            {canCreateAccount && (
-                            <button
-                                type="button"
-                                onClick={() => setStep('client_new')}
-                                className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-base transition-colors active:bg-white/20"
-                            >
-                                Soy nuevo
-                            </button>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* Cliente nuevo: ver negocios — mismo equilibrio */}
-                {step === 'client_new' && (
-                    <div className="max-w-lg mx-auto">
-                        <button type="button" onClick={goBack} className="flex items-center gap-1.5 min-h-[44px] text-slate-400 hover:text-white text-sm mb-4 rounded-lg w-fit px-2 -ml-2 active:bg-white/10">
-                            <ArrowLeft size={16} /> Volver
-                        </button>
-                        <p className="text-white text-center text-lg font-semibold mb-5">¿No tienes negocio elegido aún?</p>
-                        {canCreateAccount && onGoToClientRegister && (
-                            <button
-                                type="button"
-                                onClick={onGoToClientRegister}
-                                className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold text-base transition-colors mb-4 active:scale-[0.98]"
-                            >
-                                <UserPlus size={20} /> Crear cuenta de cliente gratis
-                            </button>
-                        )}
-                        {onGoToBarberias && (
-                            <button
-                                type="button"
-                                onClick={onGoToBarberias}
-                                className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-base transition-colors mb-4 active:bg-white/20"
-                            >
-                                <Store size={20} /> Ver negocios – elegir uno y agendar cita
-                            </button>
-                        )}
-                        <div className="bg-white/10 rounded-lg border border-white/20 p-5 mb-5">
-                            <p className="text-white font-medium text-sm mb-2">O regístrate en un negocio específico:</p>
-                            <p className="text-slate-400 text-sm">
-                                Visita el negocio donde quieres reservar y escanea el código QR o pide el enlace.
-                            </p>
-                            <p className="text-slate-500 text-sm mt-2">Si ya te registraste, inicia sesión abajo.</p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={onGoToLogin}
-                            className="w-full min-h-[52px] flex items-center justify-center gap-2 py-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium text-base transition-colors active:bg-white/20"
-                        >
-                            <LogIn size={18} /> Iniciar sesión
-                        </button>
-                    </div>
-                )}
-
                 {/* Enlace a login en paso "who" */}
                 {!showSelfSignup && step === 'who' && (!isNativeMobile || ALLOW_NATIVE_BARBER_SIGNUP) && (
                     <div className="max-w-lg mx-auto pt-6 border-t border-white/10">
                         <button type="button" onClick={onGoToLogin} className="w-full flex items-center justify-center gap-2 py-3 text-slate-400 hover:text-[#ffd427] text-sm font-medium transition-colors">
-                            <LogIn size={18} /> Ya tengo cuenta – Iniciar sesión
+                            <LogIn size={18} /> {t('welcome.alreadyHaveAccount')} {t('welcome.loginHere')}
                         </button>
                     </div>
                 )}

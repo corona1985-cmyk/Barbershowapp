@@ -210,6 +210,7 @@
     "findBarbershop": "Buscar barbearia",
     "findBarbershopDesc": "Explore barbearias próximas e agende sem se cadastrar",
     "createAccount": "Criar conta",
+    "clientEntrySubtitle": "Busque uma barbearia para agendar ou entre se já tiver conta.",
     "acceptTermsRequired": "Você deve aceitar os Termos de Serviço e a Política de Privacidade.",
     "emailRequired": "Informe seu e-mail para continuar ao pagamento.",
     "emailRequiredPlay": "Informe seu e-mail para ativar seu plano após a compra.",

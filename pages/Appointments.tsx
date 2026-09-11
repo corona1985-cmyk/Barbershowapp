@@ -62,12 +62,18 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         try {
             const role = DataService.getCurrentUserRole();
             setUserRole(role);
-            const clientsLoader = role === 'barbero' ? DataService.getClientsWithActivity() : DataService.getClients();
+            const clientsLoader = role === 'cliente'
+              ? Promise.resolve([] as Client[])
+              : role === 'barbero'
+                ? DataService.getClientsWithActivity()
+                : DataService.getClients();
+            const barbersLoader = role === 'cliente' ? Promise.resolve([] as Barber[]) : DataService.getBarbers();
+            const servicesLoader = role === 'cliente' ? DataService.getServices().catch(() => []) : DataService.getServices();
             const loadPromise = Promise.all([
                 DataService.getAppointments(),
-                DataService.getBarbers(),
+                barbersLoader,
                 clientsLoader,
-                DataService.getServices(),
+                servicesLoader,
                 DataService.getPointsOfSale(),
             ]);
             const timeoutPromise = new Promise<never>((_, reject) =>

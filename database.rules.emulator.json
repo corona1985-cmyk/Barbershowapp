@@ -1,0 +1,23 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "barbershow": {
+      ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous'",
+      ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous'",
+      "authSecrets": { ".read": false, ".write": false },
+      "uidIndex": { ".read": false, ".write": false },
+      "rateLimits": { ".read": false, ".write": false },
+      "users": { ".indexOn": ["posId"] },
+      "pointsOfSale": { ".indexOn": ["ownerId"] },
+      "clients": { ".indexOn": ["posId"] },
+      "products": { ".indexOn": ["posId"] },
+      "services": { ".indexOn": ["posId"] },
+      "barbers": { ".indexOn": ["posId"] },
+      "appointments": { ".indexOn": ["posId", "clienteId"] },
+      "sales": { ".indexOn": ["posId"] },
+      "finances": { ".indexOn": ["posId"] },
+      "notificationLogs": { ".indexOn": ["posId"] }
+    }
+  }
+}

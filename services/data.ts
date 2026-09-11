@@ -459,8 +459,8 @@ function cacheInvalidate(prefix: string) {
 function requireRole(allowedRoles: string[]): void {
   const claims = getCachedClaims();
   const role = claims?.role === 'empleado' ? 'barbero' : (claims?.role || DataService.getCurrentUserRole());
-  const normalized = role === 'empleado' ? 'barbero' : role;
-  if (!allowedRoles.includes(normalized)) {
+  const normalized = role === 'empleado' ? 'barbero' : role === 'dueno' ? 'admin' : role;
+  if (!allowedRoles.includes(normalized) && !allowedRoles.includes(role)) {
     throw new Error('No tienes permiso para realizar esta acción.');
   }
 }
@@ -558,15 +558,26 @@ export const DataService = {
           ? await nativeRtdbGet<Record<string, PointOfSale> | null>(`${ROOT}/pointsOfSale`, 'getPointsOfSale')
           : (await withTimeout(get(ref(db, ROOT + '/pointsOfSale')), FIREBASE_TIMEOUT_MS, 'getPointsOfSale')).val();
       } else if (claims?.username) {
-        const byOwner = isNative
-          ? await nativeRtdbGet<Record<string, PointOfSale> | null>(`${ROOT}/pointsOfSale`, 'getPointsOfSale.owner', `orderBy=${encodeURIComponent('"ownerId"')}&equalTo=${encodeURIComponent(`"${claims.username}"`)}`)
-          : (await withTimeout(get(query(ref(db, ROOT + '/pointsOfSale'), orderByChild('ownerId'), equalTo(claims.username))), FIREBASE_TIMEOUT_MS, 'getPointsOfSale.owner')).val();
+        let byOwner: Record<string, PointOfSale> | null = null;
+        try {
+          const ownerSnap = isNative
+            ? await nativeRtdbGet<Record<string, PointOfSale> | null>(`${ROOT}/pointsOfSale`, 'getPointsOfSale.owner', `orderBy=${encodeURIComponent('"ownerId"')}&equalTo=${encodeURIComponent(`"${claims.username}"`)}`)
+            : (await withTimeout(get(query(ref(db, ROOT + '/pointsOfSale'), orderByChild('ownerId'), equalTo(claims.username))), FIREBASE_TIMEOUT_MS, 'getPointsOfSale.owner')).val();
+          byOwner = ownerSnap;
+        } catch {
+          byOwner = null;
+        }
         const ownId = claims.posId;
-        const own = ownId != null
-          ? (isNative
-            ? await nativeRtdbGet<PointOfSale | null>(`${ROOT}/pointsOfSale/${ownId}`, 'getPointsOfSale.one')
-            : (await withTimeout(get(ref(db, ROOT + '/pointsOfSale/' + ownId)), FIREBASE_TIMEOUT_MS, 'getPointsOfSale.one')).val())
-          : null;
+        let own: PointOfSale | null = null;
+        if (ownId != null) {
+          try {
+            own = isNative
+              ? await nativeRtdbGet<PointOfSale | null>(`${ROOT}/pointsOfSale/${ownId}`, 'getPointsOfSale.one')
+              : (await withTimeout(get(ref(db, ROOT + '/pointsOfSale/' + ownId)), FIREBASE_TIMEOUT_MS, 'getPointsOfSale.one')).val();
+          } catch {
+            own = null;
+          }
+        }
         raw = { ...(byOwner || {}) };
         if (own) (raw as Record<string, PointOfSale>)[String(own.id || ownId)] = own;
       }
