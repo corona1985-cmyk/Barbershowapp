@@ -157,6 +157,8 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
   }
 
   const isCliente = client !== null;
+  const userRole = DataService.getCurrentUser()?.role;
+  const isBarbero = userRole === 'barbero' || userRole === 'empleado';
 
   return (
     <div className="p-4 md:p-6 max-w-lg mx-auto">
@@ -172,8 +174,8 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
 
       <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
         <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-8 text-center">
-          <h1 className="text-xl font-bold text-white">{t('profile.title')}</h1>
-          <p className="text-slate-300 text-sm mt-1">{t('profile.subtitle')}</p>
+          <h1 className="text-xl font-bold text-white">{isBarbero ? t('profile.barberTitle') : t('profile.title')}</h1>
+          <p className="text-slate-300 text-sm mt-1">{isBarbero ? t('profile.barberSubtitle') : t('profile.subtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -188,7 +190,7 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
 
           {!isCliente && (
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-slate-600 text-sm mb-2">
-              <p className="font-medium text-slate-700">{t('profile.adminAccount')}</p>
+              <p className="font-medium text-slate-700">{isBarbero ? t('profile.barberAccount') : t('profile.adminAccount')}</p>
               <p className="mt-1">{t('profile.adminUserLabel')} <strong>{DataService.getCurrentUser()?.username}</strong></p>
             </div>
           )}

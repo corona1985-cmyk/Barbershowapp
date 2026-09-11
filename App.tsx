@@ -17,7 +17,7 @@ const UserAdmin = lazy(() => import('./pages/UserAdmin'));
 const ClientDiscovery = lazy(() => import('./pages/ClientDiscovery'));
 const ClientProfile = lazy(() => import('./pages/ClientProfile'));
 const MasterDashboard = lazy(() => import('./pages/MasterDashboard'));
-const Clients = lazy(() => import('./pages/InventoryClientsFinance').then(m => ({ default: m.Clients })));
+const Clients = lazy(() => import('./pages/Clients'));
 const Inventory = lazy(() => import('./pages/InventoryClientsFinance').then(m => ({ default: m.Inventory })));
 const Finance = lazy(() => import('./pages/InventoryClientsFinance').then(m => ({ default: m.Finance })));
 import { Scissors, Cookie, MapPin, Globe, LogOut, Menu, UserPlus, CheckCircle, ArrowLeft, Shield, Loader2 } from 'lucide-react';
@@ -132,6 +132,7 @@ const App: React.FC = () => {
     const [guestBookingPos, setGuestBookingPos] = useState<{ id: number; name: string } | null>(null);
     /** Cita completada que se envía a facturación (Punto de Venta) */
     const [salesFromAppointment, setSalesFromAppointment] = useState<AppointmentForSale | null>(null);
+    const [appointmentsPrefill, setAppointmentsPrefill] = useState<{ date?: string; clientId?: number; openModal?: boolean } | null>(null);
     /** Plan de la sede activa: solo 'pro' muestra campana de notificaciones para el barbero */
     const [isPlanPro, setIsPlanPro] = useState(false);
     /** Tier de negocio de la sede activa: solo / barberia / multisede (menú y límites) */
@@ -799,14 +800,14 @@ const App: React.FC = () => {
             case 'dashboard': return <Dashboard key={k} onChangeView={setCurrentView} />;
             case 'sales': return <Sales key={k} salesFromAppointment={salesFromAppointment} onClearSalesFromAppointment={() => setSalesFromAppointment(null)} {...planProps} />;
             case 'shop': return <Shop key={k} />;
-            case 'appointments': return <Appointments key={k} onChangeView={setCurrentView} onCompleteForBilling={(data) => { setSalesFromAppointment(data); setCurrentView('sales'); }} {...planProps} />;
-            case 'clients': return <Clients key={k} />;
+            case 'appointments': return <Appointments key={k} onChangeView={setCurrentView} initialDate={appointmentsPrefill?.date} prefillClientId={appointmentsPrefill?.clientId} openPrefillModal={appointmentsPrefill?.openModal} onPrefillConsumed={() => setAppointmentsPrefill(null)} onCompleteForBilling={(data) => { setSalesFromAppointment(data); setCurrentView('sales'); }} {...planProps} />;
+            case 'clients': return <Clients key={k} onChangeView={setCurrentView} onBookClient={(clientId) => { setAppointmentsPrefill({ clientId, openModal: true }); setCurrentView('appointments'); }} />;
             case 'inventory': return <Inventory key={k} />;
             case 'finance': return <Finance key={k} />;
             case 'reports': return <Reports key={k} accountTier={accountTier} posListForOwner={accountTier === 'multisede' ? posListForOwner : []} />;
             case 'sales_records': return <SalesRecords key={k} accountTier={accountTier} />;
             case 'settings': return <Settings key={k} {...planProps} onAccountDeactivated={handleAccountDeactivated} />;
-            case 'calendar': return <CalendarView key={k} />;
+            case 'calendar': return <CalendarView key={k} onGoToSchedule={(date, openModal) => { setAppointmentsPrefill({ date, openModal }); setCurrentView('appointments'); }} />;
             case 'whatsapp_console': return <WhatsAppConsole key={k} />;
             case 'user_admin': return <UserAdmin key={k} />;
             case 'client_discovery': return <ClientDiscovery key={k} onSwitchPos={handleClientPosSwitch} preferredPosId={preferredPosId} onRemoveFavorite={async () => { const u = DataService.getCurrentUser(); if (u?.username) { await DataService.setClientPreferredPos(u.username, null); setPreferredPosId(null); } }} />;

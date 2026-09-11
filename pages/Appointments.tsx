@@ -10,6 +10,10 @@ interface AppointmentsProps {
     onChangeView?: (view: ViewState) => void;
     onCompleteForBilling?: (data: AppointmentForSale) => void;
     accountTier?: AccountTier;
+    initialDate?: string;
+    prefillClientId?: number;
+    openPrefillModal?: boolean;
+    onPrefillConsumed?: () => void;
 }
 
 const LOAD_TIMEOUT_MS = 22000; // 22 s: en móvil la red puede ser lenta
@@ -21,13 +25,15 @@ const getTodayLocal = (): string => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteForBilling, accountTier = 'barberia' }) => {
-    const { t } = useTranslation();
+const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteForBilling, accountTier = 'barberia', initialDate, prefillClientId, openPrefillModal, onPrefillConsumed }) => {
+    const { t, formatDate } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [barbers, setBarbers] = useState<Barber[]>([]);
-    const [selectedDate, setSelectedDate] = useState<string>(getTodayLocal);
+    const [selectedDate, setSelectedDate] = useState<string>(() =>
+        initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate) ? initialDate : getTodayLocal()
+    );
     const [userRole, setUserRole] = useState<string>('');
     const [selectedBarberForView, setSelectedBarberForView] = useState<number>(0);
     const [currentBarberiaName, setCurrentBarberiaName] = useState<string>('');
@@ -122,6 +128,23 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     useEffect(() => {
         loadData();
     }, [loadData]);
+
+    useEffect(() => {
+        if (loading) return;
+        if (!initialDate && !prefillClientId && !openPrefillModal) return;
+        const bid = DataService.getCurrentBarberId();
+        if (initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate)) {
+            setSelectedDate(initialDate);
+        }
+        setNewApt(prev => ({
+            ...prev,
+            fecha: (initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate) ? initialDate : prev.fecha) || getTodayLocal(),
+            clienteId: prefillClientId ?? prev.clienteId,
+            barberoId: bid ?? prev.barberoId,
+        }));
+        if (openPrefillModal || prefillClientId) setShowModal(true);
+        onPrefillConsumed?.();
+    }, [loading, initialDate, prefillClientId, openPrefillModal, onPrefillConsumed]);
 
     // En Android: refrescar la agenda al volver a la app o a la pestaña
     useEffect(() => {
@@ -348,6 +371,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     };
 
     const updateStatus = async (id: number, status: Appointment['estado']) => {
+        if (status === 'cancelada' && !confirm(t('appointments.cancelConfirm'))) return;
         const apt = appointments.find(a => a.id === id);
         if (!apt) return;
         const updated = { ...apt, estado: status };
@@ -360,6 +384,9 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         await updateStatus(apt.id, 'completada');
         const client = clients.find(c => c.id === apt.clienteId);
         const clienteNombre = client?.nombre ?? 'Cliente';
+        if (client) {
+            DataService.updateClient({ ...client, ultimaVisita: apt.fecha || getTodayLocal() }).catch(() => {});
+        }
         // Solo servicios de este barbero (o de la sede sin barbero): evita facturar servicios de otro barbero
         const serviciosDelBarbero = (apt.servicios || []).filter(
             (s) => s.barberId == null || s.barberId === apt.barberoId
@@ -645,6 +672,13 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                     
                     {currentBarber?.active ? (
                         <>
+                        {slots.length === 0 ? (
+                            <div className="bg-slate-50 border border-slate-100 rounded-lg p-8 text-center text-slate-500">
+                                <Clock className="mx-auto mb-2 text-slate-300" size={32} />
+                                <p className="font-medium text-slate-600">{t('appointments.noSlotsForDay')}</p>
+                                <p className="text-sm mt-1">{t('appointments.pickAnotherDay')}</p>
+                            </div>
+                        ) : (
                         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
                             {slots.map((slot, idx) => {
                                 const disabled = slot.taken || slot.past || atFreePlanLimit;
@@ -653,7 +687,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                     key={idx}
                                     disabled={disabled}
                                     onClick={() => handleSlotClick(slot.time, slot.taken, slot.past)}
-                                    className={`py-3 px-2 rounded-lg text-sm font-medium transition-all transform shadow-sm ${
+                                    className={`py-3 px-2 rounded-lg text-sm font-medium transition-all transform shadow-sm min-h-[44px] ${
                                         disabled
                                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-transparent'
                                         : 'hover:scale-105 bg-yellow-50 text-yellow-900 border border-yellow-200 hover:bg-[#ffd427] hover:border-[#ffd427] hover:shadow-md cursor-pointer'
@@ -666,11 +700,13 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                 </button>
                             );})}
                         </div>
+                        )}
                         
                         <div className="mt-8 pt-6 border-t border-slate-100">
-                            <div className="flex gap-4 text-sm text-slate-500">
-                                <div className="flex items-center"><div className="w-3 h-3 bg-yellow-50 border border-yellow-200 rounded mr-2"></div> Disponible</div>
+                            <div className="flex flex-wrap gap-4 text-sm text-slate-500">
+                                <div className="flex items-center"><div className="w-3 h-3 bg-yellow-50 border border-yellow-200 rounded mr-2"></div> {t('appointments.free')}</div>
                                 <div className="flex items-center"><div className="w-3 h-3 bg-slate-100 rounded mr-2"></div> {t('appointments.occupied')}</div>
+                                <div className="flex items-center"><div className="w-3 h-3 bg-slate-200 rounded mr-2"></div> {t('appointments.past')}</div>
                             </div>
                         </div>
                         </>
@@ -698,7 +734,18 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                             <MapPin size={14} /> <strong>{currentBarberiaName}</strong>
                                         </p>
                                     )}
-                                    Reservando para el <strong className="font-bold">{selectedDate}</strong> a las <strong className="font-bold">{newApt.hora}</strong> con <strong className="font-bold">{barbers.find(b => b.id === newApt.barberoId)?.name}</strong>.
+                                    {t('appointments.bookingSummary', {
+                                        date: formatDate(selectedDate + 'T12:00:00', { weekday: 'long', day: 'numeric', month: 'long' }),
+                                        time: newApt.hora || '',
+                                        barber: barbers.find(b => b.id === newApt.barberoId)?.name || t('common.barber'),
+                                    })}
+                                    {(newApt.servicios?.length ?? 0) > 0 && (
+                                        <p className="mt-2 font-semibold">
+                                            {t('appointments.durationTotal', { minutes: newApt.servicios!.reduce((acc, s) => acc + s.duration, 0) })}
+                                            {' · $'}
+                                            {newApt.servicios!.reduce((acc, s) => acc + s.price, 0).toFixed(2)}
+                                        </p>
+                                    )}
                                 </div>
                                 
                                 <div>
@@ -826,7 +873,16 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                         <span className="hidden sm:inline">{t('common.print')}</span>
                     </button>
                     <button 
-                        onClick={() => { setNewApt(prev => ({ ...prev, servicios: [] })); setShowModal(true); }}
+                        onClick={() => {
+                            const bid = DataService.getCurrentBarberId();
+                            setNewApt(prev => ({
+                                ...prev,
+                                servicios: [],
+                                fecha: selectedDate,
+                                barberoId: bid ?? prev.barberoId,
+                            }));
+                            setShowModal(true);
+                        }}
                         disabled={atFreePlanLimit}
                         title={atFreePlanLimit ? t('appointments.freePlanLimitTitle', { limit: FREE_PLAN_MONTHLY_LIMIT }) : undefined}
                         className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2 rounded-lg font-bold flex items-center space-x-2 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
@@ -846,6 +902,15 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                         onChange={(e) => setSelectedDate(e.target.value)}
                         className="border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
                     />
+                    {selectedDate !== todayStr && (
+                        <button
+                            type="button"
+                            onClick={() => setSelectedDate(todayStr)}
+                            className="text-sm font-semibold text-amber-700 hover:text-amber-900 px-2 py-1.5 rounded-lg hover:bg-amber-50"
+                        >
+                            {t('appointments.goToToday')}
+                        </button>
+                    )}
                 </div>
                 <div className="flex items-center gap-2">
                     <label className="font-medium text-slate-700">{t('appointments.sortBy')}</label>
@@ -858,13 +923,39 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                         <option value="estado">{t('appointments.sortByStatus')}</option>
                     </select>
                 </div>
+                {filteredAppointments.length > 0 && (
+                    <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                        <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700">
+                            {t('appointments.summaryConfirmed', { count: filteredAppointments.filter(a => a.estado === 'confirmada').length })}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
+                            {t('appointments.summaryPending', { count: filteredAppointments.filter(a => a.estado === 'pendiente').length })}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700">
+                            {t('appointments.summaryDone', { count: filteredAppointments.filter(a => a.estado === 'completada').length })}
+                        </span>
+                    </div>
+                )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {sortedAppointments.length === 0 ? (
-                    <div className="col-span-full py-12 text-center text-slate-400 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                    <div className="col-span-full py-12 text-center text-slate-500 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
                         <Calendar size={48} className="mx-auto mb-3 opacity-50" />
-                        <p>{t('appointments.noAppointmentsDay')}</p>
+                        <p className="font-medium text-slate-600">{t('appointments.noAppointmentsDay')}</p>
+                        <p className="text-sm mt-1">{t('appointments.noAppointmentsHint')}</p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const bid = DataService.getCurrentBarberId();
+                                setNewApt(prev => ({ ...prev, servicios: [], fecha: selectedDate, barberoId: bid ?? prev.barberoId }));
+                                setShowModal(true);
+                            }}
+                            disabled={atFreePlanLimit}
+                            className="mt-4 inline-flex items-center gap-2 bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2.5 rounded-xl font-bold disabled:opacity-60"
+                        >
+                            <Calendar size={18} /> {t('appointments.createFirst')}
+                        </button>
                     </div>
                 ) : (
                     sortedAppointments.map(apt => {
@@ -892,6 +983,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                     <span className={`px-2 py-1 rounded-full text-xs font-semibold uppercase ${
                                         apt.estado === 'confirmada' ? 'bg-blue-100 text-blue-700' :
                                         apt.estado === 'completada' ? 'bg-green-100 text-green-700' :
+                                        apt.estado === 'pendiente' ? 'bg-amber-100 text-amber-800' :
                                         'bg-red-100 text-red-700'
                                     }`}>
                                         {statusLabel(apt.estado)}
@@ -902,6 +994,15 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                         <User size={16} className="mr-2 text-slate-400" />
                                         <span className="font-medium">{client?.nombre || t('appointments.unknownClient')}</span>
                                     </div>
+                                    {client?.telefono && (
+                                        <div className="flex items-center text-slate-500 text-sm">
+                                            <MessageCircle size={14} className="mr-2 text-slate-400" />
+                                            {client.telefono}
+                                        </div>
+                                    )}
+                                    {apt.notas && (
+                                        <p className="text-xs text-slate-500 bg-slate-50 rounded-lg px-2 py-1">{apt.notas}</p>
+                                    )}
                                     <div className="flex items-center text-slate-600 text-sm">
                                         <Scissors size={16} className="mr-2 text-slate-400" />
                                         <span>{apt.servicios?.length ? apt.servicios.map(s => s.name).join(', ') : t('appointments.noServices')}</span>
@@ -910,30 +1011,38 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                         {t('appointments.barberLabel')} <span className="text-slate-700 font-medium">{barber?.name}</span>
                                     </div>
                                 </div>
-                                <div className="pt-3 border-t border-slate-100 flex justify-end space-x-2">
-                                    {/* WhatsApp Button restored and fixed */}
+                                <div className="pt-3 border-t border-slate-100 flex justify-end flex-wrap gap-2">
                                     {cleanPhone.length > 5 && (
                                         <a 
                                             href={waLink} 
                                             target="_blank" 
                                             rel="noopener noreferrer"
-                                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-green-100"
+                                            className="inline-flex items-center gap-1 px-2.5 py-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-green-100 min-h-[44px]"
                                             title={t('appointments.sendWhatsApp')}
                                         >
                                             <MessageCircle size={18} />
+                                            <span className="text-xs font-semibold sm:inline">{t('appointments.sendWhatsApp')}</span>
                                         </a>
+                                    )}
+                                    {apt.estado === 'pendiente' && (
+                                        <button onClick={() => updateStatus(apt.id, 'confirmada')} className="inline-flex items-center gap-1 px-2.5 py-2 text-blue-700 hover:bg-blue-50 rounded-lg border border-blue-100 min-h-[44px]" title={t('appointments.confirmPending')}>
+                                            <Check size={18} />
+                                            <span className="text-xs font-semibold">{t('appointments.confirmPending')}</span>
+                                        </button>
                                     )}
                                     {apt.estado === 'confirmada' && (
                                         <>
-                                            <button onClick={() => handleCompleteAndGoToBilling(apt)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-transparent hover:border-green-100" title={t('appointments.completeAndBill')}>
+                                            <button onClick={() => handleCompleteAndGoToBilling(apt)} className="inline-flex items-center gap-1 px-2.5 py-2 text-green-700 hover:bg-green-50 rounded-lg border border-green-100 min-h-[44px]" title={t('appointments.completeAndBill')}>
                                                 <Check size={18} />
+                                                <span className="text-xs font-semibold">{t('appointments.completeShort')}</span>
                                             </button>
-                                            <button onClick={() => updateStatus(apt.id, 'cancelada')} className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-transparent hover:border-amber-100" title={t('appointments.cancelAppointment')}>
+                                            <button onClick={() => updateStatus(apt.id, 'cancelada')} className="inline-flex items-center gap-1 px-2.5 py-2 text-amber-700 hover:bg-amber-50 rounded-lg border border-amber-100 min-h-[44px]" title={t('appointments.cancelAppointment')}>
                                                 <X size={18} />
+                                                <span className="text-xs font-semibold">{t('appointments.cancelShort')}</span>
                                             </button>
                                         </>
                                     )}
-                                    <button onClick={() => deleteAppointment(apt.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100" title={t('common.delete')}>
+                                    <button onClick={() => deleteAppointment(apt.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg min-h-[44px] min-w-[44px]" title={t('common.delete')}>
                                         <Trash2 size={18} />
                                     </button>
                                 </div>
@@ -1018,7 +1127,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                             className="mt-2 flex items-center gap-1.5 text-sm text-amber-700 hover:text-amber-800 font-medium"
                                         >
                                             <User size={16} />
-                                            ¿No está en la lista? Agregar cliente nuevo (sin registro)
+                                            {t('appointments.addWalkin')}
                                         </button>
                                     </>
                                 ) : (
@@ -1030,7 +1139,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                                                 onClick={() => { setIsNewClient(false); setNewClientName(''); setNewClientPhone(''); }}
                                                 className="text-sm text-amber-700 hover:text-amber-900 underline"
                                             >
-                                                ← Elegir de la lista de clientes
+                                                {t('appointments.backToList')}
                                             </button>
                                         </div>
                                         <div className="grid grid-cols-2 gap-3">

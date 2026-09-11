@@ -14,6 +14,11 @@ function buildWaLink(phone: string | number | null | undefined, message: string)
     return `https://wa.me/${num}?text=${encodeURIComponent(message)}`;
 }
 
+function getTodayLocal(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 interface DashboardProps {
     onChangeView: (view: ViewState) => void;
 }
@@ -27,11 +32,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
     const [stats, setStats] = useState({
         clients: 0,
         appointmentsToday: 0,
+        completedToday: 0,
         salesToday: 0,
         lowStock: 0
     });
     const [activities, setActivities] = useState<any[]>([]);
     const [nextAppointment, setNextAppointment] = useState<{ apt: Appointment; client: Client } | null>(null);
+    const [todayAgenda, setTodayAgenda] = useState<{ apt: Appointment; client: Client | null }[]>([]);
     const [pointsOfSale, setPointsOfSale] = useState<PointOfSale[]>([]);
 
     const loadData = useCallback(async () => {
@@ -40,12 +47,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
         try {
             const barberId = DataService.getCurrentBarberId();
             const productsLoader = barberId != null ? DataService.getProducts(barberId) : DataService.getProducts();
+            const clientsLoader = barberId != null ? DataService.getClientsWithActivity() : DataService.getClients();
             const timeoutPromise = new Promise<never>((_, reject) =>
                 setTimeout(() => reject(new Error(t('common.timeout'))), LOAD_TIMEOUT_MS)
             );
             const settled = await Promise.race([
                 Promise.allSettled([
-                    DataService.getClients(),
+                    clientsLoader,
                     DataService.getAppointments(),
                     DataService.getSales(),
                     productsLoader,
@@ -67,25 +75,33 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
             const productsSafe = Array.isArray(products) ? products : [];
             const posListSafe = Array.isArray(posList) ? posList : [];
             setPointsOfSale(posListSafe);
-            const todayStr = new Date().toISOString().split('T')[0];
-            const todayAppointments = appointmentsSafe
-                .filter(a => a.fecha === todayStr && a.estado !== 'cancelada' && a.estado !== 'completada')
+            const todayStr = getTodayLocal();
+            const mine = (list: Appointment[]) =>
+                barberId != null ? list.filter(a => a.barberoId === barberId) : list;
+            const todayAll = mine(appointmentsSafe.filter(a => a.fecha === todayStr && a.estado !== 'cancelada'));
+            const todayPending = todayAll
+                .filter(a => a.estado !== 'completada')
                 .sort((a, b) => a.hora.localeCompare(b.hora));
+            const completedToday = todayAll.filter(a => a.estado === 'completada').length;
             const now = new Date();
             const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-            const listForUser = barberId != null ? todayAppointments.filter(a => a.barberoId === barberId) : todayAppointments;
-            const next = listForUser.find(a => a.hora >= currentTime) || listForUser[0] || null;
+            const next = todayPending.find(a => a.hora >= currentTime) || todayPending[0] || null;
             if (next) {
-                const client = clientsSafe.find(c => c.id === next.clienteId);
-                if (client) setNextAppointment({ apt: next, client });
-                else setNextAppointment(null);
+                const client = clientsSafe.find(c => c.id === next.clienteId) || null;
+                setNextAppointment(client ? { apt: next, client } : null);
             } else setNextAppointment(null);
+
+            setTodayAgenda(todayPending.map(apt => ({
+                apt,
+                client: clientsSafe.find(c => c.id === apt.clienteId) || null,
+            })));
 
             const todaySales = salesSafe.filter(s => s.fecha === todayStr).reduce((sum, s) => sum + s.total, 0);
             const lowStock = productsSafe.filter(p => p.stock < 5).length;
             setStats({
                 clients: clientsSafe.length,
-                appointmentsToday: todayAppointments.length,
+                appointmentsToday: todayPending.length,
+                completedToday,
                 salesToday: todaySales,
                 lowStock
             });
@@ -108,19 +124,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
         loadData();
     }, [loadData]);
 
-    const openReminder = () => {
-        if (!nextAppointment) return;
-        const posName = pointsOfSale.find(p => p.id === nextAppointment.apt.posId)?.name || t('common.barberShow');
-        const fechaStr = formatDate(nextAppointment.apt.fecha + 'T12:00:00', { weekday: 'long', day: 'numeric', month: 'long' });
+    const reminderFor = (item: { apt: Appointment; client: Client }) => {
+        const posName = pointsOfSale.find(p => p.id === item.apt.posId)?.name || t('common.barberShow');
+        const fechaStr = formatDate(item.apt.fecha + 'T12:00:00', { weekday: 'long', day: 'numeric', month: 'long' });
         const msg = t('dashboard.reminderMessage', {
-            name: nextAppointment.client.nombre,
+            name: item.client.nombre,
             date: fechaStr,
-            time: nextAppointment.apt.hora,
+            time: item.apt.hora,
             shop: posName,
         });
-        const url = buildWaLink(nextAppointment.client.telefono, msg);
+        const url = buildWaLink(item.client.telefono, msg);
         if (url) window.open(url, '_blank', 'noopener,noreferrer');
         else alert(t('dashboard.invalidWhatsApp'));
+    };
+
+    const openReminder = () => {
+        if (!nextAppointment) return;
+        reminderFor(nextAppointment);
     };
 
     if (loading) {
@@ -148,72 +168,136 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
         );
     }
 
+    const statCards: { key: string; label: string; value: string; sub?: string; icon: React.ReactNode; iconWrap: string; onClick: () => void; aria: string }[] = [
+        {
+            key: 'clients',
+            label: t('dashboard.totalClients'),
+            value: String(stats.clients),
+            icon: <Users size={24} />,
+            iconWrap: 'bg-yellow-100 text-yellow-700',
+            onClick: () => onChangeView('clients'),
+            aria: t('dashboard.openClients'),
+        },
+        {
+            key: 'appts',
+            label: t('dashboard.appointmentsToday'),
+            value: String(stats.appointmentsToday),
+            sub: stats.completedToday > 0 ? t('dashboard.completedToday', { count: stats.completedToday }) : undefined,
+            icon: <Calendar size={24} />,
+            iconWrap: 'bg-orange-100 text-orange-600',
+            onClick: () => onChangeView('appointments'),
+            aria: t('dashboard.openAppointments'),
+        },
+        {
+            key: 'sales',
+            label: t('dashboard.salesToday'),
+            value: `$${stats.salesToday.toFixed(2)}`,
+            icon: <TrendingUp size={24} />,
+            iconWrap: 'bg-amber-100 text-amber-600',
+            onClick: () => onChangeView('sales_records'),
+            aria: t('dashboard.openSales'),
+        },
+        {
+            key: 'stock',
+            label: t('dashboard.lowStock'),
+            value: String(stats.lowStock),
+            icon: <AlertTriangle size={24} />,
+            iconWrap: 'bg-red-100 text-red-600',
+            onClick: () => onChangeView('inventory'),
+            aria: t('dashboard.openInventory'),
+        },
+    ];
+
     return (
         <div className="space-y-6">
             <h2 className="text-2xl font-bold text-slate-800">{t('dashboard.title')}</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-4 hover:shadow-md transition-shadow">
-                    <div className="p-3 bg-yellow-100 text-yellow-700 rounded-full">
-                        <Users size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-slate-500 font-medium">{t('dashboard.totalClients')}</p>
-                        <h3 className="text-2xl font-bold text-slate-800">{stats.clients}</h3>
-                    </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-4 hover:shadow-md transition-shadow">
-                    <div className="p-3 bg-orange-100 text-orange-600 rounded-full">
-                        <Calendar size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-slate-500 font-medium">{t('dashboard.appointmentsToday')}</p>
-                        <h3 className="text-2xl font-bold text-slate-800">{stats.appointmentsToday}</h3>
-                    </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-4 hover:shadow-md transition-shadow">
-                    <div className="p-3 bg-amber-100 text-amber-600 rounded-full">
-                        <TrendingUp size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-slate-500 font-medium">{t('dashboard.salesToday')}</p>
-                        <h3 className="text-2xl font-bold text-slate-800">${stats.salesToday.toFixed(2)}</h3>
-                    </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-4 hover:shadow-md transition-shadow">
-                    <div className="p-3 bg-red-100 text-red-600 rounded-full">
-                        <AlertTriangle size={24} />
-                    </div>
-                    <div>
-                        <p className="text-sm text-slate-500 font-medium">{t('dashboard.lowStock')}</p>
-                        <h3 className="text-2xl font-bold text-slate-800">{stats.lowStock}</h3>
-                    </div>
-                </div>
+                {statCards.map(card => (
+                    <button
+                        key={card.key}
+                        type="button"
+                        onClick={card.onClick}
+                        aria-label={card.aria}
+                        className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-4 hover:shadow-md hover:border-amber-200 transition-all text-left"
+                    >
+                        <div className={`p-3 rounded-full ${card.iconWrap}`}>
+                            {card.icon}
+                        </div>
+                        <div>
+                            <p className="text-sm text-slate-500 font-medium">{card.label}</p>
+                            <h3 className="text-2xl font-bold text-slate-800">{card.value}</h3>
+                            {card.sub && <p className="text-xs text-slate-500 mt-0.5">{card.sub}</p>}
+                        </div>
+                    </button>
+                ))}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4">{t('dashboard.recentActivity')}</h3>
-                    <div className="space-y-4">
-                        {activities.length > 0 ? activities.map((act, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                                <div className="flex items-center space-x-3">
-                                    <div className="p-2 bg-yellow-100 text-yellow-700 rounded-full">
-                                        <ShoppingBag size={18} />
-                                    </div>
-                                    <div>
-                                        <p className="font-medium text-slate-800">{act.text}</p>
-                                        <p className="text-xs text-slate-500 flex items-center"><Clock size={12} className="mr-1"/> {act.time}</p>
-                                    </div>
-                                </div>
-                                <span className="font-bold text-green-600">+${act.amount.toFixed(2)}</span>
+                <div className="lg:col-span-2 space-y-6">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold text-slate-800">{t('dashboard.todayAgenda')}</h3>
+                            <button
+                                type="button"
+                                onClick={() => onChangeView('appointments')}
+                                className="text-sm font-semibold text-amber-700 hover:text-amber-900"
+                            >
+                                {t('dashboard.viewAllToday')}
+                            </button>
+                        </div>
+                        {todayAgenda.length > 0 ? (
+                            <div className="space-y-2">
+                                {todayAgenda.slice(0, 6).map(({ apt, client }) => {
+                                    const canWa = client && phoneToWa(client.telefono).length >= 10;
+                                    return (
+                                        <div key={apt.id} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-lg">
+                                            <div className="min-w-0">
+                                                <p className="font-semibold text-slate-800 truncate">{client?.nombre || t('appointments.unknownClient')}</p>
+                                                <p className="text-xs text-slate-500 flex items-center mt-0.5">
+                                                    <Clock size={12} className="mr-1" /> {apt.hora}
+                                                    {apt.servicios?.length ? ` · ${apt.servicios.map(s => s.name).join(', ')}` : ''}
+                                                </p>
+                                            </div>
+                                            {canWa && client && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => reminderFor({ apt, client })}
+                                                    className="shrink-0 p-2.5 rounded-lg text-green-700 bg-green-50 hover:bg-green-100"
+                                                    title={t('dashboard.sendReminder')}
+                                                >
+                                                    <MessageCircle size={18} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
-                        )) : (
-                            <p className="text-slate-500 text-sm">{t('dashboard.noActivity')}</p>
+                        ) : (
+                            <p className="text-slate-500 text-sm">{t('dashboard.noMoreToday')}</p>
                         )}
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                        <h3 className="text-lg font-bold text-slate-800 mb-4">{t('dashboard.recentActivity')}</h3>
+                        <div className="space-y-4">
+                            {activities.length > 0 ? activities.map((act, idx) => (
+                                <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="p-2 bg-yellow-100 text-yellow-700 rounded-full">
+                                            <ShoppingBag size={18} />
+                                        </div>
+                                        <div>
+                                            <p className="font-medium text-slate-800">{act.text}</p>
+                                            <p className="text-xs text-slate-500 flex items-center"><Clock size={12} className="mr-1"/> {act.time}</p>
+                                        </div>
+                                    </div>
+                                    <span className="font-bold text-green-600">+${act.amount.toFixed(2)}</span>
+                                </div>
+                            )) : (
+                                <p className="text-slate-500 text-sm">{t('dashboard.noActivity')}</p>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -240,15 +324,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
                     <div>
                         <h3 className="text-lg font-bold text-slate-800 mb-4">{t('dashboard.quickActions')}</h3>
                         <div className="space-y-3">
-                            <button
-                                type="button"
-                                onClick={openReminder}
-                                disabled={!nextAppointment || !nextAppointment.client.telefono || phoneToWa(nextAppointment.client.telefono).length < 10}
-                                className="w-full flex items-center justify-between p-4 bg-green-50 hover:bg-green-100 text-green-800 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-50"
-                            >
-                                <span>{t('dashboard.sendReminder')}</span>
-                                <MessageCircle size={20} />
-                            </button>
                             <button onClick={() => onChangeView('sales')} className="w-full flex items-center justify-between p-4 bg-yellow-50 hover:bg-yellow-100 text-yellow-800 rounded-lg transition-colors font-medium">
                                 <span>{t('dashboard.newSale')}</span>
                                 <ShoppingBag size={20} />

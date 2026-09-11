@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DataService } from '../services/data';
 import { Appointment, Barber, Client } from '../types';
-import { ChevronLeft, ChevronRight, User, MapPin, Loader2, X, CalendarDays, Clock, Scissors } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, MapPin, Loader2, X, CalendarDays, Clock, Scissors, Plus } from 'lucide-react';
 import { useTranslation } from '../i18n';
 
-const CalendarView: React.FC = () => {
+interface CalendarViewProps {
+    onGoToSchedule?: (date: string, openModal?: boolean) => void;
+}
+
+const CalendarView: React.FC<CalendarViewProps> = ({ onGoToSchedule }) => {
     const { t, formatDate } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -85,7 +89,7 @@ const CalendarView: React.FC = () => {
         }
     };
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
 
     const renderCalendar = () => {
         const totalDays = daysInMonth(currentDate);
@@ -318,6 +322,15 @@ const CalendarView: React.FC = () => {
                                         </div>
                                         <p className="mt-4 font-medium text-slate-600">{t('calendar.noAppointmentsDay')}</p>
                                         <p className="mt-1 text-sm text-slate-500">{t('calendar.noAppointmentsHint')}</p>
+                                        {onGoToSchedule && selectedDay && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onGoToSchedule(selectedDay, true)}
+                                                className="mt-4 inline-flex items-center gap-2 bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2.5 rounded-xl font-bold"
+                                            >
+                                                <Plus size={18} /> {t('calendar.bookThisDay')}
+                                            </button>
+                                        )}
                                     </div>
                                 ) : (
                                     selectedDayAppointments.map(app => {
@@ -350,6 +363,17 @@ const CalendarView: React.FC = () => {
                                     })
                                 )}
                             </div>
+                            {onGoToSchedule && selectedDay && selectedDayAppointments.length > 0 && (
+                                <div className="flex-shrink-0 border-t border-slate-100 p-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => onGoToSchedule(selectedDay, true)}
+                                        className="w-full inline-flex items-center justify-center gap-2 bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-4 py-2.5 rounded-xl font-bold"
+                                    >
+                                        <Plus size={18} /> {t('calendar.bookThisDay')}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </>
