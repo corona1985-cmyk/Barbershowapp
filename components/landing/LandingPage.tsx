@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import {
     Scissors, ArrowRight, Shield, Headphones, RefreshCw, Sparkles,
     Calendar, Users, ShoppingBag, Package, BarChart3, MapPin, UserCheck, MessageCircle,
     Star, CheckCircle, Facebook, Instagram, Linkedin, Youtube, Phone, Mail, Menu, X,
-    Zap, ChevronRight, UserCircle, Search, UserPlus,
+    Zap, ChevronRight, ChevronLeft, UserCircle, Search, UserPlus,
 } from 'lucide-react';
 import { CONTACT, getTierOptions } from '../../constants/plans';
 import { APP_STORE_URL, PLAY_STORE_URL, GLOBAL_FREE_MODE } from '../../config/app';
@@ -43,7 +43,9 @@ const LandingPage: React.FC<LandingPageProps> = ({
     const isNativeMobile = Capacitor.isNativePlatform();
     const [activeNav, setActiveNav] = useState('inicio');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const [activeTestimonial, setActiveTestimonial] = useState(1);
+    const [activeTestimonial, setActiveTestimonial] = useState(0);
+    const [testimonialPaused, setTestimonialPaused] = useState(false);
+    const testimonialTouchX = useRef<number | null>(null);
 
     const navLinksData = useMemo(() => [
         { id: 'inicio', label: t('landing.nav.home') },
@@ -105,6 +107,20 @@ const LandingPage: React.FC<LandingPageProps> = ({
             initials: t('landing.testimonials.2.initials'),
         },
     ], [t]);
+
+    const testimonialCount = testimonials.length;
+
+    const goToTestimonial = (index: number) => {
+        setActiveTestimonial((index + testimonialCount) % testimonialCount);
+    };
+
+    useEffect(() => {
+        if (testimonialPaused || testimonialCount <= 1) return undefined;
+        const id = window.setInterval(() => {
+            setActiveTestimonial((current) => (current + 1) % testimonialCount);
+        }, 5500);
+        return () => window.clearInterval(id);
+    }, [testimonialPaused, testimonialCount]);
 
     const clientSteps = useMemo(() => [
         { step: '1', title: t('landing.clientSteps.0.title'), desc: t('landing.clientSteps.0.desc') },
@@ -620,68 +636,92 @@ const LandingPage: React.FC<LandingPageProps> = ({
                         </span>
                         <h2 className="text-3xl sm:text-4xl font-bold">{t('landing.testimonials.title')}</h2>
                     </div>
-                    <div className="hidden md:grid md:grid-cols-3 gap-7">
-                        {testimonials.map((item) => (
-                            <div key={item.name} className="p-8 rounded-2xl bg-[#1a1a28] border border-white/5">
-                                <div className="flex gap-1 mb-4">
-                                    {Array.from({ length: 5 }).map((_, i) => (
-                                        <Star key={i} size={18} className="text-[#ffd427] fill-[#ffd427]" />
+                    <div
+                        className="max-w-3xl mx-auto"
+                        onMouseEnter={() => setTestimonialPaused(true)}
+                        onMouseLeave={() => setTestimonialPaused(false)}
+                    >
+                        <div className="relative">
+                            <div
+                                className="overflow-hidden"
+                                onTouchStart={(e) => {
+                                    testimonialTouchX.current = e.touches[0].clientX;
+                                    setTestimonialPaused(true);
+                                }}
+                                onTouchEnd={(e) => {
+                                    if (testimonialTouchX.current == null) return;
+                                    const dx = e.changedTouches[0].clientX - testimonialTouchX.current;
+                                    if (dx > 40) goToTestimonial(activeTestimonial - 1);
+                                    else if (dx < -40) goToTestimonial(activeTestimonial + 1);
+                                    testimonialTouchX.current = null;
+                                    setTestimonialPaused(false);
+                                }}
+                            >
+                                <div
+                                    className="flex transition-transform duration-500 ease-out"
+                                    style={{ transform: `translateX(-${activeTestimonial * 100}%)` }}
+                                >
+                                    {testimonials.map((item) => (
+                                        <div key={item.name} className="min-w-full w-full flex-shrink-0 px-1">
+                                            <div className="p-6 sm:p-8 rounded-2xl bg-[#1a1a28] border border-white/5">
+                                                <div className="flex gap-1 mb-4">
+                                                    {Array.from({ length: 5 }).map((_, i) => (
+                                                        <Star key={i} size={18} className="text-[#ffd427] fill-[#ffd427]" />
+                                                    ))}
+                                                </div>
+                                                <p className="text-slate-300 text-sm sm:text-base leading-relaxed mb-6 min-h-[4.5rem]">
+                                                    &ldquo;{item.quote}&rdquo;
+                                                </p>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-12 h-12 rounded-full bg-[#ffd427]/20 flex items-center justify-center text-[#ffd427] font-bold text-base">
+                                                        {item.initials}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-semibold text-base">{item.name}</p>
+                                                        <p className="text-slate-500 text-sm">{item.shop}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     ))}
                                 </div>
-                                <p className="text-slate-300 text-base leading-relaxed mb-6">&ldquo;{item.quote}&rdquo;</p>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 rounded-full bg-[#ffd427]/20 flex items-center justify-center text-[#ffd427] font-bold text-base">
-                                        {item.initials}
-                                    </div>
-                                    <div>
-                                        <p className="font-semibold text-base">{item.name}</p>
-                                        <p className="text-slate-500 text-sm">{item.shop}</p>
-                                    </div>
-                                </div>
                             </div>
-                        ))}
-                    </div>
-                    <div className="md:hidden">
-                        <div className="p-6 rounded-2xl bg-[#1a1a28] border border-white/5">
-                            <div className="flex gap-0.5 mb-4">
-                                {Array.from({ length: 5 }).map((_, i) => (
-                                    <Star key={i} size={16} className="text-[#ffd427] fill-[#ffd427]" />
-                                ))}
-                            </div>
-                            <p className="text-slate-300 text-sm leading-relaxed mb-6">
-                                &ldquo;{testimonials[activeTestimonial].quote}&rdquo;
-                            </p>
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-[#ffd427]/20 flex items-center justify-center text-[#ffd427] font-bold text-sm">
-                                    {testimonials[activeTestimonial].initials}
-                                </div>
-                                <div>
-                                    <p className="font-semibold text-sm">{testimonials[activeTestimonial].name}</p>
-                                    <p className="text-slate-500 text-xs">{testimonials[activeTestimonial].shop}</p>
-                                </div>
-                            </div>
+                            <button
+                                type="button"
+                                onClick={() => goToTestimonial(activeTestimonial - 1)}
+                                className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 lg:-translate-x-14 w-10 h-10 items-center justify-center rounded-full bg-white/10 border border-white/10 text-white hover:bg-white/20 transition-colors"
+                                aria-label={t('landing.testimonials.ariaLabel', { n: ((activeTestimonial + testimonialCount - 1) % testimonialCount) + 1 })}
+                            >
+                                <ChevronLeft size={20} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => goToTestimonial(activeTestimonial + 1)}
+                                className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 lg:translate-x-14 w-10 h-10 items-center justify-center rounded-full bg-white/10 border border-white/10 text-white hover:bg-white/20 transition-colors"
+                                aria-label={t('landing.testimonials.ariaLabel', { n: ((activeTestimonial + 1) % testimonialCount) + 1 })}
+                            >
+                                <ChevronRight size={20} />
+                            </button>
                         </div>
-                        <div className="flex justify-center gap-2 mt-6">
+                        <div className="flex justify-center gap-1 mt-6" role="tablist">
                             {testimonials.map((_, i) => (
                                 <button
                                     key={i}
                                     type="button"
-                                    onClick={() => setActiveTestimonial(i)}
-                                    className={`w-2 h-2 rounded-full transition-colors ${
-                                        activeTestimonial === i ? 'bg-[#ffd427]' : 'bg-white/20'
-                                    }`}
+                                    role="tab"
+                                    aria-selected={activeTestimonial === i}
+                                    onClick={() => goToTestimonial(i)}
+                                    className="flex items-center justify-center w-10 h-10"
                                     aria-label={t('landing.testimonials.ariaLabel', { n: i + 1 })}
-                                />
+                                >
+                                    <span
+                                        className={`block rounded-full transition-all ${
+                                            activeTestimonial === i ? 'w-6 h-2 bg-[#ffd427]' : 'w-2 h-2 bg-white/20'
+                                        }`}
+                                    />
+                                </button>
                             ))}
                         </div>
-                    </div>
-                    <div className="hidden md:flex justify-center gap-2 mt-8">
-                        {testimonials.map((_, i) => (
-                            <span
-                                key={i}
-                                className={`w-2 h-2 rounded-full ${i === 1 ? 'bg-[#ffd427]' : 'bg-white/20'}`}
-                            />
-                        ))}
                     </div>
                 </div>
             </section>
