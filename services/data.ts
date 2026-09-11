@@ -1,5 +1,5 @@
-import { ref, get, set, remove, query, orderByChild, equalTo } from 'firebase/database';
-import { db, getAuthIdToken, loginWithPassword, upsertStaffUser, deleteStaffUser, updateMyProfile, adminUpsertPointOfSale, adminDeletePointOfSale, adminSetPosPlan, checkUsernameAvailable } from './firebase';
+import { ref, get, set, remove, query, orderByChild, equalTo, limitToLast } from 'firebase/database';
+import { db, getAuthIdToken, loginWithPassword, upsertStaffUser, deleteStaffUser, updateMyProfile, adminUpsertPointOfSale, adminDeletePointOfSale, adminSetPosPlan, checkUsernameAvailable, updateMyClientProfile, getPlatformStats, listDirectoryUsers, cancelMyAppointment, createClientAppointment } from './firebase';
 import { getCachedClaims } from './session';
 import { Capacitor } from '@capacitor/core';
 import { GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER, PROMO_GRACE_PERIOD_DAYS, getFreeSignupTierAndPlan } from '../config/app';
@@ -122,6 +122,50 @@ async function readCollectionByPos<T extends { posId?: number }>(collection: str
   const q = query(ref(db, ROOT + '/' + collection), orderByChild('posId'), equalTo(posId));
   const snap = await withTimeout(get(q), FIREBASE_TIMEOUT_MS, operation);
   return snapshotToArray<T>(snap.val());
+}
+
+async function writeNode(path: string, value: unknown, operation: string): Promise<void> {
+  if (Capacitor.isNativePlatform()) {
+    await nativeRtdbSet(path, value, operation);
+    return;
+  }
+  if (value === null) {
+    await withTimeout(remove(ref(db, path)), FIREBASE_TIMEOUT_MS, operation);
+    return;
+  }
+  await withTimeout(set(ref(db, path), value), FIREBASE_TIMEOUT_MS, operation);
+}
+
+function busySlotKey(barberoId: number, hora: string): string {
+  return `${barberoId}_${String(hora).replace(/[.#$\[\]]/g, '_')}`;
+}
+
+async function syncAppointmentIndexes(
+  apt: Pick<Appointment, 'id' | 'posId' | 'barberoId' | 'fecha' | 'hora' | 'duracionTotal' | 'estado'>,
+  gone = false
+): Promise<void> {
+  const slotPath = `${ROOT}/busySlots/${apt.posId}/${apt.fecha}/${busySlotKey(apt.barberoId, apt.hora)}`;
+  const byDate = `${ROOT}/appointmentsByPosDate/${apt.posId}/${apt.fecha}/${apt.id}`;
+  if (gone || apt.estado === 'cancelada') {
+    await writeNode(slotPath, null, 'clearBusySlot');
+    await writeNode(byDate, null, 'clearApptByDate');
+    return;
+  }
+  await writeNode(slotPath, {
+    barberoId: apt.barberoId,
+    fecha: apt.fecha,
+    hora: apt.hora,
+    duracionTotal: apt.duracionTotal || 30,
+    estado: apt.estado,
+    appointmentId: apt.id,
+  }, 'busySlot');
+  await writeNode(byDate, true, 'apptByDate');
+}
+
+async function indexClientPhone(posId: number, phone: string, clientId: number | null): Promise<void> {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 8) return;
+  await writeNode(`${ROOT}/clientsByPhone/${posId}/${digits}`, clientId, 'indexClientPhone');
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -429,7 +473,7 @@ function snapshotToUsers(val: unknown): SystemUser[] {
   return Object.values(obj).map((u) => {
     const copy = { ...u };
     delete (copy as Record<string, unknown>).password;
-    return copy;
+    return withoutOversizedProfileBlob(copy);
   });
 }
 
@@ -666,8 +710,24 @@ export const DataService = {
   },
 
   getAllUsersGlobal: async (): Promise<SystemUser[]> => {
-    const raw = await readNode<Record<string, SystemUser>>(`${ROOT}/users`, 'getAllUsersGlobal');
-    return snapshotToUsers(raw);
+    try {
+      const listed = await listDirectoryUsers();
+      return listed.map((u) => ({
+        username: u.username,
+        name: u.name,
+        role: u.role as SystemUser['role'],
+        posId: u.posId,
+        status: u.status as SystemUser['status'],
+        lastLogin: u.lastLogin,
+        ip: u.ip,
+      }));
+    } catch {
+      const raw = await readNode<Record<string, SystemUser>>(`${ROOT}/users`, 'getAllUsersGlobal.fallback');
+      return snapshotToUsers(raw).map((u) => {
+        const { photoUrl: _omit, ...rest } = u;
+        return rest as SystemUser;
+      });
+    }
   },
 
   /** Busca usuario por username sin modificar datos (para registro/comprobaciones). */
@@ -883,23 +943,60 @@ export const DataService = {
     }
   },
 
-  getAuditLogs: async (): Promise<AuditLog[]> => {
-    const snap = await get(ref(db, ROOT + '/auditLogs'));
-    const obj = snap.val() || {};
-    const arr = Object.values(obj) as AuditLog[];
+  getAuditLogs: async (limit = 80): Promise<AuditLog[]> => {
+    const cap = Math.min(Math.max(Math.floor(limit), 1), 200);
+    let obj: Record<string, AuditLog> | null;
+    if (Capacitor.isNativePlatform()) {
+      obj = await nativeRtdbGet<Record<string, AuditLog> | null>(
+        `${ROOT}/auditLogs`,
+        'getAuditLogs',
+        `orderBy=${encodeURIComponent('"$key"')}&limitToLast=${cap}`
+      );
+    } else {
+      const snap = await withTimeout(
+        get(query(ref(db, ROOT + '/auditLogs'), limitToLast(cap))),
+        FIREBASE_TIMEOUT_MS,
+        'getAuditLogs'
+      );
+      obj = (snap.val() || {}) as Record<string, AuditLog>;
+    }
+    const arr = Object.values(obj || {}) as AuditLog[];
     return arr.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   },
 
   getGlobalFinancialHistory: async () => {
-    const [salesSnap, transSnap] = await Promise.all([
-      get(ref(db, ROOT + '/sales')),
-      get(ref(db, ROOT + '/financialTransactions')),
-    ]);
-    const sales = snapshotToArray<Sale>(salesSnap.val());
-    const transactions = Object.values(transSnap.val() || {});
-    const posRevenue: Record<number, number> = {};
-    sales.forEach((s) => { posRevenue[s.posId] = (posRevenue[s.posId] || 0) + s.total; });
-    return { totalRevenue: Object.values(posRevenue).reduce((a, b) => a + b, 0), posRevenue, transactions, sales };
+    const stats = await getPlatformStats();
+    const posRevenue = stats.revenueByPos || {};
+    let sales = (stats.recentSales || []).map((s) => ({
+      id: s.id,
+      posId: s.posId,
+      numeroVenta: s.numeroVenta || String(s.id),
+      total: s.total,
+      fecha: s.fecha,
+      hora: s.hora || '',
+      metodoPago: s.metodoPago || '',
+      clienteId: null,
+      items: [],
+      subtotal: s.total,
+      iva: 0,
+      estado: 'completada' as const,
+      notas: '',
+    })) as Sale[];
+    if (!sales.length) {
+      const recent = Capacitor.isNativePlatform()
+        ? await nativeRtdbGet<Record<string, Sale> | null>(
+            `${ROOT}/sales`,
+            'getGlobalFinancialHistory.recent',
+            `orderBy=${encodeURIComponent('"$key"')}&limitToLast=20`
+          )
+        : (await withTimeout(
+            get(query(ref(db, ROOT + '/sales'), limitToLast(20))),
+            FIREBASE_TIMEOUT_MS,
+            'getGlobalFinancialHistory.recent'
+          )).val();
+      sales = snapshotToArray<Sale>(recent).sort((a, b) => Number(b.id) - Number(a.id)).slice(0, 20);
+    }
+    return { totalRevenue: stats.totalRevenue, posRevenue, transactions: [] as unknown[], sales };
   },
 
   getClients: async (): Promise<Client[]> => {
@@ -925,10 +1022,17 @@ export const DataService = {
     return DataService.getClientsWithActivity();
   },
 
-  /** Busca un cliente por teléfono en toda la base de datos (cualquier barbería). Normaliza solo dígitos. */
+  /** Busca un cliente por teléfono en la sede activa (índice, con fallback a la lista de la sede). */
   findClientByPhone: async (phone: string): Promise<Client | null> => {
     const normalized = String(phone ?? '').replace(/\D/g, '');
     if (normalized.length < 6) return null;
+    if (ACTIVE_POS_ID != null) {
+      const indexedId = await readNode<number>(`${ROOT}/clientsByPhone/${ACTIVE_POS_ID}/${normalized}`, 'findClientByPhone.index');
+      if (indexedId != null) {
+        const byId = await DataService.getClientById(Number(indexedId));
+        if (byId) return byId;
+      }
+    }
     const arr = await DataService.getClients();
     const found = arr.find((c) => String(c.telefono || '').replace(/\D/g, '') === normalized);
     return found ? { ...found, id: Number(found.id) } : null;
@@ -974,6 +1078,7 @@ export const DataService = {
       );
     }    cacheInvalidate('clients');
     DataService.logAuditAction('create_client', 'system', `Registered client: ${client.nombre}`, effectivePosId).catch(() => {});
+    await indexClientPhone(effectivePosId, String(client.telefono || ''), newClient.id);
     return newClient;
   },
 
@@ -1000,40 +1105,14 @@ export const DataService = {
     return { ...c, id: Number(c.id) };
   },
 
-  /** Solo rol cliente: actualiza su propio perfil (nombre, teléfono, foto). Escribe el cliente completo para que photoUrl se persista bien en la lista. Sincroniza nombre y foto al usuario (users) y a localStorage. */
+  /** Solo rol cliente: actualiza su propio perfil vía Function (no escribe puntos ni notas). */
   updateClientProfileForCurrentUser: async (updates: { nombre?: string; telefono?: string; photoUrl?: string | null }): Promise<void> => {
     const user = DataService.getCurrentUser();
     if (!user || user.role !== 'cliente') throw new Error('Solo los clientes pueden editar su perfil aquí.');
-    const clientId = user.clientId;
-    if (clientId == null) throw new Error('No tienes un perfil de cliente vinculado. Contacta al administrador.');
-    const client = await DataService.getClientById(clientId);
-    if (!client) throw new Error('Perfil de cliente no encontrado.');
-    const newNombre = updates.nombre !== undefined ? updates.nombre : client.nombre;
-    const newTelefono = updates.telefono !== undefined ? updates.telefono : client.telefono;
-    let newPhotoUrl: string | null = updates.photoUrl !== undefined ? (updates.photoUrl || null) : (client.photoUrl ?? null);
-    if (typeof newPhotoUrl === 'string' && newPhotoUrl.length > 500000) {
-      throw new Error('La imagen es demasiado grande. Usa una foto más pequeña o pega una URL de imagen.');
-    }
-    const merged: Client = {
-      ...client,
-      id: clientId,
-      nombre: newNombre,
-      telefono: newTelefono,
-      photoUrl: newPhotoUrl ?? undefined,
-    };
-    const toWrite = JSON.parse(JSON.stringify(merged)) as Record<string, unknown>;
-    Object.keys(toWrite).forEach((k) => { if (toWrite[k] === undefined) delete toWrite[k]; });
-    await set(ref(db, ROOT + '/clients/' + clientId), toWrite);
+    const result = await updateMyClientProfile(updates);
     cacheInvalidate('clients');
-    const photoValue = newPhotoUrl;
-    const nameValue = newNombre || user.name;
-    const userSnap = await get(ref(db, ROOT + '/users/' + user.username));
-    if (userSnap.exists()) {
-      const existingUser = userSnap.val() as Record<string, unknown>;
-      const userMerged = { ...existingUser, name: nameValue, photoUrl: photoValue };
-      Object.keys(userMerged).forEach((k) => { if (userMerged[k] === undefined) delete userMerged[k]; });
-      await set(ref(db, ROOT + '/users/' + user.username), userMerged);
-    }
+    const nameValue = String(result.client.nombre || user.name);
+    const photoValue = (result.client.photoUrl as string | null | undefined) ?? null;
     try {
       const cur = DataService.getCurrentUser();
       if (cur?.username === user.username) {
@@ -1422,16 +1501,14 @@ export const DataService = {
   },
 
   getAppointments: async (): Promise<Appointment[]> => {
-    if (ACTIVE_POS_ID == null) return [];
     const role = DataService.getCurrentUserRole();
     const claims = getCachedClaims();
     const barberId = DataService.getCurrentBarberId();
-    if ((role === 'barbero' || role === 'empleado') && barberId == null) return [];
-    const key = `appointments_${ACTIVE_POS_ID}_${barberId ?? 'all'}_${claims?.clientId ?? ''}`;
-    const cached = cacheGet<Appointment[]>(key);
-    if (cached) return cached;
-    let arr: Appointment[];
     if (role === 'cliente' && claims?.clientId != null) {
+      const key = `appointments_client_${claims.clientId}`;
+      const cached = cacheGet<Appointment[]>(key);
+      if (cached) return cached;
+      let arr: Appointment[];
       if (Capacitor.isNativePlatform()) {
         const extra = `orderBy=${encodeURIComponent('"clienteId"')}&equalTo=${claims.clientId}`;
         const raw = await nativeRtdbGet<Record<string, Appointment> | null>(`${ROOT}/appointments`, 'getAppointments.client', extra);
@@ -1441,41 +1518,87 @@ export const DataService = {
         const snap = await withTimeout(get(q), FIREBASE_TIMEOUT_MS, 'getAppointments.client');
         arr = snapshotToArray<Appointment>(snap.val()).map((a) => ({ ...a, id: Number(a.id) }));
       }
-    } else {
-      arr = (await readCollectionByPos<Appointment>('appointments', ACTIVE_POS_ID, 'getAppointments'))
-        .map((a) => ({ ...a, id: Number(a.id) }));
-      if (barberId != null) arr = arr.filter((a) => a.barberoId === barberId);
+      cacheSet(key, arr);
+      return arr;
     }
+    if (ACTIVE_POS_ID == null) return [];
+    if ((role === 'barbero' || role === 'empleado') && barberId == null) return [];
+    const key = `appointments_${ACTIVE_POS_ID}_${barberId ?? 'all'}`;
+    const cached = cacheGet<Appointment[]>(key);
+    if (cached) return cached;
+    let arr = (await readCollectionByPos<Appointment>('appointments', ACTIVE_POS_ID, 'getAppointments'))
+      .map((a) => ({ ...a, id: Number(a.id) }));
+    if (barberId != null) arr = arr.filter((a) => a.barberoId === barberId);
     cacheSet(key, arr);
     return arr;
   },
 
   checkAppointmentConflict: async (posId: number, barberId: number, date: string, time: string): Promise<boolean> => {
-    const arr = await readCollectionByPos<Appointment>('appointments', posId, 'checkAppointmentConflict');
-    return arr.some((a) => a.barberoId === barberId && a.fecha === date && a.hora === time && a.estado !== 'cancelada');
+    const slot = await readNode<{ estado?: string } | null>(
+      `${ROOT}/busySlots/${posId}/${date}/${busySlotKey(barberId, time)}`,
+      'checkAppointmentConflict.slot'
+    );
+    if (slot && slot.estado !== 'cancelada') return true;
+    return false;
+  },
+
+  getAppointmentsByDate: async (fecha: string): Promise<Appointment[]> => {
+    if (ACTIVE_POS_ID == null) return [];
+    const ids = await readNode<Record<string, boolean> | null>(
+      `${ROOT}/appointmentsByPosDate/${ACTIVE_POS_ID}/${fecha}`,
+      'getAppointmentsByDate.index'
+    );
+    if (!ids) {
+      const all = await DataService.getAppointments();
+      return all.filter((a) => a.fecha === fecha);
+    }
+    const rows = await Promise.all(
+      Object.keys(ids).map((id) => readNode<Appointment>(`${ROOT}/appointments/${id}`, 'getAppointmentsByDate.item'))
+    );
+    return rows.filter((a): a is Appointment => a != null).map((a) => ({ ...a, id: Number(a.id) }));
+  },
+
+  bookClientAppointment: async (params: {
+    posId: number;
+    barberoId: number;
+    fecha: string;
+    hora: string;
+    nombre: string;
+    telefono: string;
+    servicios: Array<{ id: number }>;
+  }): Promise<void> => {
+    await createClientAppointment(params);
+    cacheInvalidate('appointments');
+  },
+
+  cancelClientAppointment: async (appointmentId: number): Promise<void> => {
+    await cancelMyAppointment(appointmentId);
+    cacheInvalidate('appointments');
   },
 
   /** Añade una cita sin reemplazar las demás (para reservas de cliente o invitado). Sin undefined para evitar fallos en móvil. */
   addAppointment: async (appointment: Omit<Appointment, 'id'>): Promise<Appointment> => {
     const id = generateUniqueId();
     const apt: Appointment = { ...appointment, id };
-    const toWrite = JSON.parse(JSON.stringify(apt)) as Record<string, unknown>;    if (Capacitor.isNativePlatform()) {
-      await nativeRtdbSet(`${ROOT}/appointments/${id}`, toWrite, 'addAppointment');
-    } else {
-      await withTimeout(
-        set(ref(db, ROOT + '/appointments/' + id), toWrite),
-        FIREBASE_TIMEOUT_MS,
-        'addAppointment'
-      );
-    }    cacheInvalidate('appointments');
+    const toWrite = JSON.parse(JSON.stringify(apt)) as Record<string, unknown>;
+    await writeNode(`${ROOT}/appointments/${id}`, toWrite, 'addAppointment');
+    await syncAppointmentIndexes(apt);
+    cacheInvalidate('appointments');
     cacheInvalidate('clientsActivity');
     return apt;
   },
 
   /** Actualiza una cita (escritura por ítem; evita leer/escribir todo el nodo). */
   updateAppointment: async (apt: Appointment): Promise<void> => {
+    const role = DataService.getCurrentUserRole();
+    if (role === 'cliente') {
+      if (apt.estado !== 'cancelada') throw new Error('Los clientes solo pueden cancelar citas.');
+      await DataService.cancelClientAppointment(apt.id);
+      return;
+    }
     requireRole(['admin', 'superadmin', 'barbero']);
     await set(ref(db, ROOT + '/appointments/' + apt.id), apt);
+    await syncAppointmentIndexes(apt);
     cacheInvalidate('appointments');
     cacheInvalidate('clientsActivity');
   },
@@ -1483,16 +1606,19 @@ export const DataService = {
   /** Elimina una cita (escritura por ítem). */
   deleteAppointment: async (id: number): Promise<void> => {
     requireRole(['admin', 'superadmin', 'barbero']);
+    const existing = await readNode<Appointment>(`${ROOT}/appointments/${id}`, 'deleteAppointment.read');
     await remove(ref(db, ROOT + '/appointments/' + id));
+    if (existing) await syncAppointmentIndexes(existing, true);
     cacheInvalidate('appointments');
     cacheInvalidate('clientsActivity');
   },
 
-  /** @deprecated Usar addAppointment / updateAppointment / deleteAppointment para no sobrecargar con muchas sedes. */
+  /** Escribe citas por id (no reemplaza el árbol completo). */
   setAppointments: async (data: Appointment[]): Promise<void> => {
     requireRole(['admin', 'superadmin', 'barbero']);
     for (const apt of data) {
       await set(ref(db, ROOT + '/appointments/' + apt.id), apt);
+      await syncAppointmentIndexes(apt);
     }
     cacheInvalidate('appointments');
     cacheInvalidate('clientsActivity');
@@ -1527,14 +1653,28 @@ export const DataService = {
 
   /** Cuenta citas no canceladas del mes en curso para una sede (plan gratuito: límite 100/mes). */
   getAppointmentsCountCurrentMonth: async (posId: number): Promise<number> => {
-    const list = await DataService.getAppointmentsForPos(posId);
     const now = new Date();
     const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const prefix = `${year}-${month}-`;
-    return list.filter(
-      (a) => a.fecha.startsWith(prefix) && a.estado !== 'cancelada'
-    ).length;
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    let count = 0;
+    const dates: string[] = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      dates.push(`${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+    }
+    const snaps = await Promise.all(
+      dates.map((fecha) => readNode<Record<string, boolean> | null>(`${ROOT}/appointmentsByPosDate/${posId}/${fecha}`, 'countMonth'))
+    );
+    const hasIndex = snaps.some((s) => s != null);
+    if (!hasIndex) {
+      const list = await DataService.getAppointmentsForPos(posId);
+      const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
+      return list.filter((a) => a.fecha.startsWith(prefix) && a.estado !== 'cancelada').length;
+    }
+    for (const snap of snaps) {
+      if (snap) count += Object.keys(snap).length;
+    }
+    return count;
   },
 
   /** Añade una venta (escritura por ítem; evita leer/escribir todo el nodo). */
@@ -1606,18 +1746,7 @@ export const DataService = {
   },
 
   getGlobalStats: async () => {
-    const [salesSnap, usersSnap, posSnap, appSnap] = await Promise.all([
-      get(ref(db, ROOT + '/sales')),
-      get(ref(db, ROOT + '/users')),
-      get(ref(db, ROOT + '/pointsOfSale')),
-      get(ref(db, ROOT + '/appointments')),
-    ]);
-    const sales = snapshotToArray<Sale>(salesSnap.val());
-    const users = snapshotToUsers(usersSnap.val());
-    const sedes = snapshotToArray<PointOfSale>(posSnap.val());
-    const appointments = snapshotToArray<Appointment>(appSnap.val());
-    const totalRevenue = sales.reduce((acc, s) => acc + s.total, 0);
-    return { totalRevenue, totalUsers: users.length, totalSedes: sedes.length, totalAppointments: appointments.length };
+    return getPlatformStats();
   },
 };
 

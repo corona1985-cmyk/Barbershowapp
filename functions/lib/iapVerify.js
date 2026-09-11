@@ -28,6 +28,8 @@ async function verifyGooglePlayPurchase(productId, purchaseToken) {
                 productId,
                 expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                 platform: "android",
+                orderId: `emu-${productId}`,
+                purchaseTokenHash: (0, lib_1.sha256Hex)(purchaseToken || productId).slice(0, 40),
             };
         }
         throw new https_1.HttpsError("failed-precondition", "La verificación de Google Play no está configurada.");
@@ -59,6 +61,8 @@ async function verifyGooglePlayPurchase(productId, purchaseToken) {
         productId,
         expiresAt: new Date(expiryMs).toISOString(),
         platform: "android",
+        orderId: json.orderId ? String(json.orderId) : undefined,
+        purchaseTokenHash: (0, lib_1.sha256Hex)(purchaseToken).slice(0, 40),
     };
 }
 exports.verifyGooglePlayPurchase = verifyGooglePlayPurchase;
@@ -89,6 +93,8 @@ async function verifyApplePurchase(productId, receiptData) {
             productId,
             expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             platform: "ios",
+            originalTransactionId: `emu-ios-${productId}`,
+            purchaseTokenHash: (0, lib_1.sha256Hex)(receiptData || productId).slice(0, 40),
         };
     }
     let json = await appleVerifyReceipt(receiptData, false);
@@ -117,6 +123,8 @@ async function verifyApplePurchase(productId, receiptData) {
         productId: match.product_id || productId,
         expiresAt: new Date(expiryMs).toISOString(),
         originalTransactionId: match.original_transaction_id,
+        orderId: match.original_transaction_id,
+        purchaseTokenHash: (0, lib_1.sha256Hex)(receiptData).slice(0, 40),
         platform: "ios",
     };
 }

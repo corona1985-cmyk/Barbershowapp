@@ -6,21 +6,29 @@ import {
   ROOT,
   PAID_PLANS,
   MIN_PHONE_DIGITS,
+  MIN_PASSWORD_LENGTH,
   DEFAULT_SETTINGS,
   ALL_ROLES,
   assertAppCheck,
+  assertPassword,
   assertUsername,
   canCallerAssignRole,
+  claimIapReceipt,
   consumeRateLimit,
   db,
   digitsOnly,
   firestore,
   generateUniqueId,
   hashPasswordNode,
+  iapReuseKeys,
+  indexClientPhone,
   ipHash,
   isEmulator,
   isPlatformRole,
   isStaffRole,
+  canRewritePosClaim,
+  canActivatePosPlan,
+  parseGlobalFreeMode,
   mintCustomTokenForUser,
   readPasswordHash,
   requireAuth,
@@ -37,6 +45,14 @@ import {
   writeAdminAudit,
 } from "./lib";
 import { verifyGooglePlayPurchase, verifyStorePurchase } from "./iapVerify";
+import {
+  assertBookingPayload,
+  assertPosAndBarber,
+  createPendingAppointment,
+  ensureClientForBooking,
+  loadBusySlotsForPos,
+  resolveServicesFromIds,
+} from "./booking";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -45,8 +61,9 @@ if (!admin.apps.length) {
 const callableOpts = { region: "us-central1" as const };
 
 function getFreeSignupTierAndPlan(): { tier: string; plan: string } {
-  const globalFree = process.env.GLOBAL_FREE_MODE !== "false";
-  if (globalFree) return { tier: "barberia", plan: "pro" };
+  if (parseGlobalFreeMode(process.env.GLOBAL_FREE_MODE, isEmulator())) {
+    return { tier: "barberia", plan: "pro" };
+  }
   return { tier: "gratuito", plan: "basic" };
 }
 
@@ -243,7 +260,7 @@ function parseSignup(data: SignupPayload | undefined) {
   const barrio = data?.barrio != null ? String(data.barrio).trim() : undefined;
   const lat = typeof data?.lat === "number" && Number.isFinite(data.lat) ? data.lat : undefined;
   const lng = typeof data?.lng === "number" && Number.isFinite(data.lng) ? data.lng : undefined;
-  if (!password || password.length < 6) throw new HttpsError("invalid-argument", "La contraseña es obligatoria (mín. 6 caracteres).");
+  assertPassword(password);
   if (!name) throw new HttpsError("invalid-argument", "El nombre completo es obligatorio.");
   if (phone.length < MIN_PHONE_DIGITS) throw new HttpsError("invalid-argument", "Teléfono inválido.");
   if (!barbershopName) throw new HttpsError("invalid-argument", "El nombre de la barbería es obligatorio.");
@@ -353,6 +370,9 @@ export const createPendingBarberSignupMobile = onCall(callableOpts, async (reque
 
 export const activatePlanFromPlay = onCall(callableOpts, async (request) => {
   const { claims } = requireAuth(request);
+  if (!canActivatePosPlan(claims.role)) {
+    throw new HttpsError("permission-denied", "Solo el dueño o administrador puede activar el plan.");
+  }
   await consumeRateLimit("iap", claims.username, 10, 60 * 60 * 1000);
   const data = request.data as { purchaseToken?: string; productId?: string; receiptData?: string; platform?: string } | undefined;
   const productId = String(data?.productId ?? "").trim();
@@ -370,13 +390,7 @@ export const activatePlanFromPlay = onCall(callableOpts, async (request) => {
   const userData = userSnap.val() as { posId?: number };
   const posId = userData.posId;
   if (posId == null) throw new HttpsError("failed-precondition", "Usuario sin barbería asignada.");
-  if (verified.originalTransactionId) {
-    const used = await db().ref(`${ROOT}/authSecrets/_iap/${verified.originalTransactionId}`).get();
-    if (used.exists() && used.val()?.username && used.val().username !== username) {
-      throw new HttpsError("already-exists", "Este recibo ya fue usado.");
-    }
-    await db().ref(`${ROOT}/authSecrets/_iap/${verified.originalTransactionId}`).set({ username, at: new Date().toISOString() });
-  }
+  await claimIapReceipt(username, iapReuseKeys(verified));
   await db().ref(`${ROOT}/pointsOfSale/${posId}`).update({
     isActive: true,
     tier: tierMeta.tier,
@@ -392,10 +406,14 @@ export const activatePlanFromPlay = onCall(callableOpts, async (request) => {
 
 export const verifyGooglePlayReceipt = onRequest({ region: "us-central1" }, async (req, res) => {
   try {
+    if (!isEmulator() && process.env.PLAY_VERIFY_ALLOW_HTTP !== "true") {
+      res.status(404).json({ error: "gone" });
+      return;
+    }
     const bid = String(req.query.bid || "");
     const subId = String(req.query.subId || "");
     const purchaseToken = String(req.query.purchaseToken || "");
-    await consumeRateLimit("play-verify", crypto.createHash("sha256").update(req.ip || "unknown").digest("hex").slice(0, 32), 40, 15 * 60 * 1000);
+    await consumeRateLimit("play-verify", crypto.createHash("sha256").update(req.ip || "unknown").digest("hex").slice(0, 32), 20, 15 * 60 * 1000);
     if (!subId || !purchaseToken) {
       res.status(400).json({ error: "missing" });
       return;
@@ -424,7 +442,7 @@ export const registerClientAccount = onCall(callableOpts, async (request) => {
   const name = String(data?.name ?? "").trim();
   const phone = digitsOnly(String(data?.phone ?? ""));
   const posId = Number(data?.posId ?? 0);
-  if (!password || password.length < 6) throw new HttpsError("invalid-argument", "Contraseña inválida.");
+  assertPassword(password);
   if (!name) throw new HttpsError("invalid-argument", "Nombre obligatorio.");
   if (phone.length < MIN_PHONE_DIGITS) throw new HttpsError("invalid-argument", "Teléfono inválido.");
   if (!Number.isFinite(posId) || posId <= 0) throw new HttpsError("invalid-argument", "Barbería inválida.");
@@ -434,19 +452,21 @@ export const registerClientAccount = onCall(callableOpts, async (request) => {
   }
   if (await resolveUsernameKey(username)) throw new HttpsError("already-exists", "Ese nombre de usuario ya existe.");
   const clientId = generateUniqueId();
+  const phoneDisplay = String(data?.phone ?? "").trim();
   await db().ref(`${ROOT}/clients/${clientId}`).set({
     id: clientId,
     posId,
     nombre: name,
-    telefono: String(data?.phone ?? "").trim(),
+    telefono: phoneDisplay,
     email: "",
     ultimaVisita: "N/A",
     notas: "Registro de cliente",
     fechaRegistro: new Date().toISOString().split("T")[0],
     puntos: 0,
     status: "active",
-    whatsappOptIn: true,
+    whatsappOptIn: false,
   });
+  await indexClientPhone(posId, phoneDisplay, clientId);
   const newUser: Record<string, unknown> = {
     username,
     role: "cliente",
@@ -500,8 +520,10 @@ export const upsertStaffUser = onCall(callableOpts, async (request) => {
     await migratePasswordSecret(username, existing.password);
   }
   await db().ref(`${ROOT}/users/${username}`).set(toWrite);
-  if (password && password.length >= 6) {
+  if (password && password.length >= MIN_PASSWORD_LENGTH) {
     await setPasswordHash(username, hashPasswordNode(password));
+  } else if (password) {
+    throw new HttpsError("invalid-argument", `La contraseña es obligatoria (mín. ${MIN_PASSWORD_LENGTH} caracteres).`);
   } else if (!existing) {
     throw new HttpsError("invalid-argument", "La contraseña es obligatoria para usuarios nuevos.");
   }
@@ -623,14 +645,21 @@ export const switchActivePos = onCall(callableOpts, async (request) => {
   const posSnap = await db().ref(`${ROOT}/pointsOfSale/${posId}`).get();
   if (!posSnap.exists()) throw new HttpsError("not-found", "Sede no encontrada.");
   const pos = posSnap.val() as { ownerId?: string };
-  const allowed = isPlatformRole(claims.role) || claims.posId === posId || pos.ownerId === claims.username || claims.role === "cliente";
+  if (claims.role === "cliente") {
+    await db().ref(`${ROOT}/clientPreferences/${claims.username}`).set({ preferredPosId: posId });
+    return { success: true, posId };
+  }
+  const allowed = canRewritePosClaim({
+    role: claims.role,
+    claimsPosId: claims.posId,
+    targetPosId: posId,
+    ownerId: pos.ownerId,
+    username: claims.username,
+  });
   if (!allowed) throw new HttpsError("permission-denied", "No autorizado.");
   const userSnap = await db().ref(`${ROOT}/users/${claims.username}`).get();
   const user = (userSnap.exists() ? userSnap.val() : { role: claims.role, username: claims.username }) as Record<string, unknown>;
-  if (claims.role === "cliente") {
-    await db().ref(`${ROOT}/clientPreferences/${claims.username}`).set({ preferredPosId: posId });
-    user.posId = posId;
-  } else if (isPlatformRole(claims.role) || pos.ownerId === claims.username) {
+  if (isPlatformRole(claims.role) || pos.ownerId === claims.username) {
     user.posId = posId;
   }
   await syncUserClaims(uid, user, claims.username);
@@ -695,10 +724,10 @@ export const getPublicBookingCatalog = onCall(callableOpts, async (request) => {
   const posSnap = await db().ref(`${ROOT}/pointsOfSale/${posId}`).get();
   const shop = sanitizePublicShop(posSnap.val());
   if (!shop) throw new HttpsError("not-found", "Barbería no encontrada.");
-  const [servicesSnap, barbersSnap, apptsSnap] = await Promise.all([
+  const [servicesSnap, barbersSnap, busySlots] = await Promise.all([
     db().ref(`${ROOT}/services`).orderByChild("posId").equalTo(posId).get(),
     db().ref(`${ROOT}/barbers`).orderByChild("posId").equalTo(posId).get(),
-    db().ref(`${ROOT}/appointments`).orderByChild("posId").equalTo(posId).get(),
+    loadBusySlotsForPos(posId),
   ]);
   const services = Object.values((servicesSnap.val() || {}) as Record<string, Record<string, unknown>>).map((s) => ({
     id: Number(s.id),
@@ -711,17 +740,8 @@ export const getPublicBookingCatalog = onCall(callableOpts, async (request) => {
   const barbers = Object.values((barbersSnap.val() || {}) as Record<string, Record<string, unknown>>)
     .map((b) => sanitizePublicBarber(b, posId))
     .filter((b): b is Record<string, unknown> => b != null);
-  const busySlots = Object.values((apptsSnap.val() || {}) as Record<string, Record<string, unknown>>)
-    .filter((a) => a.estado !== "cancelada")
-    .map((a) => ({
-      barberoId: a.barberoId,
-      fecha: a.fecha,
-      hora: a.hora,
-      duracionTotal: a.duracionTotal || 30,
-      estado: a.estado,
-    }));
   const galleries: Record<string, unknown[]> = {};
-  for (const b of barbers) {
+  await Promise.all(barbers.map(async (b) => {
     const g = await db().ref(`${ROOT}/barberGallery/${b.id}`).get();
     if (g.exists()) {
       galleries[String(b.id)] = Object.values(g.val() as Record<string, unknown>).map((photo) => {
@@ -729,7 +749,7 @@ export const getPublicBookingCatalog = onCall(callableOpts, async (request) => {
         return { id: p.id, barberId: p.barberId, imageUrl: p.imageUrl, caption: p.caption, createdAt: p.createdAt };
       });
     }
-  }
+  }));
   return { shop, services, barbers, busySlots, galleries };
 });
 
@@ -743,73 +763,26 @@ export const createGuestAppointment = onCall(callableOpts, async (request) => {
     hora?: string;
     nombre?: string;
     telefono?: string;
-    servicios?: Array<{ id: number; name: string; price: number; duration: number }>;
+    servicios?: Array<{ id: number }>;
   } | undefined;
-  const posId = Number(data?.posId);
-  const barberoId = Number(data?.barberoId);
-  const fecha = String(data?.fecha || "");
-  const hora = String(data?.hora || "");
-  const nombre = String(data?.nombre || "").trim();
-  const telefono = String(data?.telefono || "").trim();
-  if (!Number.isFinite(posId) || !Number.isFinite(barberoId) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^\d{2}:\d{2}$/.test(hora) || !nombre || digitsOnly(telefono).length < MIN_PHONE_DIGITS) {
-    throw new HttpsError("invalid-argument", "Datos de reserva inválidos.");
-  }
-  const posSnap = await db().ref(`${ROOT}/pointsOfSale/${posId}`).get();
-  if (!posSnap.exists() || posSnap.val()?.isActive === false) throw new HttpsError("not-found", "Barbería no encontrada.");
-  const barberSnap = await db().ref(`${ROOT}/barbers/${barberoId}`).get();
-  if (!barberSnap.exists() || Number(barberSnap.val()?.posId) !== posId || barberSnap.val()?.active === false) {
-    throw new HttpsError("failed-precondition", "Barbero no disponible.");
-  }
-  const apptsSnap = await db().ref(`${ROOT}/appointments`).orderByChild("posId").equalTo(posId).get();
-  const conflict = Object.values((apptsSnap.val() || {}) as Record<string, { barberoId?: number; fecha?: string; hora?: string; estado?: string }>).some(
-    (a) => a.barberoId === barberoId && a.fecha === fecha && a.hora === hora && a.estado !== "cancelada"
-  );
-  if (conflict) throw new HttpsError("already-exists", "Ese horario ya no está disponible.");
-  let clientId: number | null = null;
-  const clientsSnap = await db().ref(`${ROOT}/clients`).orderByChild("posId").equalTo(posId).get();
-  const want = digitsOnly(telefono);
-  if (clientsSnap.exists()) {
-    for (const c of Object.values(clientsSnap.val() as Record<string, { id?: number; telefono?: string }>)) {
-      if (digitsOnly(String(c.telefono || "")) === want) {
-        clientId = Number(c.id);
-        break;
-      }
-    }
-  }
-  if (clientId == null) {
-    clientId = generateUniqueId();
-    await db().ref(`${ROOT}/clients/${clientId}`).set({
-      id: clientId,
-      posId,
-      nombre,
-      telefono,
-      email: "",
-      ultimaVisita: "N/A",
-      notas: "Reserva sin cuenta (invitado)",
-      fechaRegistro: new Date().toISOString().split("T")[0],
-      puntos: 0,
-      status: "active",
-    });
-  }
-  const servicios = Array.isArray(data?.servicios) ? data!.servicios.slice(0, 10) : [];
-  const duracionTotal = servicios.reduce((acc, s) => acc + Number(s.duration || 0), 0) || 30;
-  const total = servicios.reduce((acc, s) => acc + Number(s.price || 0), 0);
-  const id = generateUniqueId();
-  await db().ref(`${ROOT}/appointments/${id}`).set({
-    id,
-    posId,
-    clienteId: clientId,
-    barberoId,
-    fecha,
-    hora,
-    servicios,
-    notas: "",
-    duracionTotal,
-    total,
-    estado: "confirmada",
-    fechaCreacion: new Date().toISOString(),
+  const parsed = assertBookingPayload(data || {});
+  await assertPosAndBarber(parsed.posId, parsed.barberoId);
+  const servicios = await resolveServicesFromIds(parsed.posId, data?.servicios);
+  const clientId = await ensureClientForBooking({
+    posId: parsed.posId,
+    nombre: parsed.nombre,
+    telefono: parsed.telefono,
+    notas: "Reserva sin cuenta (invitado)",
   });
-  return { success: true, appointmentId: id };
+  const appointmentId = await createPendingAppointment({
+    posId: parsed.posId,
+    barberoId: parsed.barberoId,
+    fecha: parsed.fecha,
+    hora: parsed.hora,
+    clienteId: clientId,
+    servicios,
+  });
+  return { success: true, appointmentId };
 });
 
 export const stripeWebhook = onRequest({ region: "us-central1" }, async (req, res) => {
@@ -898,3 +871,17 @@ export const createPlanCheckout = onCall(callableOpts, async (request) => {
   if (!session.url) throw new HttpsError("internal", "No se pudo crear el checkout.");
   return { url: session.url };
 });
+
+export {
+  updateMyClientProfile,
+  createClientAppointment,
+  cancelMyAppointment,
+  getShopCatalog,
+  createClientShopOrder,
+  getPlatformStats,
+  listDirectoryUsers,
+  onSaleCreated,
+  onAppointmentCreated,
+  onUserCreated,
+  onPosCreated,
+} from "./clientOps";

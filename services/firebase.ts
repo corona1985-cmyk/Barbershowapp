@@ -342,3 +342,93 @@ export async function createGuestAppointment(params: {
   await fn(params);
   return { success: true };
 }
+
+export async function updateMyClientProfile(updates: { nombre?: string; telefono?: string; photoUrl?: string | null }): Promise<{ client: Record<string, unknown> }> {
+  const fn = callable<typeof updates, { success: true; client: Record<string, unknown> }>('updateMyClientProfile');
+  const result = await fn(updates);
+  return { client: result.data.client };
+}
+
+export async function createClientAppointment(params: {
+  posId: number;
+  barberoId: number;
+  fecha: string;
+  hora: string;
+  nombre: string;
+  telefono: string;
+  servicios: Array<{ id: number }>;
+}): Promise<{ success: true }> {
+  const fn = callable<typeof params, { success: true }>('createClientAppointment');
+  await fn(params);
+  return { success: true };
+}
+
+export async function cancelMyAppointment(appointmentId: number): Promise<void> {
+  const fn = callable<{ appointmentId: number }, { success: true }>('cancelMyAppointment');
+  await fn({ appointmentId });
+}
+
+export async function getShopCatalog(posId: number): Promise<{
+  products: Array<{ id: number; posId: number; producto: string; precioVenta: number; stock: number; photoUrl?: string | null }>;
+  taxRate: number;
+  currencySymbol: string;
+}> {
+  const fn = callable<{ posId: number }, {
+    products: Array<{ id: number; posId: number; producto: string; precioVenta: number; stock: number; photoUrl?: string | null }>;
+    taxRate: number;
+    currencySymbol: string;
+  }>('getShopCatalog');
+  const result = await fn({ posId });
+  return result.data;
+}
+
+export async function createClientShopOrder(posId: number, items: Array<{ id: number; quantity: number }>): Promise<{ saleNumber: string; total: number }> {
+  const fn = callable<{ posId: number; items: Array<{ id: number; quantity: number }> }, { success: true; saleNumber: string; total: number }>('createClientShopOrder');
+  const result = await fn({ posId, items });
+  return { saleNumber: result.data.saleNumber, total: result.data.total };
+}
+
+export type PlatformStats = {
+  totalRevenue: number;
+  totalUsers: number;
+  totalSedes: number;
+  totalAppointments: number;
+  revenueByPos?: Record<string, number>;
+  recentSales?: Array<{
+    id: number;
+    posId: number;
+    total: number;
+    fecha: string;
+    hora?: string;
+    numeroVenta?: string;
+    metodoPago?: string;
+  }>;
+};
+
+export async function getPlatformStats(): Promise<PlatformStats> {
+  const fn = callable<Record<string, never>, PlatformStats>('getPlatformStats');
+  const result = await fn({});
+  return result.data;
+}
+
+export async function listDirectoryUsers(): Promise<Array<{
+  username: string;
+  name: string;
+  role: string;
+  posId: number | null;
+  status?: string;
+  lastLogin?: string;
+  ip?: string;
+}>> {
+  const fn = callable<Record<string, never>, { users: Array<{
+    username: string;
+    name: string;
+    role: string;
+    posId: number | null;
+    status?: string;
+    lastLogin?: string;
+    ip?: string;
+  }> }>('listDirectoryUsers');
+  const result = await fn({});
+  return result.data.users;
+}

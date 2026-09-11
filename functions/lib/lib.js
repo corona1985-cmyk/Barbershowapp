@@ -23,8 +23,8 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ensureAuthUser = exports.syncUserClaims = exports.setPasswordHash = exports.migrateAllLegacyPasswordSecrets = exports.migratePasswordSecret = exports.readPasswordHash = exports.inspectPasswordHash = exports.resolvePasswordHashFromSources = exports.resolveUsernameKey = exports.uidForUsername = exports.publicUser = exports.writeAdminAudit = exports.consumeRateLimit = exports.requirePlatformOwner = exports.requirePlatform = exports.requireAuth = exports.claimsFromToken = exports.firestore = exports.db = exports.ipHash = exports.clientIp = exports.sha256Hex = exports.generateUniqueId = exports.verifyPasswordNode = exports.isStoredHash = exports.hashPasswordNode = exports.bufferToHex = exports.sanitizePublicBarber = exports.sanitizePublicShop = exports.sanitizePublicHighlights = exports.sanitizePublicCertifications = exports.resolveTierFromProductId = exports.canManagePosUsers = exports.isStaffRole = exports.isPlatformRole = exports.assertAppCheck = exports.appCheckEnforced = exports.isEmulator = exports.DEFAULT_SETTINGS = exports.PRODUCT_ID_TO_TIER = exports.APPOINTMENT_STATES = exports.ALL_ROLES = exports.PLATFORM_ROLES = exports.STAFF_ROLES = exports.PAID_PLANS = exports.MIN_PHONE_DIGITS = exports.HASH_BYTES = exports.SALT_BYTES = exports.PBKDF2_ITERATIONS = exports.ROOT = void 0;
-exports.canCallerAssignRole = exports.assertUsername = exports.digitsOnly = exports.mintCustomTokenForUser = void 0;
+exports.writeAdminAudit = exports.consumeRateLimit = exports.requirePlatformOwner = exports.requirePlatform = exports.requireAuth = exports.claimsFromToken = exports.firestore = exports.db = exports.ipHash = exports.clientIp = exports.sha256Hex = exports.generateUniqueId = exports.verifyPasswordNode = exports.isStoredHash = exports.hashPasswordNode = exports.bufferToHex = exports.sanitizePublicBarber = exports.sanitizePublicShop = exports.sanitizePublicHighlights = exports.sanitizePublicCertifications = exports.resolveTierFromProductId = exports.canRewritePosClaim = exports.canClientOrderAtPos = exports.appendRecentSales = exports.normalizeRecentSales = exports.RECENT_SALES_LIMIT = exports.toDirectoryUser = exports.canListDirectoryUsers = exports.canActivatePosPlan = exports.parseGlobalFreeMode = exports.canManagePosUsers = exports.isStaffRole = exports.isPlatformRole = exports.assertAppCheck = exports.appCheckEnforced = exports.isEmulator = exports.DEFAULT_SETTINGS = exports.PRODUCT_ID_TO_TIER = exports.APPOINTMENT_STATES = exports.ALL_ROLES = exports.PLATFORM_ROLES = exports.STAFF_ROLES = exports.PAID_PLANS = exports.PUBLIC_SLOT_DAYS = exports.MIN_PASSWORD_LENGTH = exports.MIN_PHONE_DIGITS = exports.HASH_BYTES = exports.SALT_BYTES = exports.PBKDF2_ITERATIONS = exports.ROOT = void 0;
+exports.canCallerAssignRole = exports.assertUsername = exports.releaseAppointmentSlot = exports.lockAppointmentSlot = exports.isSlotLockActive = exports.SLOT_LOCK_TTL_MS = exports.claimIapReceipt = exports.iapReuseKeys = exports.findClientIdByPhone = exports.indexClientPhone = exports.writeAppointmentIndexes = exports.bumpPlatformStat = exports.busySlotKey = exports.isoDateOffset = exports.rtdbSafeKey = exports.assertPassword = exports.digitsOnly = exports.mintCustomTokenForUser = exports.ensureAuthUser = exports.syncUserClaims = exports.setPasswordHash = exports.migrateAllLegacyPasswordSecrets = exports.migratePasswordSecret = exports.readPasswordHash = exports.inspectPasswordHash = exports.resolvePasswordHashFromSources = exports.resolveUsernameKey = exports.uidForUsername = exports.publicUser = void 0;
 const crypto = __importStar(require("crypto"));
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
@@ -33,6 +33,8 @@ exports.PBKDF2_ITERATIONS = 100000;
 exports.SALT_BYTES = 16;
 exports.HASH_BYTES = 32;
 exports.MIN_PHONE_DIGITS = 8;
+exports.MIN_PASSWORD_LENGTH = 10;
+exports.PUBLIC_SLOT_DAYS = 14;
 exports.PAID_PLANS = ["solo", "barberia", "multisede"];
 exports.STAFF_ROLES = ["admin", "dueno", "barbero", "empleado"];
 exports.PLATFORM_ROLES = ["platform_owner", "superadmin", "support", "financial", "commercial"];
@@ -88,6 +90,92 @@ function canManagePosUsers(role) {
     return role === "admin" || role === "dueno" || isPlatformRole(role);
 }
 exports.canManagePosUsers = canManagePosUsers;
+/**
+ * Modo promocional en Functions: true/false explícito gana.
+ * Si no está definido, el emulador queda en true (como Vite DEV) y producción en false.
+ */
+function parseGlobalFreeMode(raw, emulator) {
+    if (raw === "true")
+        return true;
+    if (raw === "false")
+        return false;
+    return emulator;
+}
+exports.parseGlobalFreeMode = parseGlobalFreeMode;
+/** Solo dueño/admin de la sede puede activar un plan IAP (no barbero, empleado ni cliente). */
+function canActivatePosPlan(role) {
+    return role === "admin" || role === "dueno";
+}
+exports.canActivatePosPlan = canActivatePosPlan;
+function canListDirectoryUsers(role) {
+    return isPlatformRole(role) || role === "support" || role === "financial" || role === "commercial";
+}
+exports.canListDirectoryUsers = canListDirectoryUsers;
+/** Lista de plataforma: sin photoUrl ni password. */
+function toDirectoryUser(username, raw) {
+    const posRaw = raw === null || raw === void 0 ? void 0 : raw.posId;
+    const posId = posRaw == null || posRaw === "" ? null : Number(posRaw);
+    const out = {
+        username: String((raw === null || raw === void 0 ? void 0 : raw.username) || username),
+        name: String((raw === null || raw === void 0 ? void 0 : raw.name) || ""),
+        role: String((raw === null || raw === void 0 ? void 0 : raw.role) || ""),
+        posId: Number.isFinite(posId) && posId > 0 ? posId : null,
+    };
+    if (typeof (raw === null || raw === void 0 ? void 0 : raw.status) === "string")
+        out.status = raw.status;
+    if (typeof (raw === null || raw === void 0 ? void 0 : raw.lastLogin) === "string")
+        out.lastLogin = raw.lastLogin;
+    if (typeof (raw === null || raw === void 0 ? void 0 : raw.ip) === "string")
+        out.ip = raw.ip;
+    return out;
+}
+exports.toDirectoryUser = toDirectoryUser;
+exports.RECENT_SALES_LIMIT = 20;
+function normalizeRecentSales(cur) {
+    const list = Array.isArray(cur)
+        ? cur
+        : cur && typeof cur === "object"
+            ? Object.values(cur)
+            : [];
+    return list.filter((item) => {
+        if (!item || typeof item !== "object")
+            return false;
+        const rec = item;
+        return Number.isFinite(Number(rec.id)) && Number(rec.id) > 0 && Number.isFinite(Number(rec.total));
+    }).slice(-exports.RECENT_SALES_LIMIT);
+}
+exports.normalizeRecentSales = normalizeRecentSales;
+function appendRecentSales(cur, sale) {
+    return [...normalizeRecentSales(cur), sale].slice(-exports.RECENT_SALES_LIMIT);
+}
+exports.appendRecentSales = appendRecentSales;
+/** El cliente solo compra en su sede preferida, la de su ficha o la del token. */
+function canClientOrderAtPos(params) {
+    const asPosId = (n) => {
+        const v = Number(n);
+        return Number.isFinite(v) && v > 0 ? v : null;
+    };
+    const target = asPosId(params.targetPosId);
+    if (target == null)
+        return false;
+    const allowed = [params.preferredPosId, params.clientRecordPosId, params.claimsPosId]
+        .map(asPosId)
+        .filter((n) => n != null);
+    return allowed.includes(target);
+}
+exports.canClientOrderAtPos = canClientOrderAtPos;
+/** El cliente nunca reescribe posId del token. Staff/plataforma sí, si es sede propia u owner. */
+function canRewritePosClaim(params) {
+    const role = String(params.role || "");
+    if (!role || role === "cliente")
+        return false;
+    if (isPlatformRole(role))
+        return true;
+    if (params.ownerId && params.username && params.ownerId === params.username)
+        return true;
+    return Number(params.claimsPosId) === Number(params.targetPosId);
+}
+exports.canRewritePosClaim = canRewritePosClaim;
 function resolveTierFromProductId(productId) {
     const id = String(productId || "").trim();
     if (exports.PRODUCT_ID_TO_TIER[id])
@@ -489,6 +577,128 @@ function digitsOnly(value) {
     return String(value || "").replace(/\D/g, "");
 }
 exports.digitsOnly = digitsOnly;
+function assertPassword(password) {
+    if (!password || password.length < exports.MIN_PASSWORD_LENGTH) {
+        throw new https_1.HttpsError("invalid-argument", `La contraseña es obligatoria (mín. ${exports.MIN_PASSWORD_LENGTH} caracteres).`);
+    }
+    return password;
+}
+exports.assertPassword = assertPassword;
+function rtdbSafeKey(value) {
+    return String(value || "").replace(/[.#$\[\]]/g, "_").slice(0, 200);
+}
+exports.rtdbSafeKey = rtdbSafeKey;
+function isoDateOffset(days = 0) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+}
+exports.isoDateOffset = isoDateOffset;
+function busySlotKey(barberoId, hora) {
+    return `${barberoId}_${rtdbSafeKey(hora)}`;
+}
+exports.busySlotKey = busySlotKey;
+async function bumpPlatformStat(field, delta = 1) {
+    if (!field || !Number.isFinite(delta) || delta === 0)
+        return;
+    await db().ref(`${exports.ROOT}/platformStats/${field}`).transaction((cur) => (typeof cur === "number" ? cur : 0) + delta);
+}
+exports.bumpPlatformStat = bumpPlatformStat;
+async function writeAppointmentIndexes(apt) {
+    const slotPath = `${exports.ROOT}/busySlots/${apt.posId}/${apt.fecha}/${busySlotKey(apt.barberoId, apt.hora)}`;
+    const byDatePath = `${exports.ROOT}/appointmentsByPosDate/${apt.posId}/${apt.fecha}/${apt.id}`;
+    if (apt.estado === "cancelada") {
+        await db().ref(slotPath).remove();
+        await db().ref(byDatePath).remove();
+        return;
+    }
+    await db().ref(slotPath).set({
+        barberoId: apt.barberoId,
+        fecha: apt.fecha,
+        hora: apt.hora,
+        duracionTotal: apt.duracionTotal || 30,
+        estado: apt.estado,
+        appointmentId: apt.id,
+    });
+    await db().ref(byDatePath).set(true);
+}
+exports.writeAppointmentIndexes = writeAppointmentIndexes;
+async function indexClientPhone(posId, phone, clientId) {
+    const digits = digitsOnly(phone);
+    if (digits.length < exports.MIN_PHONE_DIGITS)
+        return;
+    const ref = db().ref(`${exports.ROOT}/clientsByPhone/${posId}/${digits}`);
+    if (clientId == null)
+        await ref.remove();
+    else
+        await ref.set(clientId);
+}
+exports.indexClientPhone = indexClientPhone;
+async function findClientIdByPhone(posId, phone) {
+    const digits = digitsOnly(phone);
+    if (digits.length < exports.MIN_PHONE_DIGITS)
+        return null;
+    const snap = await db().ref(`${exports.ROOT}/clientsByPhone/${posId}/${digits}`).get();
+    if (snap.exists() && Number.isFinite(Number(snap.val())))
+        return Number(snap.val());
+    return null;
+}
+exports.findClientIdByPhone = findClientIdByPhone;
+function iapReuseKeys(input) {
+    const keys = [input.originalTransactionId, input.orderId, input.purchaseTokenHash]
+        .map((k) => rtdbSafeKey(String(k || "").trim()))
+        .filter(Boolean);
+    return [...new Set(keys)];
+}
+exports.iapReuseKeys = iapReuseKeys;
+async function claimIapReceipt(username, keys) {
+    if (!keys.length) {
+        throw new https_1.HttpsError("failed-precondition", "No se pudo identificar el recibo de la tienda.");
+    }
+    const at = new Date().toISOString();
+    for (const key of keys) {
+        const ref = db().ref(`${exports.ROOT}/authSecrets/_iap/${key}`);
+        const result = await ref.transaction((cur) => {
+            const owner = cur && typeof cur === "object" ? String(cur.username || "") : "";
+            if (owner && owner !== username)
+                return;
+            return { username, at };
+        });
+        if (!result.committed) {
+            throw new https_1.HttpsError("already-exists", "Este recibo ya fue usado.");
+        }
+    }
+}
+exports.claimIapReceipt = claimIapReceipt;
+/** Mutex corto: si el proceso muere, el lock caduca y no deja el horario muerto. */
+exports.SLOT_LOCK_TTL_MS = 60000;
+function isSlotLockActive(cur, now = Date.now()) {
+    if (cur == null)
+        return false;
+    if (typeof cur !== "object")
+        return true;
+    const at = Number(cur.at);
+    if (!Number.isFinite(at))
+        return true;
+    return now - at < exports.SLOT_LOCK_TTL_MS;
+}
+exports.isSlotLockActive = isSlotLockActive;
+async function lockAppointmentSlot(posId, barberoId, fecha, hora) {
+    const ref = db().ref(`${exports.ROOT}/slotLocks/${posId}/${barberoId}/${fecha}/${rtdbSafeKey(hora)}`);
+    const result = await ref.transaction((cur) => {
+        if (isSlotLockActive(cur))
+            return;
+        return { at: Date.now() };
+    });
+    if (!result.committed) {
+        throw new https_1.HttpsError("already-exists", "Ese horario ya no está disponible.");
+    }
+}
+exports.lockAppointmentSlot = lockAppointmentSlot;
+async function releaseAppointmentSlot(posId, barberoId, fecha, hora) {
+    await db().ref(`${exports.ROOT}/slotLocks/${posId}/${barberoId}/${fecha}/${rtdbSafeKey(hora)}`).remove();
+}
+exports.releaseAppointmentSlot = releaseAppointmentSlot;
 function assertUsername(username) {
     const value = String(username || "").trim().toLowerCase();
     if (!value || value.length < 3 || value.length > 40 || !/^[a-z0-9._-]+$/.test(value)) {

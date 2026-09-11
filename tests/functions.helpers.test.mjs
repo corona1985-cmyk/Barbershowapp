@@ -77,11 +77,43 @@ describe('security helpers', () => {
     assert.equal(legacy.hash, 'salt:hashvalue');
   });
 
+  it('caduca slotLocks viejos y trata null como libre', () => {
+    assert.equal(lib.isSlotLockActive(null), false);
+    assert.equal(lib.isSlotLockActive({ at: Date.now() }), true);
+    assert.equal(lib.isSlotLockActive({ at: Date.now() - lib.SLOT_LOCK_TTL_MS - 1 }), false);
+    assert.equal(lib.isSlotLockActive({}), true);
+  });
+
   it('prioriza authSecrets sobre users.password', () => {
     const migrated = lib.resolvePasswordHashFromSources('secret-hash', 'legacy-password');
     assert.equal(migrated.source, 'authSecrets');
     assert.equal(migrated.hash, 'secret-hash');
     assert.equal(lib.resolvePasswordHashFromSources(null, '').source, 'none');
     assert.equal(lib.resolvePasswordHashFromSources(undefined, null).hash, null);
+  });
+
+  it('directorio de usuarios omite photoUrl y password', () => {
+    const listed = lib.toDirectoryUser('ana', {
+      username: 'ana',
+      name: 'Ana',
+      role: 'admin',
+      posId: 12,
+      photoUrl: 'data:image/jpeg;base64,xxxx',
+      password: 'secret',
+    });
+    assert.equal(listed.username, 'ana');
+    assert.equal(listed.posId, 12);
+    assert.equal('photoUrl' in listed, false);
+    assert.equal('password' in listed, false);
+  });
+
+  it('recorta recentSales a 20 y acepta objeto de RTDB', () => {
+    const many = Array.from({ length: 21 }, (_, i) => ({ id: i + 1, posId: 1, total: 10, fecha: '2026-09-11' }));
+    const next = lib.appendRecentSales(many, { id: 99, posId: 2, total: 5, fecha: '2026-09-11' });
+    assert.equal(next.length, 20);
+    assert.equal(next[next.length - 1].id, 99);
+    const fromObject = lib.normalizeRecentSales({ a: { id: 1, posId: 1, total: 3, fecha: '2026-09-01' } });
+    assert.equal(fromObject.length, 1);
+    assert.equal(fromObject[0].id, 1);
   });
 });

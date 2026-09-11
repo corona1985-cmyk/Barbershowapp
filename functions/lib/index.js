@@ -23,21 +23,22 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createPlanCheckout = exports.stripeWebhook = exports.createGuestAppointment = exports.getPublicBookingCatalog = exports.listPublicShops = exports.deleteMyAccount = exports.switchActivePos = exports.adminDeletePointOfSale = exports.adminUpsertPointOfSale = exports.adminSetPosPlan = exports.updateMyProfile = exports.deleteStaffUser = exports.upsertStaffUser = exports.registerClientAccount = exports.verifyGooglePlayReceipt = exports.activatePlanFromPlay = exports.createPendingBarberSignupMobile = exports.createPendingBarberSignup = exports.completeSelfSignupFree = exports.sendWhatsAppMessage = exports.checkUsernameAvailable = exports.authenticateMasterWithPassword = exports.loginWithPassword = void 0;
+exports.onPosCreated = exports.onUserCreated = exports.onAppointmentCreated = exports.onSaleCreated = exports.listDirectoryUsers = exports.getPlatformStats = exports.createClientShopOrder = exports.getShopCatalog = exports.cancelMyAppointment = exports.createClientAppointment = exports.updateMyClientProfile = exports.createPlanCheckout = exports.stripeWebhook = exports.createGuestAppointment = exports.getPublicBookingCatalog = exports.listPublicShops = exports.deleteMyAccount = exports.switchActivePos = exports.adminDeletePointOfSale = exports.adminUpsertPointOfSale = exports.adminSetPosPlan = exports.updateMyProfile = exports.deleteStaffUser = exports.upsertStaffUser = exports.registerClientAccount = exports.verifyGooglePlayReceipt = exports.activatePlanFromPlay = exports.createPendingBarberSignupMobile = exports.createPendingBarberSignup = exports.completeSelfSignupFree = exports.sendWhatsAppMessage = exports.checkUsernameAvailable = exports.authenticateMasterWithPassword = exports.loginWithPassword = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const v1_1 = require("firebase-functions/v1");
 const admin = __importStar(require("firebase-admin"));
 const crypto = __importStar(require("crypto"));
 const lib_1 = require("./lib");
 const iapVerify_1 = require("./iapVerify");
+const booking_1 = require("./booking");
 if (!admin.apps.length) {
     admin.initializeApp();
 }
 const callableOpts = { region: "us-central1" };
 function getFreeSignupTierAndPlan() {
-    const globalFree = process.env.GLOBAL_FREE_MODE !== "false";
-    if (globalFree)
+    if ((0, lib_1.parseGlobalFreeMode)(process.env.GLOBAL_FREE_MODE, (0, lib_1.isEmulator)())) {
         return { tier: "barberia", plan: "pro" };
+    }
     return { tier: "gratuito", plan: "basic" };
 }
 const PLAN_PRICES = {
@@ -219,8 +220,7 @@ function parseSignup(data) {
     const barrio = (data === null || data === void 0 ? void 0 : data.barrio) != null ? String(data.barrio).trim() : undefined;
     const lat = typeof (data === null || data === void 0 ? void 0 : data.lat) === "number" && Number.isFinite(data.lat) ? data.lat : undefined;
     const lng = typeof (data === null || data === void 0 ? void 0 : data.lng) === "number" && Number.isFinite(data.lng) ? data.lng : undefined;
-    if (!password || password.length < 6)
-        throw new https_1.HttpsError("invalid-argument", "La contraseña es obligatoria (mín. 6 caracteres).");
+    (0, lib_1.assertPassword)(password);
     if (!name)
         throw new https_1.HttpsError("invalid-argument", "El nombre completo es obligatorio.");
     if (phone.length < lib_1.MIN_PHONE_DIGITS)
@@ -341,8 +341,11 @@ exports.createPendingBarberSignupMobile = (0, https_1.onCall)(callableOpts, asyn
     return { success: true, customToken: created.customToken, user: created.user };
 });
 exports.activatePlanFromPlay = (0, https_1.onCall)(callableOpts, async (request) => {
-    var _a, _b;
+    var _a;
     const { claims } = (0, lib_1.requireAuth)(request);
+    if (!(0, lib_1.canActivatePosPlan)(claims.role)) {
+        throw new https_1.HttpsError("permission-denied", "Solo el dueño o administrador puede activar el plan.");
+    }
     await (0, lib_1.consumeRateLimit)("iap", claims.username, 10, 60 * 60 * 1000);
     const data = request.data;
     const productId = String((_a = data === null || data === void 0 ? void 0 : data.productId) !== null && _a !== void 0 ? _a : "").trim();
@@ -363,13 +366,7 @@ exports.activatePlanFromPlay = (0, https_1.onCall)(callableOpts, async (request)
     const posId = userData.posId;
     if (posId == null)
         throw new https_1.HttpsError("failed-precondition", "Usuario sin barbería asignada.");
-    if (verified.originalTransactionId) {
-        const used = await (0, lib_1.db)().ref(`${lib_1.ROOT}/authSecrets/_iap/${verified.originalTransactionId}`).get();
-        if (used.exists() && ((_b = used.val()) === null || _b === void 0 ? void 0 : _b.username) && used.val().username !== username) {
-            throw new https_1.HttpsError("already-exists", "Este recibo ya fue usado.");
-        }
-        await (0, lib_1.db)().ref(`${lib_1.ROOT}/authSecrets/_iap/${verified.originalTransactionId}`).set({ username, at: new Date().toISOString() });
-    }
+    await (0, lib_1.claimIapReceipt)(username, (0, lib_1.iapReuseKeys)(verified));
     await (0, lib_1.db)().ref(`${lib_1.ROOT}/pointsOfSale/${posId}`).update({
         isActive: true,
         tier: tierMeta.tier,
@@ -384,10 +381,14 @@ exports.activatePlanFromPlay = (0, https_1.onCall)(callableOpts, async (request)
 });
 exports.verifyGooglePlayReceipt = (0, https_1.onRequest)({ region: "us-central1" }, async (req, res) => {
     try {
+        if (!(0, lib_1.isEmulator)() && process.env.PLAY_VERIFY_ALLOW_HTTP !== "true") {
+            res.status(404).json({ error: "gone" });
+            return;
+        }
         const bid = String(req.query.bid || "");
         const subId = String(req.query.subId || "");
         const purchaseToken = String(req.query.purchaseToken || "");
-        await (0, lib_1.consumeRateLimit)("play-verify", crypto.createHash("sha256").update(req.ip || "unknown").digest("hex").slice(0, 32), 40, 15 * 60 * 1000);
+        await (0, lib_1.consumeRateLimit)("play-verify", crypto.createHash("sha256").update(req.ip || "unknown").digest("hex").slice(0, 32), 20, 15 * 60 * 1000);
         if (!subId || !purchaseToken) {
             res.status(400).json({ error: "missing" });
             return;
@@ -417,8 +418,7 @@ exports.registerClientAccount = (0, https_1.onCall)(callableOpts, async (request
     const name = String((_c = data === null || data === void 0 ? void 0 : data.name) !== null && _c !== void 0 ? _c : "").trim();
     const phone = (0, lib_1.digitsOnly)(String((_d = data === null || data === void 0 ? void 0 : data.phone) !== null && _d !== void 0 ? _d : ""));
     const posId = Number((_e = data === null || data === void 0 ? void 0 : data.posId) !== null && _e !== void 0 ? _e : 0);
-    if (!password || password.length < 6)
-        throw new https_1.HttpsError("invalid-argument", "Contraseña inválida.");
+    (0, lib_1.assertPassword)(password);
     if (!name)
         throw new https_1.HttpsError("invalid-argument", "Nombre obligatorio.");
     if (phone.length < lib_1.MIN_PHONE_DIGITS)
@@ -432,19 +432,21 @@ exports.registerClientAccount = (0, https_1.onCall)(callableOpts, async (request
     if (await (0, lib_1.resolveUsernameKey)(username))
         throw new https_1.HttpsError("already-exists", "Ese nombre de usuario ya existe.");
     const clientId = (0, lib_1.generateUniqueId)();
+    const phoneDisplay = String((_g = data === null || data === void 0 ? void 0 : data.phone) !== null && _g !== void 0 ? _g : "").trim();
     await (0, lib_1.db)().ref(`${lib_1.ROOT}/clients/${clientId}`).set({
         id: clientId,
         posId,
         nombre: name,
-        telefono: String((_g = data === null || data === void 0 ? void 0 : data.phone) !== null && _g !== void 0 ? _g : "").trim(),
+        telefono: phoneDisplay,
         email: "",
         ultimaVisita: "N/A",
         notas: "Registro de cliente",
         fechaRegistro: new Date().toISOString().split("T")[0],
         puntos: 0,
         status: "active",
-        whatsappOptIn: true,
+        whatsappOptIn: false,
     });
+    await (0, lib_1.indexClientPhone)(posId, phoneDisplay, clientId);
     const newUser = {
         username,
         role: "cliente",
@@ -508,8 +510,11 @@ exports.upsertStaffUser = (0, https_1.onCall)(callableOpts, async (request) => {
         await (0, lib_1.migratePasswordSecret)(username, existing.password);
     }
     await (0, lib_1.db)().ref(`${lib_1.ROOT}/users/${username}`).set(toWrite);
-    if (password && password.length >= 6) {
+    if (password && password.length >= lib_1.MIN_PASSWORD_LENGTH) {
         await (0, lib_1.setPasswordHash)(username, (0, lib_1.hashPasswordNode)(password));
+    }
+    else if (password) {
+        throw new https_1.HttpsError("invalid-argument", `La contraseña es obligatoria (mín. ${lib_1.MIN_PASSWORD_LENGTH} caracteres).`);
     }
     else if (!existing) {
         throw new https_1.HttpsError("invalid-argument", "La contraseña es obligatoria para usuarios nuevos.");
@@ -648,16 +653,22 @@ exports.switchActivePos = (0, https_1.onCall)(callableOpts, async (request) => {
     if (!posSnap.exists())
         throw new https_1.HttpsError("not-found", "Sede no encontrada.");
     const pos = posSnap.val();
-    const allowed = (0, lib_1.isPlatformRole)(claims.role) || claims.posId === posId || pos.ownerId === claims.username || claims.role === "cliente";
+    if (claims.role === "cliente") {
+        await (0, lib_1.db)().ref(`${lib_1.ROOT}/clientPreferences/${claims.username}`).set({ preferredPosId: posId });
+        return { success: true, posId };
+    }
+    const allowed = (0, lib_1.canRewritePosClaim)({
+        role: claims.role,
+        claimsPosId: claims.posId,
+        targetPosId: posId,
+        ownerId: pos.ownerId,
+        username: claims.username,
+    });
     if (!allowed)
         throw new https_1.HttpsError("permission-denied", "No autorizado.");
     const userSnap = await (0, lib_1.db)().ref(`${lib_1.ROOT}/users/${claims.username}`).get();
     const user = (userSnap.exists() ? userSnap.val() : { role: claims.role, username: claims.username });
-    if (claims.role === "cliente") {
-        await (0, lib_1.db)().ref(`${lib_1.ROOT}/clientPreferences/${claims.username}`).set({ preferredPosId: posId });
-        user.posId = posId;
-    }
-    else if ((0, lib_1.isPlatformRole)(claims.role) || pos.ownerId === claims.username) {
+    if ((0, lib_1.isPlatformRole)(claims.role) || pos.ownerId === claims.username) {
         user.posId = posId;
     }
     await (0, lib_1.syncUserClaims)(uid, user, claims.username);
@@ -727,10 +738,10 @@ exports.getPublicBookingCatalog = (0, https_1.onCall)(callableOpts, async (reque
     const shop = (0, lib_1.sanitizePublicShop)(posSnap.val());
     if (!shop)
         throw new https_1.HttpsError("not-found", "Barbería no encontrada.");
-    const [servicesSnap, barbersSnap, apptsSnap] = await Promise.all([
+    const [servicesSnap, barbersSnap, busySlots] = await Promise.all([
         (0, lib_1.db)().ref(`${lib_1.ROOT}/services`).orderByChild("posId").equalTo(posId).get(),
         (0, lib_1.db)().ref(`${lib_1.ROOT}/barbers`).orderByChild("posId").equalTo(posId).get(),
-        (0, lib_1.db)().ref(`${lib_1.ROOT}/appointments`).orderByChild("posId").equalTo(posId).get(),
+        (0, booking_1.loadBusySlotsForPos)(posId),
     ]);
     const services = Object.values((servicesSnap.val() || {})).map((s) => {
         var _a;
@@ -746,17 +757,8 @@ exports.getPublicBookingCatalog = (0, https_1.onCall)(callableOpts, async (reque
     const barbers = Object.values((barbersSnap.val() || {}))
         .map((b) => (0, lib_1.sanitizePublicBarber)(b, posId))
         .filter((b) => b != null);
-    const busySlots = Object.values((apptsSnap.val() || {}))
-        .filter((a) => a.estado !== "cancelada")
-        .map((a) => ({
-        barberoId: a.barberoId,
-        fecha: a.fecha,
-        hora: a.hora,
-        duracionTotal: a.duracionTotal || 30,
-        estado: a.estado,
-    }));
     const galleries = {};
-    for (const b of barbers) {
+    await Promise.all(barbers.map(async (b) => {
         const g = await (0, lib_1.db)().ref(`${lib_1.ROOT}/barberGallery/${b.id}`).get();
         if (g.exists()) {
             galleries[String(b.id)] = Object.values(g.val()).map((photo) => {
@@ -764,79 +766,31 @@ exports.getPublicBookingCatalog = (0, https_1.onCall)(callableOpts, async (reque
                 return { id: p.id, barberId: p.barberId, imageUrl: p.imageUrl, caption: p.caption, createdAt: p.createdAt };
             });
         }
-    }
+    }));
     return { shop, services, barbers, busySlots, galleries };
 });
 exports.createGuestAppointment = (0, https_1.onCall)(callableOpts, async (request) => {
-    var _a, _b, _c;
     (0, lib_1.assertAppCheck)(request);
     await (0, lib_1.consumeRateLimit)("guest-book", (0, lib_1.ipHash)(request), 10, 60 * 60 * 1000);
     const data = request.data;
-    const posId = Number(data === null || data === void 0 ? void 0 : data.posId);
-    const barberoId = Number(data === null || data === void 0 ? void 0 : data.barberoId);
-    const fecha = String((data === null || data === void 0 ? void 0 : data.fecha) || "");
-    const hora = String((data === null || data === void 0 ? void 0 : data.hora) || "");
-    const nombre = String((data === null || data === void 0 ? void 0 : data.nombre) || "").trim();
-    const telefono = String((data === null || data === void 0 ? void 0 : data.telefono) || "").trim();
-    if (!Number.isFinite(posId) || !Number.isFinite(barberoId) || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !/^\d{2}:\d{2}$/.test(hora) || !nombre || (0, lib_1.digitsOnly)(telefono).length < lib_1.MIN_PHONE_DIGITS) {
-        throw new https_1.HttpsError("invalid-argument", "Datos de reserva inválidos.");
-    }
-    const posSnap = await (0, lib_1.db)().ref(`${lib_1.ROOT}/pointsOfSale/${posId}`).get();
-    if (!posSnap.exists() || ((_a = posSnap.val()) === null || _a === void 0 ? void 0 : _a.isActive) === false)
-        throw new https_1.HttpsError("not-found", "Barbería no encontrada.");
-    const barberSnap = await (0, lib_1.db)().ref(`${lib_1.ROOT}/barbers/${barberoId}`).get();
-    if (!barberSnap.exists() || Number((_b = barberSnap.val()) === null || _b === void 0 ? void 0 : _b.posId) !== posId || ((_c = barberSnap.val()) === null || _c === void 0 ? void 0 : _c.active) === false) {
-        throw new https_1.HttpsError("failed-precondition", "Barbero no disponible.");
-    }
-    const apptsSnap = await (0, lib_1.db)().ref(`${lib_1.ROOT}/appointments`).orderByChild("posId").equalTo(posId).get();
-    const conflict = Object.values((apptsSnap.val() || {})).some((a) => a.barberoId === barberoId && a.fecha === fecha && a.hora === hora && a.estado !== "cancelada");
-    if (conflict)
-        throw new https_1.HttpsError("already-exists", "Ese horario ya no está disponible.");
-    let clientId = null;
-    const clientsSnap = await (0, lib_1.db)().ref(`${lib_1.ROOT}/clients`).orderByChild("posId").equalTo(posId).get();
-    const want = (0, lib_1.digitsOnly)(telefono);
-    if (clientsSnap.exists()) {
-        for (const c of Object.values(clientsSnap.val())) {
-            if ((0, lib_1.digitsOnly)(String(c.telefono || "")) === want) {
-                clientId = Number(c.id);
-                break;
-            }
-        }
-    }
-    if (clientId == null) {
-        clientId = (0, lib_1.generateUniqueId)();
-        await (0, lib_1.db)().ref(`${lib_1.ROOT}/clients/${clientId}`).set({
-            id: clientId,
-            posId,
-            nombre,
-            telefono,
-            email: "",
-            ultimaVisita: "N/A",
-            notas: "Reserva sin cuenta (invitado)",
-            fechaRegistro: new Date().toISOString().split("T")[0],
-            puntos: 0,
-            status: "active",
-        });
-    }
-    const servicios = Array.isArray(data === null || data === void 0 ? void 0 : data.servicios) ? data.servicios.slice(0, 10) : [];
-    const duracionTotal = servicios.reduce((acc, s) => acc + Number(s.duration || 0), 0) || 30;
-    const total = servicios.reduce((acc, s) => acc + Number(s.price || 0), 0);
-    const id = (0, lib_1.generateUniqueId)();
-    await (0, lib_1.db)().ref(`${lib_1.ROOT}/appointments/${id}`).set({
-        id,
-        posId,
-        clienteId: clientId,
-        barberoId,
-        fecha,
-        hora,
-        servicios,
-        notas: "",
-        duracionTotal,
-        total,
-        estado: "confirmada",
-        fechaCreacion: new Date().toISOString(),
+    const parsed = (0, booking_1.assertBookingPayload)(data || {});
+    await (0, booking_1.assertPosAndBarber)(parsed.posId, parsed.barberoId);
+    const servicios = await (0, booking_1.resolveServicesFromIds)(parsed.posId, data === null || data === void 0 ? void 0 : data.servicios);
+    const clientId = await (0, booking_1.ensureClientForBooking)({
+        posId: parsed.posId,
+        nombre: parsed.nombre,
+        telefono: parsed.telefono,
+        notas: "Reserva sin cuenta (invitado)",
     });
-    return { success: true, appointmentId: id };
+    const appointmentId = await (0, booking_1.createPendingAppointment)({
+        posId: parsed.posId,
+        barberoId: parsed.barberoId,
+        fecha: parsed.fecha,
+        hora: parsed.hora,
+        clienteId: clientId,
+        servicios,
+    });
+    return { success: true, appointmentId };
 });
 exports.stripeWebhook = (0, https_1.onRequest)({ region: "us-central1" }, async (req, res) => {
     var _a, _b, _c, _d;
@@ -931,4 +885,16 @@ exports.createPlanCheckout = (0, https_1.onCall)(callableOpts, async (request) =
         throw new https_1.HttpsError("internal", "No se pudo crear el checkout.");
     return { url: session.url };
 });
+var clientOps_1 = require("./clientOps");
+Object.defineProperty(exports, "updateMyClientProfile", { enumerable: true, get: function () { return clientOps_1.updateMyClientProfile; } });
+Object.defineProperty(exports, "createClientAppointment", { enumerable: true, get: function () { return clientOps_1.createClientAppointment; } });
+Object.defineProperty(exports, "cancelMyAppointment", { enumerable: true, get: function () { return clientOps_1.cancelMyAppointment; } });
+Object.defineProperty(exports, "getShopCatalog", { enumerable: true, get: function () { return clientOps_1.getShopCatalog; } });
+Object.defineProperty(exports, "createClientShopOrder", { enumerable: true, get: function () { return clientOps_1.createClientShopOrder; } });
+Object.defineProperty(exports, "getPlatformStats", { enumerable: true, get: function () { return clientOps_1.getPlatformStats; } });
+Object.defineProperty(exports, "listDirectoryUsers", { enumerable: true, get: function () { return clientOps_1.listDirectoryUsers; } });
+Object.defineProperty(exports, "onSaleCreated", { enumerable: true, get: function () { return clientOps_1.onSaleCreated; } });
+Object.defineProperty(exports, "onAppointmentCreated", { enumerable: true, get: function () { return clientOps_1.onAppointmentCreated; } });
+Object.defineProperty(exports, "onUserCreated", { enumerable: true, get: function () { return clientOps_1.onUserCreated; } });
+Object.defineProperty(exports, "onPosCreated", { enumerable: true, get: function () { return clientOps_1.onPosCreated; } });
 //# sourceMappingURL=index.js.map

@@ -197,6 +197,7 @@
     "slotOverlap": "Esse horário não está mais disponível (conflita com outra consulta). Escolha outro.",
     "bookingFailedWithMsg": "Não foi possível agendar. {message}",
     "successConfirmed": "Sua consulta em {shop} para {date} às {time} está confirmada. Entraremos em contato no {phone} se necessário.",
+    "successPending": "Sua consulta em {shop} para {date} às {time} ficou pendente de confirmação. Entraremos em contato no {phone} se necessário.",
     "backToShops": "Voltar às barbearias",
     "appointmentBooked": "Consulta agendada"
   },
@@ -522,6 +523,12 @@
     "sendWhatsApp": "Enviar WhatsApp",
     "completeAndBill": "Concluir e ir para faturamento",
     "cancelAppointment": "Cancelar",
+    "tabBook": "Reservar",
+    "tabMine": "Minhas consultas",
+    "noMyAppointments": "Você não tem consultas próximas.",
+    "cancelledSuccess": "Consulta cancelada.",
+    "cancelFailed": "Não foi possível cancelar a consulta.",
+    "cancelling": "Cancelando...",
     "waConfirmMessage": "Olá {name}, escrevemos do BarberShow para confirmar sua consulta em {date} às {time}.",
     "worksOf": "Trabalhos de {name}",
     "status": {

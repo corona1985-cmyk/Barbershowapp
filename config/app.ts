@@ -11,11 +11,20 @@ export const DEFAULT_PUBLIC_APP_URL = 'https://barbershow.net';
 export const APP_STORE_URL = 'https://apps.apple.com/us/app/barbershow/id6766656155';
 export const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.barbershow.app';
 
+function envFlag(name: string, defaultDev: boolean, defaultProd: boolean): boolean {
+  const raw = import.meta.env[name] as string | undefined;
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return import.meta.env.DEV ? defaultDev : defaultProd;
+}
+
 /**
- * Modo promocional global: evita pantallas de suscripción vencida y bloqueos por plan.
- * Desactivado: Plan Barbería se cobra vía App Store / Google Play.
+ * Modo promocional global. En desarrollo vale true salvo VITE_GLOBAL_FREE_MODE=false.
+ * En build de tienda/producción queda false salvo VITE_GLOBAL_FREE_MODE=true.
  */
-export const GLOBAL_FREE_MODE = true;
+export const GLOBAL_FREE_MODE = envFlag('VITE_GLOBAL_FREE_MODE', true, false);
+
+export const MIN_PASSWORD_LENGTH = 10;
 
 /** Permite autoregistro de barberías en app móvil nativa (con IAP cuando aplique). */
 export const ALLOW_NATIVE_BARBER_SIGNUP = true;

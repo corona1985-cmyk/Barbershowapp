@@ -5,6 +5,8 @@ import { ViewState } from '../types';
 import { Calendar, Clock, User, Scissors, Check, X, Trash2, Printer, MessageCircle, MapPin, Loader2, ImageIcon, RefreshCw } from 'lucide-react';
 import { handlePrint } from '../utils/print';
 import { useTranslation } from '../i18n';
+import { getPublicBookingCatalog } from '../services/firebase';
+import { showToast } from '../components/ToastHost';
 import PublicProfileInfo from '../components/PublicProfileInfo';
 
 interface AppointmentsProps {
@@ -63,6 +65,9 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     const [resolvedClients, setResolvedClients] = useState<Record<number, Client | null>>({});
     /** Orden de la lista: por hora o por tipo/estado (confirmadas siempre primero). */
     const [sortBy, setSortBy] = useState<'hora' | 'estado'>('hora');
+    const [monthlyCount, setMonthlyCount] = useState(0);
+    const [clientTab, setClientTab] = useState<'book' | 'mine'>('book');
+    const [cancellingId, setCancellingId] = useState<number | null>(null);
 
     const loadData = React.useCallback(async () => {
         setLoadError(false);
@@ -70,35 +75,47 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         try {
             const role = DataService.getCurrentUserRole();
             setUserRole(role);
+            const posId = DataService.getActivePosId();
+            const catalogPromise = role === 'cliente' && posId != null
+              ? getPublicBookingCatalog(posId).catch(() => null)
+              : Promise.resolve(null);
             const clientsLoader = role === 'cliente'
               ? Promise.resolve([] as Client[])
               : role === 'barbero'
                 ? DataService.getClientsWithActivity()
                 : DataService.getClients();
             const barbersLoader = role === 'cliente' ? Promise.resolve([] as Barber[]) : DataService.getBarbers();
-            const servicesLoader = role === 'cliente' ? DataService.getServices().catch(() => []) : DataService.getServices();
+            const servicesLoader = role === 'cliente' ? Promise.resolve([] as Service[]) : DataService.getServices();
+            const apptsLoader = role === 'cliente'
+              ? DataService.getAppointments()
+              : DataService.getAppointmentsByDate(selectedDate);
             const loadPromise = Promise.all([
-                DataService.getAppointments(),
+                apptsLoader,
                 barbersLoader,
                 clientsLoader,
                 servicesLoader,
-                DataService.getPointsOfSale(),
+                role === 'cliente' ? Promise.resolve([] as PointOfSale[]) : DataService.getPointsOfSale(),
+                catalogPromise,
             ]);
             const timeoutPromise = new Promise<never>((_, reject) =>
                 setTimeout(() => reject(new Error(t('common.timeoutConnection'))), LOAD_TIMEOUT_MS)
             );
-            const [appts, barbersList, clientsList, servicesList, posList] = await Promise.race([loadPromise, timeoutPromise]);
+            const [appts, barbersList, clientsList, servicesList, posList, catalog] = await Promise.race([loadPromise, timeoutPromise]);
             const apptsSafe = Array.isArray(appts) ? appts : [];
-            const barbersSafe = Array.isArray(barbersList) ? barbersList : [];
+            const barbersSafe = role === 'cliente' ? (catalog?.barbers || []) : (Array.isArray(barbersList) ? barbersList : []);
             const clientsSafe = Array.isArray(clientsList) ? clientsList : [];
-            const servicesSafe = Array.isArray(servicesList) ? servicesList : [];
+            const servicesSafe = role === 'cliente' ? (catalog?.services || []) : (Array.isArray(servicesList) ? servicesList : []);
             const posListSafe = Array.isArray(posList) ? posList : [];
             setAppointments(apptsSafe);
             setBarbers(barbersSafe);
             setClients(clientsSafe);
             setServices(servicesSafe);
+            if (role === 'cliente' && catalog?.galleries) {
+                const first = barbersSafe.find((b) => b.active) || barbersSafe[0];
+                setClientBarberGallery(first ? (catalog.galleries[String(first.id)] || []) : []);
+            }
             const activePosId = DataService.getActivePosId();
-            const pos = posListSafe.find(p => p.id === activePosId);
+            const pos = catalog?.shop || posListSafe.find(p => p.id === activePosId) || null;
             setCurrentBarberiaName(pos ? pos.name : '');
             setCurrentPos(pos || null);
             const activeBarbers = barbersSafe.filter(b => b.active);
@@ -120,13 +137,18 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             } else {
                 setResolvedClients({});
             }
+            if (role !== 'cliente' && posId != null) {
+                setMonthlyCount(await DataService.getAppointmentsCountCurrentMonth(posId));
+            } else {
+                setMonthlyCount(0);
+            }
         } catch (err) {
             console.error('Error cargando citas:', err);
             setLoadError(true);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [selectedDate]);
 
     useEffect(() => {
         loadData();
@@ -160,14 +182,6 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
 
     const role = (userRole || '').toLowerCase();
     const isClientView = role === 'cliente';
-    useEffect(() => {
-        if (isClientView) DataService.getBarbers().then(setBarbers);
-    }, [isClientView, selectedDate]);
-    useEffect(() => {
-        if (isClientView && selectedBarberForView) {
-            DataService.getBarberGallery(selectedBarberForView).then(setClientBarberGallery).catch(() => setClientBarberGallery([]));
-        } else setClientBarberGallery([]);
-    }, [isClientView, selectedBarberForView]);
 
     const filteredAppointments = appointments.filter(a => a.fecha === selectedDate);
     const sortedAppointments = useMemo(() => {
@@ -200,11 +214,6 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     const isPlanSolo = accountTier === 'solo';
     const isPlanGratuito = accountTier === 'gratuito';
     const FREE_PLAN_MONTHLY_LIMIT = 100;
-    const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-`;
-    const monthlyCount = useMemo(
-        () => appointments.filter((a) => a.fecha.startsWith(currentYearMonth) && a.estado !== 'cancelada').length,
-        [appointments, currentYearMonth]
-    );
     const atFreePlanLimit = isPlanGratuito && monthlyCount >= FREE_PLAN_MONTHLY_LIMIT;
     const defaultBarberId = barbers.filter(b => b.active).length > 0 ? barbers.filter(b => b.active)[0].id : barbers[0]?.id;
     /** Solo clientes activos para agendar (no suspendidos). */
@@ -231,51 +240,61 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
 
     const handleSave = async () => {
         if (atFreePlanLimit) {
-            alert(freePlanLimitAlert());
+            showToast(freePlanLimitAlert());
             return;
         }
         const barberoId = isPlanSolo ? (newApt.barberoId ?? defaultBarberId) : newApt.barberoId;
-        if (!barberoId) { alert(t('appointments.selectBarberAlert')); return; }
-        if (!newApt.hora) { alert(t('appointments.selectTimeAlert')); return; }
-        if (!isPlanGratuito && !newApt.servicios?.length) { alert(t('appointments.selectServiceAlert')); return; }
+        if (!barberoId) { showToast(t('appointments.selectBarberAlert')); return; }
+        if (!newApt.hora) { showToast(t('appointments.selectTimeAlert')); return; }
+        if (!isPlanGratuito && !newApt.servicios?.length) { showToast(t('appointments.selectServiceAlert')); return; }
         if (newApt.fecha && isDateTimeInPast(newApt.fecha, newApt.hora)) {
-            alert(t('appointments.pastDateError'));
+            showToast(t('appointments.pastDateError'));
             return;
         }
         if (saving) return;
         setSaving(true);
-        let finalClientId = newApt.clienteId;
+        const posId = DataService.getActivePosId();
+        if (posId == null) {
+            setSaving(false);
+            showToast(t('appointments.noActivePos'), 'error');
+            return;
+        }
         if (userRole === 'cliente') {
             const currUser = DataService.getCurrentUser();
-            const clientRecord = clients.find(c => c.nombre === currUser?.name);
-            if (clientRecord) {
-                finalClientId = clientRecord.id;
-            } else if ((clientPhoneForBooking || '').trim()) {
-                try {                    const clientPromise = DataService.addClientOrGetExisting({
-                        nombre: (currUser?.name || 'Cliente').trim(),
-                        telefono: clientPhoneForBooking.trim(),
-                        email: '',
-                        notas: 'Registrado al agendar cita (cliente)',
-                        fechaRegistro: new Date().toISOString().split('T')[0],
-                        ultimaVisita: 'N/A',
-                        puntos: 0,
-                        status: 'active',
-                    });
-                    const timeoutPromise = new Promise<never>((_, reject) =>
-                        setTimeout(() => reject(new Error(t('appointments.clientSaveTimeout'))), SAVE_TIMEOUT_MS)
-                    );
-                    const client = await Promise.race([clientPromise, timeoutPromise]);                    finalClientId = client.id;
-                    if (!clients.some(c => c.id === client.id)) setClients(prev => [...prev, client]);
-                } catch (err) {                    setSaving(false);
-                    const msg = err instanceof Error ? err.message : String(err);
-                    alert(msg);
-                    return;
-                }
+            const phone = (clientPhoneForBooking || '').trim();
+            if (!phone) {
+                setSaving(false);
+                showToast(t('appointments.enterPhoneToConfirm'), 'error');
+                return;
             }
-        } else if (isNewClient) {
+            try {
+                await DataService.bookClientAppointment({
+                    posId,
+                    barberoId,
+                    fecha: newApt.fecha!,
+                    hora: newApt.hora!,
+                    nombre: (currUser?.name || 'Cliente').trim(),
+                    telefono: phone,
+                    servicios: (newApt.servicios ?? []).map((s) => ({ id: s.id })),
+                });
+                setShowModal(false);
+                setClientPhoneForBooking('');
+                setClientTab('mine');
+                showToast(t('appointments.savedSuccess'), 'success');
+                await loadData();
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                showToast(msg, 'error');
+            } finally {
+                setSaving(false);
+            }
+            return;
+        }
+        let finalClientId = newApt.clienteId;
+        if (isNewClient) {
             if (!newClientName.trim() || !newClientPhone.trim()) {
                 setSaving(false);
-                alert(t('appointments.enterNewClient'));
+                showToast(t('appointments.enterNewClient'));
                 return;
             }
             try {                const clientPromise = DataService.addClientOrGetExisting({
@@ -295,23 +314,23 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                 if (!clients.some(c => c.id === client.id)) setClients([...clients, client]);
             } catch (err) {                setSaving(false);
                 const msg = err instanceof Error ? err.message : String(err);
-                alert(msg);
+                showToast(msg);
                 return;
             }
         }
         if (!finalClientId) {
             setSaving(false);
             if (userRole === 'cliente') {
-                alert(t('appointments.enterPhoneToConfirm'));
+                showToast(t('appointments.enterPhoneToConfirm'));
             } else {
-                alert(t('appointments.selectOrAddClient'));
+                showToast(t('appointments.selectOrAddClient'));
             }
             return;
         }
         const clientRecord = clients.find(c => c.id === finalClientId);
         if (clientRecord && !String(clientRecord.telefono ?? '').trim()) {
             setSaving(false);
-            alert(t('appointments.clientNeedsPhone'));
+            showToast(t('appointments.clientNeedsPhone'));
             return;
         }
         const serviciosList = newApt.servicios ?? [];
@@ -328,13 +347,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         });
         if (overlaps) {
             setSaving(false);
-            alert(t('appointments.overlapError', { duration }));
-            return;
-        }
-        const posId = DataService.getActivePosId();
-        if (posId == null) {
-            setSaving(false);
-            alert(t('appointments.noActivePos'));
+            showToast(t('appointments.overlapError', { duration }));
             return;
         }
         const aptData: Omit<Appointment, 'id'> = {
@@ -363,13 +376,28 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
             setNewClientName('');
             setNewClientPhone('');
             setClientPhoneForBooking('');
-            alert(t('appointments.savedSuccess'));
+            showToast(t('appointments.savedSuccess'));
             await loadData();
         } catch (err) {            console.error('Error al agendar cita:', err);
             const msg = err instanceof Error ? err.message : String(err);
-            alert(msg.includes('permiso') || msg.includes('conexión') || msg.includes('tardó demasiado') ? msg : t('appointments.saveFailed', { message: msg }));
+            showToast(msg.includes('permiso') || msg.includes('conexión') || msg.includes('tardó demasiado') ? msg : t('appointments.saveFailed', { message: msg }));
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleClientCancel = async (id: number) => {
+        if (!confirm(t('appointments.cancelConfirm'))) return;
+        setCancellingId(id);
+        try {
+            await DataService.cancelClientAppointment(id);
+            showToast(t('appointments.cancelledSuccess'), 'success');
+            await loadData();
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : t('appointments.cancelFailed');
+            showToast(msg, 'error');
+        } finally {
+            setCancellingId(null);
         }
     };
 
@@ -379,8 +407,13 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
         if (!apt) return;
         const updated = { ...apt, estado: status };
         setAppointments(prev => prev.map(a => a.id === id ? updated : a));
-        await DataService.updateAppointment(updated);
-        await loadData();
+        try {
+            await DataService.updateAppointment(updated);
+            await loadData();
+        } catch (err) {
+            showToast(err instanceof Error ? err.message : t('appointments.saveFailed', { message: '' }), 'error');
+            await loadData();
+        }
     };
 
     const handleCompleteAndGoToBilling = async (apt: Appointment) => {
@@ -438,7 +471,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     const handleSearchByPhone = async () => {
         const trimmed = searchPhone.trim();
         if (trimmed.length < 6) {
-            alert(t('appointments.searchMinDigits'));
+            showToast(t('appointments.searchMinDigits'));
             return;
         }
         setSearchAttempted(true);
@@ -544,7 +577,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     const handleSlotClick = (time: string, taken: boolean, past?: boolean) => {
         if (taken || past) return;
         if (atFreePlanLimit) {
-            alert(freePlanLimitAlert());
+            showToast(freePlanLimitAlert());
             return;
         }
         const current = newApt.servicios || [];
@@ -588,6 +621,9 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
     if (isClientView) {
         const slots = generateTimeSlots(selectedDate, selectedBarberForView);
         const currentBarber = barbers.find(b => b.id === selectedBarberForView);
+        const myUpcoming = appointments
+            .filter((a) => a.estado === 'pendiente' || a.estado === 'confirmada')
+            .sort((a, b) => `${a.fecha}${a.hora}`.localeCompare(`${b.fecha}${b.hora}`));
         
         return (
             <div className="space-y-6">
@@ -599,7 +635,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                             <span>{currentBarberiaName}</span>
                         </div>
                     )}
-                    {currentBarber && (
+                    {currentBarber && clientTab === 'book' && (
                         <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 text-slate-800 px-4 py-3 rounded-xl">
                             <User size={20} className="text-slate-500 flex-shrink-0" />
                             <span className="font-semibold">{t('appointments.barberLabel')}</span>
@@ -607,6 +643,81 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                         </div>
                     )}
                 </div>
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
+                    <button
+                        type="button"
+                        onClick={() => setClientTab('book')}
+                        className={`flex-1 sm:flex-none px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-semibold transition-colors ${
+                            clientTab === 'book' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                    >
+                        {t('appointments.tabBook')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setClientTab('mine')}
+                        className={`flex-1 sm:flex-none px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-semibold transition-colors ${
+                            clientTab === 'mine' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                    >
+                        {t('appointments.tabMine')}
+                        {myUpcoming.length > 0 && (
+                            <span className="ml-2 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-[#ffd427] text-slate-900 text-xs">
+                                {myUpcoming.length}
+                            </span>
+                        )}
+                    </button>
+                </div>
+                {clientTab === 'mine' ? (
+                    <div className="space-y-3">
+                        {myUpcoming.length === 0 ? (
+                            <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-500">
+                                <Calendar className="mx-auto mb-2 text-slate-300" size={32} />
+                                <p className="font-medium">{t('appointments.noMyAppointments')}</p>
+                            </div>
+                        ) : (
+                            myUpcoming.map((apt) => {
+                                const barberName = barbers.find((b) => b.id === apt.barberoId)?.name || t('common.barber');
+                                const canCancel = apt.estado === 'pendiente' || apt.estado === 'confirmada';
+                                return (
+                                    <div key={apt.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                                        <div className="flex flex-wrap items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="font-bold text-slate-800">
+                                                    {formatDate(apt.fecha + 'T12:00:00', { weekday: 'short', day: 'numeric', month: 'short' })}
+                                                    {' · '}
+                                                    {apt.hora}
+                                                </p>
+                                                <p className="text-sm text-slate-600 mt-1">{barberName}</p>
+                                                {(apt.servicios?.length ?? 0) > 0 && (
+                                                    <p className="text-sm text-slate-500 mt-1">
+                                                        {apt.servicios.map((s) => s.name).filter(Boolean).join(', ')}
+                                                    </p>
+                                                )}
+                                                <span className={`inline-block mt-2 text-xs font-semibold px-2 py-1 rounded-full ${
+                                                    apt.estado === 'confirmada' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'
+                                                }`}>
+                                                    {t(`appointments.status.${apt.estado}`)}
+                                                </span>
+                                            </div>
+                                            {canCancel && (
+                                                <button
+                                                    type="button"
+                                                    disabled={cancellingId === apt.id}
+                                                    onClick={() => handleClientCancel(apt.id)}
+                                                    className="min-h-[44px] px-4 py-2 rounded-lg border border-red-200 text-red-700 text-sm font-semibold hover:bg-red-50 disabled:opacity-60"
+                                                >
+                                                    {cancellingId === apt.id ? t('appointments.cancelling') : t('appointments.cancelAppointment')}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                ) : (
+                <>
                 <PublicProfileInfo
                     title={t('profile.aboutShop')}
                     bio={currentPos?.about}
@@ -742,6 +853,8 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
                         </div>
                     )}
                 </div>
+                </>
+                )}
 
                 {/* Modal Reuse */}
                 {showModal && (

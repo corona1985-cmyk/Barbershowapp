@@ -197,6 +197,7 @@
     "slotOverlap": "That time is no longer available (overlaps with another appointment). Choose another.",
     "bookingFailedWithMsg": "Could not book. {message}",
     "successConfirmed": "Your appointment at {shop} on {date} at {time} is confirmed. We will contact you at {phone} if needed.",
+    "successPending": "Your appointment at {shop} on {date} at {time} is pending confirmation. We will contact you at {phone} if needed.",
     "backToShops": "Back to barbershops",
     "appointmentBooked": "Appointment booked"
   },
@@ -522,6 +523,12 @@
     "sendWhatsApp": "Send WhatsApp",
     "completeAndBill": "Complete and go to billing",
     "cancelAppointment": "Cancel",
+    "tabBook": "Book",
+    "tabMine": "My appointments",
+    "noMyAppointments": "You have no upcoming appointments.",
+    "cancelledSuccess": "Appointment cancelled.",
+    "cancelFailed": "Could not cancel the appointment.",
+    "cancelling": "Cancelling...",
     "waConfirmMessage": "Hi {name}, we're writing from BarberShow to confirm your appointment on {date} at {time}.",
     "worksOf": "Work by {name}",
     "status": {

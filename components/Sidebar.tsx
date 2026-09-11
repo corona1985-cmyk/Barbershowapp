@@ -20,7 +20,7 @@ interface SidebarProps {
 type NavGroup = 'principal' | 'operaciones' | 'administracion';
 
 const HIDDEN_IN_TIER_SOLO: ViewState[] = ['calendar', 'inventory', 'finance', 'user_admin'];
-const SHOWN_IN_TIER_GRATUITO: ViewState[] = ['dashboard', 'sales', 'client_profile', 'appointments', 'settings', 'client_discovery', 'qr_scanner'];
+const SHOWN_IN_TIER_GRATUITO: ViewState[] = ['dashboard', 'sales', 'client_profile', 'appointments', 'settings', 'client_discovery', 'qr_scanner', 'shop'];
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, userRole, isOpen, onClose, clientHasSelectedBarberia = true, accountTier = 'barberia', preferredPosId = null, currentPosId = null, onRemoveFavorite }) => {
     const { t } = useTranslation();

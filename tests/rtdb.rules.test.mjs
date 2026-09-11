@@ -109,4 +109,51 @@ describe('RTDB rules', () => {
       id: 99, posId: 9, total: 100, estado: 'completada',
     }));
   });
+
+  it('cliente no lee ventas ni citas ajenas aunque el token tenga posId', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('barbershow/sales/70').set({
+        id: 70, posId: 5, total: 40, estado: 'completada',
+      });
+      await ctx.database().ref('barbershow/appointments/71').set({
+        id: 71, posId: 5, clienteId: 999, barberoId: 1, fecha: '2026-09-11', hora: '10:00', estado: 'pendiente',
+      });
+      await ctx.database().ref('barbershow/clients/80').set({
+        id: 80, posId: 5, nombre: 'Ana', status: 'active', puntos: 10, notas: 'vip', telefono: '8091111111',
+      });
+    });
+    const client = authed('c1', { username: 'carla', role: 'cliente', posId: 5, clientId: 80 });
+    await assertFails(client.ref('barbershow/sales/70').get());
+    await assertFails(client.ref('barbershow/appointments/71').get());
+    await assertSucceeds(client.ref('barbershow/clients/80').get());
+    await assertFails(client.ref('barbershow/clients/80').set({
+      id: 80, posId: 5, nombre: 'Ana', status: 'active', puntos: 999, notas: 'hack',
+    }));
+  });
+
+  it('cliente puede cancelar su cita pendiente', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('barbershow/appointments/72').set({
+        id: 72, posId: 5, clienteId: 80, barberoId: 1, fecha: '2026-09-12', hora: '11:00', estado: 'pendiente',
+      });
+    });
+    const client = authed('c1', { username: 'carla', role: 'cliente', posId: 5, clientId: 80 });
+    await assertSucceeds(client.ref('barbershow/appointments/72').update({
+      id: 72, posId: 5, clienteId: 80, barberoId: 1, fecha: '2026-09-12', hora: '11:00', estado: 'cancelada',
+    }));
+  });
+
+  it('cliente lee su propia cita y no productos de la sede', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('barbershow/appointments/73').set({
+        id: 73, posId: 5, clienteId: 80, barberoId: 1, fecha: '2026-09-12', hora: '12:00', estado: 'pendiente',
+      });
+      await ctx.database().ref('barbershow/products/1').set({
+        id: 1, posId: 5, producto: 'Gel', precioVenta: 10,
+      });
+    });
+    const client = authed('c1', { username: 'carla', role: 'cliente', posId: 5, clientId: 80 });
+    await assertSucceeds(client.ref('barbershow/appointments/73').get());
+    await assertFails(client.ref('barbershow/products/1').get());
+  });
 });

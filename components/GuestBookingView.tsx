@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Appointment, Barber, BarberGalleryPhoto, Service, PointOfSale } from '../types';
 import { MapPin, ArrowLeft, CheckCircle, ImageIcon } from 'lucide-react';
 import { useTranslation } from '../i18n';
@@ -32,12 +32,14 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
     const [done, setDone] = useState(false);
     const [guestBarberGallery, setGuestBarberGallery] = useState<BarberGalleryPhoto[]>([]);
     const [dataLoading, setDataLoading] = useState(true);
+    const [catalogError, setCatalogError] = useState(false);
 
     const [galleries, setGalleries] = useState<Record<string, BarberGalleryPhoto[]>>({});
     const [shop, setShop] = useState<PointOfSale | null>(null);
 
-    useEffect(() => {
+    const loadCatalog = useCallback(() => {
         setDataLoading(true);
+        setCatalogError(false);
         setError('');
         getPublicBookingCatalog(posId)
             .then((catalog) => {
@@ -62,9 +64,16 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                 setShop(catalog.shop || null);
                 if (active.length > 0) setSelectedBarberId(active[0].id);
             })
-            .catch(() => setError(t('errors.loadDataFailed')))
+            .catch(() => {
+                setCatalogError(true);
+                setError(t('errors.loadDataFailed'));
+            })
             .finally(() => setDataLoading(false));
-    }, [posId]);
+    }, [posId, t]);
+
+    useEffect(() => {
+        loadCatalog();
+    }, [loadCatalog]);
 
     const activeBarbers = useMemo(() => barbers.filter((b) => b.active), [barbers]);
     const defaultBarberId = activeBarbers.length > 0 ? activeBarbers[0].id : 0;
@@ -216,7 +225,7 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                         </div>
                         <h2 className="text-xl font-bold text-slate-800 mb-2">{t('guestBooking.appointmentBooked')}</h2>
                         <p className="text-slate-600 mb-6">
-                            {t('guestBooking.successConfirmed', { shop: posName, date: selectedDate, time: selectedTime, phone: telefono })}
+                            {t('guestBooking.successPending', { shop: posName, date: selectedDate, time: selectedTime, phone: telefono })}
                         </p>
                         <button
                             type="button"
@@ -246,6 +255,33 @@ const GuestBookingView: React.FC<GuestBookingViewProps> = ({ posId, posName, onB
                 <main className="flex-1 px-4 flex flex-col items-center justify-center safe-area-bottom">
                     <div className="w-14 h-14 border-4 border-[#ffd427] border-t-transparent rounded-full animate-spin mb-4" />
                     <p className="text-slate-600 font-medium">{t('guestBooking.loadingShop')}</p>
+                </main>
+            </div>
+        );
+    }
+
+    if (catalogError) {
+        return (
+            <div className="min-h-screen min-h-[100dvh] bg-slate-100 flex flex-col">
+                <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-3 safe-area-top shadow-sm">
+                    <button
+                        type="button"
+                        onClick={onBack}
+                        className="flex items-center gap-1.5 min-h-[44px] text-slate-600 hover:text-slate-900 text-sm rounded-xl hover:bg-slate-100 px-3 -ml-1 transition-colors"
+                    >
+                        <ArrowLeft size={18} /> {t('common.back')}
+                    </button>
+                </header>
+                <main className="flex-1 px-4 flex flex-col items-center justify-center text-center safe-area-bottom">
+                    <p className="font-medium text-slate-700 mb-2">{t('errors.loadDataFailed')}</p>
+                    <p className="text-sm text-slate-500 mb-6">{t('common.connectionHintInternet')}</p>
+                    <button
+                        type="button"
+                        onClick={loadCatalog}
+                        className="bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 font-semibold px-6 py-3 rounded-xl min-h-[44px]"
+                    >
+                        {t('common.retry')}
+                    </button>
                 </main>
             </div>
         );

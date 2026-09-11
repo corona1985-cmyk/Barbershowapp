@@ -22,7 +22,7 @@ const BarberNotificationBell: React.FC<BarberNotificationBellProps> = ({ isPlanP
     const [notifiedIds, setNotifiedIds] = useState<Set<number>>(new Set());
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    const canSee = isPlanPro && ['barbero', 'admin', 'superadmin'].includes(userRole);
+    const canSee = isPlanPro && ['barbero', 'admin', 'dueno', 'superadmin'].includes(userRole);
     const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => typeof Notification !== 'undefined' ? Notification.permission : 'denied');
 
     const requestNotificationPermission = () => {
@@ -56,22 +56,27 @@ const BarberNotificationBell: React.FC<BarberNotificationBellProps> = ({ isPlanP
 
     const badgeCount = approaching.length;
 
-    const loadData = async () => {
+    const loadAppointments = async () => {
         if (!canSee) return;
-        const [appts, clientsList, barbersList] = await Promise.all([
-            DataService.getAppointments(),
+        const appts = await DataService.getAppointmentsByDate(todayStr);
+        const today = appts.filter((a) => a.fecha === todayStr && a.estado !== 'cancelada');
+        setAppointments(today);
+    };
+
+    const loadStatic = async () => {
+        if (!canSee) return;
+        const [clientsList, barbersList] = await Promise.all([
             DataService.getClients(),
             DataService.getBarbers(),
         ]);
-        const today = appts.filter((a) => a.fecha === todayStr && a.estado !== 'cancelada');
-        setAppointments(today);
         setClients(clientsList);
         setBarbers(barbersList);
     };
 
     useEffect(() => {
-        loadData();
-        const interval = setInterval(loadData, POLL_INTERVAL_MS);
+        loadStatic();
+        loadAppointments();
+        const interval = setInterval(loadAppointments, POLL_INTERVAL_MS);
         return () => clearInterval(interval);
     }, [canSee, todayStr]);
 

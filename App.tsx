@@ -1,39 +1,12 @@
 
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import Sidebar from './components/Sidebar';
 import { ViewState, UserRole, PointOfSale, SystemUser, AppointmentForSale, AccountTier } from './types';
-
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Sales = lazy(() => import('./pages/Sales'));
-const Shop = lazy(() => import('./pages/Shop'));
-const Appointments = lazy(() => import('./pages/Appointments'));
-const Reports = lazy(() => import('./pages/Reports'));
-const SalesRecords = lazy(() => import('./pages/SalesRecords'));
-const Settings = lazy(() => import('./pages/Settings'));
-const AdminPOS = lazy(() => import('./pages/AdminPOS'));
-const CalendarView = lazy(() => import('./pages/CalendarView'));
-const WhatsAppConsole = lazy(() => import('./pages/WhatsAppConsole'));
-const UserAdmin = lazy(() => import('./pages/UserAdmin'));
-const ClientDiscovery = lazy(() => import('./pages/ClientDiscovery'));
-const ClientProfile = lazy(() => import('./pages/ClientProfile'));
-const MasterDashboard = lazy(() => import('./pages/MasterDashboard'));
-const Clients = lazy(() => import('./pages/Clients'));
-const Inventory = lazy(() => import('./pages/InventoryClientsFinance').then(m => ({ default: m.Inventory })));
-const Finance = lazy(() => import('./pages/InventoryClientsFinance').then(m => ({ default: m.Finance })));
-import { Scissors, Cookie, MapPin, Globe, LogOut, Menu, UserPlus, CheckCircle, ArrowLeft, Shield, Loader2 } from 'lucide-react';
-import BarberNotificationBell from './components/BarberNotificationBell';
-import WelcomePlanSelector from './components/WelcomePlanSelector';
-import SelfServiceBarberSignup from './components/SelfServiceBarberSignup';
-import LandingPage from './components/landing/LandingPage';
-import GuestBookingView from './components/GuestBookingView';
-import AdMobBanner from './components/AdMobBanner';
-import AdSenseBanner from './components/AdSenseBanner';
 import QRScannerView from './components/QRScannerView';
 import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { DataService } from './services/data';
 import { isAccountDeactivated } from './services/data';
-import { APP_VERSION, authenticateMasterWithPassword, activatePlanFromPlay, listPublicShops, registerClientAccount, switchActivePos, signOutSession, auth } from './services/firebase';
+import { authenticateMasterWithPassword, activatePlanFromPlay, listPublicShops, registerClientAccount, switchActivePos, signOutSession, auth } from './services/firebase';
 import {
     initPlayBilling,
     isNativePaymentAvailable,
@@ -46,24 +19,17 @@ import {
 } from './services/playBilling';
 import { initLocalNotifications, syncAppointmentNotifications, stopAppointmentNotifications } from './services/notifications';
 import LegalDocumentPage from './pages/LegalDocumentPage';
-import { getLegalDocumentFromUrl, navigateToLegal, LegalDocumentType } from './utils/legal';
-import { GLOBAL_FREE_MODE } from './config/app';
-import { isIOSAccountCreationAllowed, isIOSBarberSignupAllowed, isIOSPlatform } from './utils/platform';
+import { getLegalDocumentFromUrl, LegalDocumentType } from './utils/legal';
+import { GLOBAL_FREE_MODE, MIN_PASSWORD_LENGTH } from './config/app';
+import { sanitizeViewForRole, defaultViewForRole } from './config/views';
+import { isIOSAccountCreationAllowed } from './utils/platform';
 import { useTranslation, translate } from './i18n';
-import LanguageSwitcher from './components/LanguageSwitcher';
+import { guestShell, ViewFallback } from './components/app/GuestShell';
+import { SubscriptionExpiredView } from './components/app/SubscriptionExpiredView';
+import { AuthenticatedShell } from './components/app/AuthenticatedShell';
+import { UnauthenticatedScreens } from './components/app/UnauthenticatedScreens';
 
-const guestShell = (content: React.ReactNode) => (
-    <>
-        <LanguageSwitcher floating />
-        {content}
-    </>
-);
-
-const ViewFallback = () => (
-    <div className="flex items-center justify-center min-h-[200px]">
-        <div className="w-12 h-12 border-4 border-[#ffd427] border-t-transparent rounded-full animate-spin" />
-    </div>
-);
+const MasterDashboard = lazy(() => import('./pages/MasterDashboard'));
 
 function parseSessionUserRole(value: string | undefined): UserRole | null {
     const role = value === 'empleado' ? 'barbero' : value;
@@ -161,22 +127,32 @@ const App: React.FC = () => {
     }, []);
 
     const handleSwitchPos = async (posId: number): Promise<AccountTier> => {
-        try {
-            await switchActivePos(posId);
-        } catch (e) {
-            console.warn('switchActivePos', e);
+        const role = DataService.getCurrentUserRole() || userRole;
+        if (role !== 'cliente') {
+            try {
+                await switchActivePos(posId);
+            } catch (e) {
+                console.warn('switchActivePos', e);
+            }
         }
         DataService.setActivePosId(posId);
         setCurrentPosId(posId);
         try {
-            const posList = await DataService.getPointsOfSale();
-            const pos = posList.find(p => p.id === posId) ?? null;
+            let pos: PointOfSale | null = null;
+            let posList: PointOfSale[] = [];
+            if (role === 'cliente') {
+                posList = await listPublicShops();
+                pos = posList.find(p => p.id === posId) ?? null;
+            } else {
+                posList = await DataService.getPointsOfSale();
+                pos = posList.find(p => p.id === posId) ?? null;
+            }
             try {
                 setCurrentPos(pos);
                 setCurrentPosName(pos ? pos.name : 'Desconocido');
                 setIsPlanPro(pos?.plan === 'pro');
                 setAccountTier(pos?.tier ?? 'barberia');
-                if (pos?.tier === 'multisede' && pos.ownerId) {
+                if (role !== 'cliente' && pos?.tier === 'multisede' && pos.ownerId) {
                     const sameOwner = posList.filter(p => p.ownerId === pos.ownerId);
                     setPosListForOwner(sameOwner);
                 } else {
@@ -323,12 +299,11 @@ const App: React.FC = () => {
         };
     }, [isNativeApp, isAuthenticated, userRole, currentPosId, username]);
 
-    // Plan Gratuito: no tiene acceso al Dashboard; redirigir a Agenda (superadmin puede ver todo)
     useEffect(() => {
-        if (accountTier === 'gratuito' && currentView === 'dashboard' && userRole !== 'superadmin') {
-            setCurrentView('appointments');
-        }
-    }, [accountTier, currentView, userRole]);
+        if (!isAuthenticated) return;
+        const safe = sanitizeViewForRole(currentView, userRole, accountTier);
+        if (safe !== currentView) setCurrentView(safe);
+    }, [isAuthenticated, accountTier, currentView, userRole]);
 
     useEffect(() => {
         const user = localStorage.getItem('currentUser');
@@ -445,7 +420,7 @@ const App: React.FC = () => {
                         const params = new URLSearchParams(window.location.search);
                         const refPosId = params.get('ref_pos');
                         if (refPosId) {
-                            const posList = await DataService.getPointsOfSale();
+                            const posList = await listPublicShops();
                             const found = posList.find(p => p.id === Number(refPosId));
                             if (found) {
                                 await DataService.setClientPreferredPos(sessionUsername, found.id);
@@ -460,7 +435,7 @@ const App: React.FC = () => {
                                 setCurrentView('client_discovery');
                             }
                         } else if (preferred != null) {
-                            const posList = await DataService.getPointsOfSale();
+                            const posList = await listPublicShops();
                             const found = posList.find(p => p.id === preferred);
                             if (found) {
                                 await handleSwitchPos(preferred);
@@ -576,7 +551,7 @@ const App: React.FC = () => {
                     const refPosId = params.get('ref_pos');
                     const [preferred, posList] = await Promise.all([
                         DataService.getClientPreferredPos(user.username),
-                        DataService.getPointsOfSale(),
+                        listPublicShops(),
                     ]);
                     setPreferredPosId(preferred);
                     if (refPosId) {
@@ -642,6 +617,10 @@ const App: React.FC = () => {
         }
         if (phoneTrim.length < 8) {
             setLoginError(translate('errors.invalidPhone'));
+            return;
+        }
+        if (regPassword.length < MIN_PASSWORD_LENGTH) {
+            setLoginError(translate('signup.passwordMinPlaceholder', { min: MIN_PASSWORD_LENGTH }));
             return;
         }
         try {
@@ -714,7 +693,7 @@ const App: React.FC = () => {
         setPassword('');
         setLoginError('');
         setRenewalError('');
-        setCurrentView('dashboard');
+        setCurrentView(defaultViewForRole(userRole));
         DataService.setActivePosId(null);
         setCurrentPosId(null);
         setShowLoginScreen(false);
@@ -774,12 +753,17 @@ const App: React.FC = () => {
         setAcceptedCookies(true);
     };
 
-    const handleClientPosSwitch = async (id: number) => {        const currentUser = DataService.getCurrentUser();
-        if (currentUser?.username && (currentUser.role === 'cliente' || (currentUser as any).role === 'cliente')) {            await DataService.setClientPreferredPos(currentUser.username, id);            setPreferredPosId(id);
-        }        await handleSwitchPos(id);        setCurrentView('appointments');
-        window.history.replaceState({}, '', `${window.location.pathname}?ref_pos=${id}`);    };
+    const handleClientPosSwitch = async (id: number) => {
+        const currentUser = DataService.getCurrentUser();
+        if (currentUser?.username && currentUser.role === 'cliente') {
+            await DataService.setClientPreferredPos(currentUser.username, id);
+            setPreferredPosId(id);
+        }
+        await handleSwitchPos(id);
+        setCurrentView('appointments');
+        window.history.replaceState({}, '', `${window.location.pathname}?ref_pos=${id}`);
+    };
 
-    /** Al volver a Descubrir Barberías, el cliente debe limpiar la barbería seleccionada y la URL. */
     const handleChangeView = (view: ViewState) => {
         if (userRole === 'cliente' && view === 'client_discovery') {
             DataService.setActivePosId(null);
@@ -788,36 +772,16 @@ const App: React.FC = () => {
             DataService.clearCart();
             window.history.replaceState({}, '', window.location.pathname);
         }
-        setCurrentView(view);
+        setCurrentView(sanitizeViewForRole(view, userRole, accountTier));
     };
 
-    const renderView = () => {
-        // Force re-render when POS changes: key must be passed directly to JSX, not spread
-        const k = currentPosId;
-        const planProps = { accountTier };
-        switch (currentView) {
-            case 'admin_pos': return <AdminPOS key={k} />;
-            case 'dashboard': return <Dashboard key={k} onChangeView={setCurrentView} />;
-            case 'sales': return <Sales key={k} salesFromAppointment={salesFromAppointment} onClearSalesFromAppointment={() => setSalesFromAppointment(null)} {...planProps} />;
-            case 'shop': return <Shop key={k} />;
-            case 'appointments': return <Appointments key={k} onChangeView={setCurrentView} initialDate={appointmentsPrefill?.date} prefillClientId={appointmentsPrefill?.clientId} openPrefillModal={appointmentsPrefill?.openModal} onPrefillConsumed={() => setAppointmentsPrefill(null)} onCompleteForBilling={(data) => { setSalesFromAppointment(data); setCurrentView('sales'); }} {...planProps} />;
-            case 'clients': return <Clients key={k} onChangeView={setCurrentView} onBookClient={(clientId) => { setAppointmentsPrefill({ clientId, openModal: true }); setCurrentView('appointments'); }} />;
-            case 'inventory': return <Inventory key={k} />;
-            case 'finance': return <Finance key={k} />;
-            case 'reports': return <Reports key={k} accountTier={accountTier} posListForOwner={accountTier === 'multisede' ? posListForOwner : []} />;
-            case 'sales_records': return <SalesRecords key={k} accountTier={accountTier} />;
-            case 'settings': return <Settings key={k} {...planProps} onAccountDeactivated={handleAccountDeactivated} />;
-            case 'calendar': return <CalendarView key={k} onGoToSchedule={(date, openModal) => { setAppointmentsPrefill({ date, openModal }); setCurrentView('appointments'); }} />;
-            case 'whatsapp_console': return <WhatsAppConsole key={k} />;
-            case 'user_admin': return <UserAdmin key={k} />;
-            case 'client_discovery': return <ClientDiscovery key={k} onSwitchPos={handleClientPosSwitch} preferredPosId={preferredPosId} onRemoveFavorite={async () => { const u = DataService.getCurrentUser(); if (u?.username) { await DataService.setClientPreferredPos(u.username, null); setPreferredPosId(null); } }} />;
-            case 'client_profile': return <ClientProfile key={k} onChangeView={setCurrentView} onProfileUpdated={() => { const u = DataService.getCurrentUser(); if (u) { setFullName(u.name ?? fullName); setUserPhotoUrl(u.photoUrl ?? ''); } }} onAccountDeactivated={handleAccountDeactivated} />;
-            case 'qr_scanner': return null;
-            default: return <Dashboard key={k} onChangeView={setCurrentView} />;
+    const handleRemoveFavorite = async () => {
+        const u = DataService.getCurrentUser();
+        if (u?.username) {
+            await DataService.setClientPreferredPos(u.username, null);
+            setPreferredPosId(null);
         }
     };
-
-    // --- RENDER ---
 
     const getViewTitle = (view: ViewState): string => {
         const titles: Partial<Record<ViewState, string>> = {
@@ -843,11 +807,46 @@ const App: React.FC = () => {
         return key ? t(key) : view.replace('_', ' ');
     };
 
+    const viewProps = {
+        currentView,
+        userRole,
+        accountTier,
+        currentPosId,
+        preferredPosId,
+        salesFromAppointment,
+        appointmentsPrefill,
+        posListForOwner,
+        onChangeView: handleChangeView,
+        onClearSalesFromAppointment: () => setSalesFromAppointment(null),
+        onPrefillConsumed: () => setAppointmentsPrefill(null),
+        onCompleteForBilling: (data: AppointmentForSale) => {
+            setSalesFromAppointment(data);
+            setCurrentView(sanitizeViewForRole('sales', userRole, accountTier));
+        },
+        onBookClient: (clientId: number) => {
+            setAppointmentsPrefill({ clientId, openModal: true });
+            setCurrentView('appointments');
+        },
+        onGoToSchedule: (date: string, openModal?: boolean) => {
+            setAppointmentsPrefill({ date, openModal });
+            setCurrentView('appointments');
+        },
+        onClientPosSwitch: handleClientPosSwitch,
+        onRemoveFavorite: handleRemoveFavorite,
+        onProfileUpdated: () => {
+            const u = DataService.getCurrentUser();
+            if (u) {
+                setFullName(u.name ?? fullName);
+                setUserPhotoUrl(u.photoUrl ?? '');
+            }
+        },
+        onAccountDeactivated: handleAccountDeactivated,
+    };
+
     if (legalView) {
         return isAuthenticated ? <LegalDocumentPage type={legalView} /> : guestShell(<LegalDocumentPage type={legalView} />);
     }
 
-    // 1. MASTER DASHBOARD RENDER (No sidebar, full screen exclusive)
     if (isAuthenticated && userRole === 'platform_owner') {
         return (
             <Suspense fallback={<ViewFallback />}>
@@ -856,529 +855,154 @@ const App: React.FC = () => {
         );
     }
 
-    // 2. SUSCRIPCIÓN VENCIDA (admin/dueno/barbero con sede vencida)
     if (isAuthenticated && isSubscriptionExpired && currentPos && !GLOBAL_FREE_MODE) {
         const expiresAt = currentPos.subscriptionExpiresAt;
         const expiryDate = expiresAt ? formatDate(expiresAt, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
         return (
-            <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col items-center justify-center p-6 text-white">
-                <div className="max-w-md w-full text-center space-y-6">
-                    <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto">
-                        <Shield size={32} className="text-amber-400" />
-                    </div>
-                    <h1 className="text-2xl font-bold">{t('subscription.expiredTitle')}</h1>
-                    <p className="text-slate-300">
-                        {t('subscription.expiredMessage', {
-                            name: currentPosName || currentPos.name,
-                            date: expiryDate ? t('subscription.expiredOn', { date: expiryDate }) : '',
-                        })}
-                    </p>
-                    {renewalError && (
-                        <p className="text-sm text-red-300 bg-red-900/30 rounded-lg px-3 py-2">{renewalError}</p>
-                    )}
-                    <div className="flex flex-col gap-3 justify-center">
-                        <button
-                            type="button"
-                            onClick={handleRenewSubscription}
-                            disabled={renewalLoading}
-                            className="px-6 py-3 bg-[#ffd427] text-slate-900 font-semibold rounded-xl hover:bg-amber-400 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-                        >
-                            {renewalLoading ? <><Loader2 size={18} className="animate-spin" /> {t('common.processing')}</> : t('subscription.renewNow')}
-                        </button>
-                        {isNativePaymentAvailable() && isIOSPlatform() && (
-                            <button
-                                type="button"
-                                onClick={handleRestoreSubscription}
-                                disabled={renewalLoading}
-                                className="px-6 py-3 border border-slate-500 text-slate-300 rounded-xl hover:bg-slate-700/50 transition-colors disabled:opacity-60"
-                            >
-                                {t('subscription.restorePurchases')}
-                            </button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={handleLogout}
-                            className="px-6 py-3 border border-slate-500 text-slate-300 rounded-xl hover:bg-slate-700/50 transition-colors"
-                        >
-                            {t('common.logout')}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // 3. LOADING (restaurando sesión)
-    if (!isAuthenticated && isLoadingSession) {
-        return guestShell(
-            <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
-                <div className="text-center text-white">
-                    <div className="w-16 h-16 border-4 border-[#ffd427] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                    <p className="text-lg font-medium">{t('auth.loadingApp')}</p>
-                </div>
-            </div>
-        );
-    }
-
-    // 3. INVITADO: Agendar cita sin cuenta (desde QR o tras elegir barbería)
-    if (!isAuthenticated && guestBookingPos) {
-        return guestShell(
-            <GuestBookingView
-                posId={guestBookingPos.id}
-                posName={guestBookingPos.name}
-                onBack={() => setGuestBookingPos(null)}
-                onSuccess={() => setGuestBookingPos(null)}
+            <SubscriptionExpiredView
+                title={t('subscription.expiredTitle')}
+                message={t('subscription.expiredMessage', {
+                    name: currentPosName || currentPos.name,
+                    date: expiryDate ? t('subscription.expiredOn', { date: expiryDate }) : '',
+                })}
+                renewLabel={t('subscription.renewNow')}
+                restoreLabel={t('subscription.restorePurchases')}
+                logoutLabel={t('common.logout')}
+                processingLabel={t('common.processing')}
+                renewalError={renewalError}
+                renewalLoading={renewalLoading}
+                onRenew={handleRenewSubscription}
+                onRestore={handleRestoreSubscription}
+                onLogout={handleLogout}
             />
         );
     }
 
-    // 4. INVITADO: Ver barberías (cliente buscando barbería)
-    if (!isAuthenticated && showBarberiasGuest) {
-        return guestShell(
-            <div className="min-h-screen min-h-[100dvh] bg-slate-50">
-                <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between safe-area-top shadow-sm">
-                    <button type="button" onClick={() => setShowBarberiasGuest(false)} className="flex items-center gap-1.5 min-h-[44px] text-slate-600 hover:text-slate-900 text-sm rounded-xl hover:bg-slate-100 px-3 -ml-1 transition-colors">
-                        <ArrowLeft size={18} /> {t('common.back')}
-                    </button>
-                    <div className="flex items-center gap-2">
-                        <div className="w-9 h-9 bg-[#ffd427] rounded-lg flex items-center justify-center shadow-sm">
-                            <Scissors size={18} className="text-slate-900" />
-                        </div>
-                        <span className="font-bold text-slate-900 hidden sm:inline">{t('common.barberShow')}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {isIOSAccountCreationAllowed() && (
-                            <button type="button" onClick={() => openClientRegistration(true, 'barberias')} className="min-h-[44px] flex items-center text-sm border border-slate-200 hover:border-slate-300 text-slate-700 font-medium px-3 sm:px-4 rounded-xl transition-colors hover:bg-slate-50">
-                                {t('common.register')}
-                            </button>
-                        )}
-                        <button type="button" onClick={() => openLoginScreen('barberias')} className="min-h-[44px] flex items-center text-sm bg-[#ffd427] hover:bg-amber-400 text-slate-900 font-semibold px-3 sm:px-4 rounded-xl transition-colors shadow-sm">
-                            {t('common.login')}
-                        </button>
-                    </div>
-                </header>
-                <main className="px-4 sm:px-6 lg:px-10 py-8 md:py-12 max-w-7xl mx-auto">
-                    <Suspense fallback={<ViewFallback />}>
-                    <ClientDiscovery
-                        guestMode
-                        onSwitchPos={(id) => {
-                            listPublicShops().then((list) => {
-                                const pos = list.find(p => p.id === id);
-                                if (pos) {
-                                    setReferralPos(pos);
-                                    if (isIOSAccountCreationAllowed()) {
-                                        openClientRegistration(false, 'barberias');
-                                    } else {
-                                        setGuestBookingPos({ id: pos.id, name: pos.name });
-                                    }
-                                    window.history.replaceState({}, '', `${window.location.pathname}?ref_pos=${id}`);
-                                }
-                            });
-                        }}
-                        onBookAppointment={(id, name) => setGuestBookingPos({ id, name })}
-                    />
-                    </Suspense>
-                </main>
-            </div>
-        );
-    }
-
-    // 5. LANDING PAGE (marketing) — solo web; nunca en app compilada iOS/Android
-    if (!isAuthenticated && showLandingPage && !isNativeApp && !showBarberiasGuest && !guestBookingPos) {
-        return guestShell(
-            <>
-                <AdMobBanner showAds={true} />
-                <LandingPage
-                    onGetStarted={() => {
-                        setShowLandingPage(false);
-                        setIsBarberRegistering(true);
-                    }}
-                    onGoToLogin={() => { setShowLandingPage(false); openLoginScreen('landing'); }}
-                    onGoToBarberias={() => { setShowBarberiasGuest(true); }}
-                    onGoToClientRegister={() => openClientRegistration(true, 'landing')}
-                />
-            </>
-        );
-    }
-
-    // 6. BIENVENIDA (tipo de barbería + contacto) o LOGIN
     if (!isAuthenticated) {
-        if (isBarberRegistering && isIOSBarberSignupAllowed()) {
-            return guestShell(
-                <>
-                    <AdMobBanner showAds={true} />
-                    <SelfServiceBarberSignup
-                        onSuccess={(username, password) => {
-                            setIsBarberRegistering(false);
-                            handleLogin({ preventDefault: () => {} } as React.FormEvent, { username, password });
-                        }}
-                        onGoToLogin={() => openLoginScreen(showLoginScreen ? loginReturnTarget : 'landing')}
-                        onGoBack={() => {
-                            setIsBarberRegistering(false);
-                            if (!showLoginScreen && !isNativeApp) setShowLandingPage(true);
-                        }}
-                    />
-                </>
-            );
-        }
-        if (!showLoginScreen) {
-            return guestShell(
-                <>
-                    <AdMobBanner showAds={true} />
-                    <WelcomePlanSelector
-                        onGoToLogin={() => openLoginScreen('welcome')}
-                        onGoToBarberias={() => setShowBarberiasGuest(true)}
-                        onGoToClientRegister={() => openClientRegistration(true, 'welcome')}
-                        onBackToLanding={isNativeApp ? undefined : () => setShowLandingPage(true)}
-                        onBarberSignupSuccess={(username, password) => {
-                            handleLogin({ preventDefault: () => {} } as React.FormEvent, { username, password });
-                        }}
-                    />
-                </>
-            );
-        }
-        return guestShell(
-            <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col">
-                <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-white/10 px-4 sm:px-6 py-3 safe-area-top">
-                    <button
-                        type="button"
-                        onClick={handleLoginBack}
-                        className="flex items-center gap-1.5 min-h-[44px] text-slate-200 hover:text-white text-sm rounded-xl hover:bg-white/10 px-3 -ml-1 transition-colors"
-                    >
-                        <ArrowLeft size={18} /> {t('common.back')}
-                    </button>
-                </header>
-                <main className="flex-1 overflow-y-auto scroll-touch px-3 sm:px-4 py-4 sm:py-6 safe-area-bottom flex items-start sm:items-center justify-center">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 md:p-8 border-t-8 border-[#ffd427] min-w-0">
-                    {connectionError && (
-                        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
-                            {connectionError}
-                        </div>
-                    )}
-                    {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('signup') === 'success' && (
-                        <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-sm flex items-center gap-2">
-                            <CheckCircle size={20} className="flex-shrink-0" />
-                            <span>{t('auth.accountActivated')}</span>
-                        </div>
-                    )}
-                    {/* Header */}
-                    <div className="text-center mb-6">
-                        <div className="w-16 h-16 bg-[#ffd427] rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-yellow-500/20">
-                            <Scissors size={32} className="text-slate-900" />
-                        </div>
-                        <h1 className="text-2xl font-bold text-slate-900">{t('common.barberShow')}</h1>
-                        <p className="text-slate-400 text-xs mt-1">v{APP_VERSION}</p>
-                    </div>
-
-                    {isRegistering && isIOSAccountCreationAllowed() ? (
-                         <form onSubmit={handleRegister} className="space-y-4 animate-in slide-in-from-right duration-300">
-                             <p className="text-center text-slate-600 text-sm mb-1">{t('auth.createClientAccount', { role: t('auth.clientRole') })}</p>
-                             {loginError && (
-                                 <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
-                                     {loginError}
-                                 </div>
-                             )}
-                             {referralPos && (
-                                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-center mb-4">
-                                     <MapPin size={20} className="text-[#ffd427] mr-2" />
-                                     <div>
-                                         <p className="text-xs text-yellow-800 uppercase font-bold">{t('auth.registeringAt')}</p>
-                                         <p className="font-bold text-slate-800">{referralPos.name}</p>
-                                     </div>
-                                 </div>
-                             )}
-                             
-                             {regSuccess ? (
-                                 <div className="bg-green-50 text-green-700 p-6 rounded-xl flex flex-col items-center justify-center text-center">
-                                     <CheckCircle size={48} className="mb-2" />
-                                     <h3 className="font-bold text-lg">{t('auth.accountCreated')}</h3>
-                                     <p>{t('auth.redirectingLogin')}</p>
-                                 </div>
-                             ) : (
-                                 <>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.username')}</label>
-                                            <input type="text" required className="w-full px-4 py-2 border rounded-lg focus:ring-[#ffd427]" value={regUsername} onChange={e => setRegUsername(e.target.value)} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.name')}</label>
-                                            <input type="text" required className="w-full px-4 py-2 border rounded-lg focus:ring-[#ffd427]" value={regName} onChange={e => setRegName(e.target.value)} />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.phone')}</label>
-                                        <input type="tel" required className="w-full px-4 py-2 border rounded-lg focus:ring-[#ffd427]" value={regPhone} onChange={e => setRegPhone(e.target.value)} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.password')}</label>
-                                        <input type="password" required className="w-full px-4 py-2 border rounded-lg focus:ring-[#ffd427]" value={regPassword} onChange={e => setRegPassword(e.target.value)} />
-                                    </div>
-                                    <button type="submit" className="w-full min-h-[48px] bg-[#ffd427] text-slate-900 py-3 rounded-xl font-bold hover:bg-[#e6be23] transition-colors shadow-lg mt-4 active:scale-[0.98]">
-                                        {t('common.register')}
-                                    </button>
-                                    <button type="button" onClick={() => setIsRegistering(false)} className="w-full min-h-[44px] text-slate-500 py-2 text-sm flex items-center justify-center hover:text-slate-700 active:bg-slate-100 rounded-lg">
-                                        <ArrowLeft size={14} className="mr-1" /> {t('auth.backToLogin')}
-                                    </button>
-                                 </>
-                             )}
-                         </form>
-                    ) : (
-                        <div className="space-y-4">
-                            <form onSubmit={handleLogin} className="space-y-4 animate-in slide-in-from-left duration-300">
-                                {loginError && (
-                                    <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
-                                        {loginError}
-                                    </div>
-                                )}
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.username')}</label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full px-4 py-3 sm:py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
-                                        value={username}
-                                        onChange={e => setUsername(e.target.value)}
-                                        placeholder={t('common.usernamePlaceholder')}
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">{t('common.password')}</label>
-                                    <input 
-                                        type="password" 
-                                        className="w-full px-4 py-3 sm:py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
-                                        value={password}
-                                        onChange={e => setPassword(e.target.value)}
-                                        placeholder={t('common.passwordPlaceholder')}
-                                        required
-                                    />
-                                </div>
-                                
-                                <button type="submit" disabled={loginLoading} className="w-full min-h-[48px] py-3 rounded-xl font-bold transition-colors shadow-lg shadow-yellow-500/30 mt-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.98] bg-[#ffd427] text-slate-900 hover:bg-[#e6be23]">
-                                    {loginLoading ? (<><Loader2 size={20} className="animate-spin" /> {t('common.loggingIn')}</>) : t('common.loginTitle')}
-                                </button>
-
-                                {isIOSAccountCreationAllowed() && (
-                                <div className="pt-4 border-t border-slate-100 mt-4 space-y-2">
-                                    <button type="button" onClick={() => setIsRegistering(true)} className="w-full min-h-[44px] flex items-center justify-center text-slate-600 font-medium hover:underline hover:text-[#e6be23] rounded-lg active:bg-slate-50">
-                                        <UserPlus size={18} className="mr-2" /> {t('auth.createClientFree')}
-                                    </button>
-                                    {isIOSBarberSignupAllowed() && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setIsBarberRegistering(true);
-                                            setIsRegistering(false);
-                                            setLoginError('');
-                                        }}
-                                        className="w-full min-h-[44px] flex items-center justify-center text-slate-600 font-medium hover:underline hover:text-[#e6be23] rounded-lg active:bg-slate-50"
-                                    >
-                                        <Scissors size={18} className="mr-2" /> {t('auth.createBarberProfile')}
-                                    </button>
-                                    )}
-                                </div>
-                                )}
-
-                            </form>
-                        </div>
-                    )}
-                    </div>
-                </main>
-            </div>
+        return (
+            <UnauthenticatedScreens
+                t={t}
+                isNativeApp={isNativeApp}
+                isLoadingSession={isLoadingSession}
+                guestBookingPos={guestBookingPos}
+                showBarberiasGuest={showBarberiasGuest}
+                showLandingPage={showLandingPage}
+                showLoginScreen={showLoginScreen}
+                isBarberRegistering={isBarberRegistering}
+                isRegistering={isRegistering}
+                connectionError={connectionError}
+                loginError={loginError}
+                loginLoading={loginLoading}
+                username={username}
+                password={password}
+                regName={regName}
+                regUsername={regUsername}
+                regPassword={regPassword}
+                regPhone={regPhone}
+                regSuccess={regSuccess}
+                referralPos={referralPos}
+                onGuestBookingBack={() => setGuestBookingPos(null)}
+                onGuestBookingSuccess={() => setGuestBookingPos(null)}
+                onCloseBarberias={() => setShowBarberiasGuest(false)}
+                onOpenClientRegistration={openClientRegistration}
+                onOpenLogin={openLoginScreen}
+                onGuestSelectPos={(id) => {
+                    listPublicShops().then((list) => {
+                        const pos = list.find(p => p.id === id);
+                        if (pos) {
+                            setReferralPos(pos);
+                            if (isIOSAccountCreationAllowed()) {
+                                openClientRegistration(false, 'barberias');
+                            } else {
+                                setGuestBookingPos({ id: pos.id, name: pos.name });
+                            }
+                            window.history.replaceState({}, '', `${window.location.pathname}?ref_pos=${id}`);
+                        }
+                    });
+                }}
+                onBookAppointment={(id, name) => setGuestBookingPos({ id, name })}
+                onLandingGetStarted={() => {
+                    setShowLandingPage(false);
+                    setIsBarberRegistering(true);
+                }}
+                onLandingLogin={() => { setShowLandingPage(false); openLoginScreen('landing'); }}
+                onLandingBarberias={() => setShowBarberiasGuest(true)}
+                onLandingClientRegister={() => openClientRegistration(true, 'landing')}
+                onBarberSignupSuccess={(u, pw) => {
+                    setIsBarberRegistering(false);
+                    handleLogin({ preventDefault: () => {} } as React.FormEvent, { username: u, password: pw });
+                }}
+                onBarberSignupLogin={() => openLoginScreen(showLoginScreen ? loginReturnTarget : 'landing')}
+                onBarberSignupBack={() => {
+                    setIsBarberRegistering(false);
+                    if (!showLoginScreen && !isNativeApp) setShowLandingPage(true);
+                }}
+                onWelcomeLogin={() => openLoginScreen('welcome')}
+                onWelcomeBarberias={() => setShowBarberiasGuest(true)}
+                onWelcomeClientRegister={() => openClientRegistration(true, 'welcome')}
+                onWelcomeBackToLanding={isNativeApp ? undefined : () => setShowLandingPage(true)}
+                onWelcomeBarberSuccess={(u, pw) => {
+                    handleLogin({ preventDefault: () => {} } as React.FormEvent, { username: u, password: pw });
+                }}
+                onLoginBack={handleLoginBack}
+                onLogin={handleLogin}
+                onRegister={handleRegister}
+                onUsernameChange={setUsername}
+                onPasswordChange={setPassword}
+                onRegNameChange={setRegName}
+                onRegUsernameChange={setRegUsername}
+                onRegPasswordChange={setRegPassword}
+                onRegPhoneChange={setRegPhone}
+                onStartClientRegister={() => setIsRegistering(true)}
+                onStartBarberRegister={() => {
+                    setIsBarberRegistering(true);
+                    setIsRegistering(false);
+                    setLoginError('');
+                }}
+                onCancelRegister={() => setIsRegistering(false)}
+            />
         );
     }
 
-    // 4. CLIENTE: Lector QR (pantalla completa con cámara)
-    if (isAuthenticated && userRole === 'cliente' && currentView === 'qr_scanner') {
+    if (userRole === 'cliente' && currentView === 'qr_scanner') {
         return (
             <QRScannerView
                 onBack={() => setCurrentView('client_discovery')}
                 onScan={async (posId) => {
-                    await handleSwitchPos(posId);
-                    setCurrentView('appointments');
-                    window.history.replaceState({}, '', `${window.location.pathname}?ref_pos=${posId}`);
+                    await handleClientPosSwitch(posId);
                 }}
             />
         );
     }
 
-    // 5. MAIN APP RENDER (General Users)
-    const showWebAds = accountTier === 'gratuito' || userRole === 'cliente';
-    /** Anuncios nativos (AdMob): plan gratuito o rol cliente. Barberos con plan de pago no ven anuncios. */
-    const showNativeAds = accountTier === 'gratuito' || userRole === 'cliente';
     return (
-        <div className="flex h-screen min-h-0 max-h-[100dvh] bg-slate-100 font-sans overflow-hidden">
-            <AdMobBanner showAds={showNativeAds} />
-            <Sidebar 
-                currentView={currentView} 
-                onChangeView={handleChangeView} 
-                onLogout={handleLogout}
-                userRole={userRole}
-                isOpen={isSidebarOpen}
-                onClose={() => setIsSidebarOpen(false)}
-                clientHasSelectedBarberia={userRole === 'cliente' ? currentPosId != null : true}
-                accountTier={accountTier}
-                preferredPosId={userRole === 'cliente' ? preferredPosId : null}
-                currentPosId={userRole === 'cliente' ? currentPosId : null}
-                onRemoveFavorite={userRole === 'cliente' ? async () => { const u = DataService.getCurrentUser(); if (u?.username) { await DataService.setClientPreferredPos(u.username, null); setPreferredPosId(null); } } : undefined}
-            />
-            {/* Área principal: flex para que el scroll sea solo en el contenido */}
-            <main className="flex-1 flex flex-col min-w-0 min-h-0 md:ml-64 overflow-hidden transition-all duration-300">
-                <header className="flex-shrink-0 flex flex-wrap justify-between items-center p-3 sm:p-4 md:p-6 lg:p-8 pb-2 md:pb-4 no-print gap-2 sm:gap-3 bg-slate-100">
-                    <div className="flex items-center space-x-2 sm:space-x-3 md:space-x-4 min-w-0">
-                        {/* Hamburger Button for Mobile - touch target 44px */}
-                        <button 
-                            className="md:hidden flex items-center justify-center min-h-[44px] min-w-[44px] text-slate-700 p-2 bg-white rounded-xl shadow-sm active:bg-slate-100"
-                            onClick={() => setIsSidebarOpen(true)}
-                            aria-label={t('common.openMenu')}
-                        >
-                            <Menu size={24} />
-                        </button>
-
-                        <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 capitalize truncate max-w-[140px] sm:max-w-[200px] md:max-w-none">
-                            {getViewTitle(currentView)}
-                        </h1>
-                        
-                        {/* SuperAdmin Global Selector */}
-                        {userRole === 'superadmin' && (
-                            <div className="hidden md:flex items-center bg-slate-800 text-white px-3 py-1.5 rounded-lg shadow-md ml-4 border border-slate-700">
-                                <Globe size={16} className="text-[#ffd427] mr-2" />
-                                <span className="text-xs text-slate-400 mr-2 uppercase tracking-wider font-bold">{t('nav.viewingPos')}</span>
-                                <select 
-                                    value={currentPosId || ''} 
-                                    onChange={(e) => handleSwitchPos(Number(e.target.value))}
-                                    className="bg-slate-900 border-none text-white text-sm font-bold focus:ring-0 cursor-pointer rounded"
-                                >
-                                    {pointsOfSale.map(pos => (
-                                        <option key={pos.id} value={pos.id}>{pos.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-                        {/* Multi-Sede: selector de sede cuando el usuario tiene varias sedes (mismo owner) */}
-                        {accountTier === 'multisede' && posListForOwner.length > 1 && userRole !== 'superadmin' && (
-                            <div className="hidden md:flex items-center bg-slate-800 text-white px-3 py-1.5 rounded-lg shadow-md ml-4 border border-slate-700">
-                                <MapPin size={16} className="text-[#ffd427] mr-2" />
-                                <span className="text-xs text-slate-400 mr-2 uppercase tracking-wider font-bold">{t('nav.posLabel')}</span>
-                                <select 
-                                    value={currentPosId || ''} 
-                                    onChange={(e) => handleSwitchPos(Number(e.target.value))}
-                                    className="bg-slate-900 border-none text-white text-sm font-bold focus:ring-0 cursor-pointer rounded"
-                                >
-                                    {posListForOwner.map(pos => (
-                                        <option key={pos.id} value={pos.id}>{pos.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-                        
-                        {/* Tenant Label: en plan Solo "Mi negocio", en Barbería/Multi-Sede nombre de la sede */}
-                        {userRole !== 'superadmin' && userRole !== 'platform_owner' && (
-                            <div className="hidden md:flex items-center bg-white px-3 py-1.5 rounded-full shadow-sm border border-slate-200">
-                                <MapPin size={14} className="text-[#ffd427] mr-2" />
-                                <span className="text-sm font-bold text-slate-700">
-                                    {accountTier === 'solo' ? t('common.myBusiness') : currentPosName}
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                    
-                    <div className="flex items-center space-x-2 md:space-x-4">
-                        {/* Campana de notificaciones (solo Plan Pro, barbero/admin) */}
-                        <BarberNotificationBell
-                            isPlanPro={isPlanPro}
-                            userRole={userRole}
-                            onChangeView={setCurrentView}
-                        />
-                        <div className="text-right hidden md:block">
-                            <p className="text-sm font-bold text-slate-800">{fullName || username}</p>
-                            <p className="text-xs text-slate-500 capitalize">{formatDate(new Date(), { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-                        </div>
-                        <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-tr from-[#ffd427] to-amber-500 rounded-full flex items-center justify-center text-slate-900 font-bold border-2 border-white shadow-md overflow-hidden shrink-0">
-                            {userPhotoUrl ? (
-                                <img src={userPhotoUrl} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                                (username || fullName).charAt(0).toUpperCase() || '?'
-                            )}
-                        </div>
-                        
-                        {/* Extra Logout Button in Header */}
-                        <button 
-                            type="button"
-                            onClick={handleLogout} 
-                            className="flex items-center justify-center min-h-[44px] min-w-[44px] bg-white p-2 rounded-full text-slate-500 hover:text-red-600 hover:bg-red-50 active:bg-red-100 transition-colors shadow-sm border border-slate-200"
-                            title={t('common.logoutTitle')}
-                            aria-label={t('common.logout')}
-                        >
-                            <LogOut size={20} />
-                        </button>
-                    </div>
-                </header>
-                
-                {/* Zona con scroll: única área que hace scroll */}
-                <div className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto scroll-touch scroll-area-mobile px-3 sm:px-4 md:px-6 lg:px-8 pb-6">
-                    {/* Mobile Tenant Selector (Superadmin o Multi-Sede con varias sedes) */}
-                    {userRole === 'superadmin' && (
-                        <div className="md:hidden mb-4">
-                             <div className="flex items-center bg-slate-800 text-white px-3 py-2 rounded-lg shadow-md border border-slate-700 w-full">
-                                <Globe size={16} className="text-[#ffd427] mr-2" />
-                                <select 
-                                    value={currentPosId || ''} 
-                                    onChange={(e) => handleSwitchPos(Number(e.target.value))}
-                                    className="bg-slate-900 border-none text-white text-sm font-bold focus:ring-0 cursor-pointer rounded w-full"
-                                >
-                                    {pointsOfSale.map(pos => (
-                                        <option key={pos.id} value={pos.id}>{pos.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-                    )}
-                    {accountTier === 'multisede' && posListForOwner.length > 1 && userRole !== 'superadmin' && (
-                        <div className="md:hidden mb-4">
-                            <div className="flex items-center bg-slate-800 text-white px-3 py-2 rounded-lg shadow-md border border-slate-700 w-full">
-                                <MapPin size={16} className="text-[#ffd427] mr-2" />
-                                <select 
-                                    value={currentPosId || ''} 
-                                    onChange={(e) => handleSwitchPos(Number(e.target.value))}
-                                    className="bg-slate-900 border-none text-white text-sm font-bold focus:ring-0 cursor-pointer rounded w-full"
-                                >
-                                    {posListForOwner.map(pos => (
-                                        <option key={pos.id} value={pos.id}>{pos.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-                    )}
-                    <div className="responsive-container">
-                        <Suspense fallback={<ViewFallback />}>
-                            {renderView()}
-                        </Suspense>
-                    </div>
-                    <AdSenseBanner show={showWebAds} />
-                </div>
-            </main>
-
-            {/* Cookie Consent Banner — solo web; en iOS/Android nativo oculto (requisitos App Store) */}
-            {!acceptedCookies && !Capacitor.isNativePlatform() && (
-                <div className="fixed bottom-0 left-0 right-0 w-full bg-slate-900 text-white p-4 z-50 shadow-2xl animate-in slide-in-from-bottom duration-500 safe-area-bottom">
-                    <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div className="flex items-center space-x-3">
-                            <Cookie className="text-[#ffd427]" size={24} />
-                            <p className="text-sm">
-                                {t('cookies.message')}
-                            </p>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                            <button type="button" onClick={() => navigateToLegal('privacidad')} className="min-h-[44px] px-4 flex items-center text-slate-300 hover:text-white text-sm underline rounded-lg active:bg-white/10">{t('common.viewPolicy')}</button>
-                            <button type="button" onClick={acceptCookies} className="min-h-[44px] bg-[#ffd427] hover:bg-[#e6be23] text-slate-900 px-6 py-2.5 rounded-full text-sm font-bold transition-colors active:scale-[0.98]">
-                                {t('common.accept')}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
+        <AuthenticatedShell
+            {...viewProps}
+            viewTitle={getViewTitle(currentView)}
+            fullName={fullName}
+            username={username}
+            userPhotoUrl={userPhotoUrl}
+            currentPosName={currentPosName}
+            isPlanPro={isPlanPro}
+            isSidebarOpen={isSidebarOpen}
+            acceptedCookies={acceptedCookies}
+            pointsOfSale={pointsOfSale}
+            formattedDate={formatDate(new Date(), { weekday: 'long', day: 'numeric', month: 'long' })}
+            cookieMessage={t('cookies.message')}
+            viewPolicyLabel={t('common.viewPolicy')}
+            acceptLabel={t('common.accept')}
+            openMenuLabel={t('common.openMenu')}
+            logoutLabel={t('common.logout')}
+            logoutTitle={t('common.logoutTitle')}
+            viewingPosLabel={t('nav.viewingPos')}
+            posLabel={t('nav.posLabel')}
+            myBusinessLabel={t('common.myBusiness')}
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+            onCloseSidebar={() => setIsSidebarOpen(false)}
+            onLogout={handleLogout}
+            onSwitchPos={(posId) => { void handleSwitchPos(posId); }}
+            onAcceptCookies={acceptCookies}
+        />
     );
 };
 

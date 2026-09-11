@@ -9,7 +9,7 @@ import { formatSignupAddress, getBarriosForCity, getCitiesForCountry } from '../
 import { requestUserLocationWithPermission } from '../utils/geolocation';
 import { initPlayBilling, purchasePlan, addPlayPurchaseListener, getActivePlayTransactions, isPlanAvailableForPurchase, isTransactionActivatable, getTransactionForPlan, isNativePaymentAvailable, iapActivationPayload } from '../services/playBilling';
 import { navigateToLegal } from '../utils/legal';
-import { ALLOW_NATIVE_BARBER_SIGNUP, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER, IOS_IAP_TIERS, APP_STORE_URL, PLAY_STORE_URL } from '../config/app';
+import { ALLOW_NATIVE_BARBER_SIGNUP, GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER, IOS_IAP_TIERS, APP_STORE_URL, PLAY_STORE_URL, MIN_PASSWORD_LENGTH } from '../config/app';
 import { isIOSAccountCreationAllowed, isIOSBarberSignupAllowed, isIOSPlatform } from '../utils/platform';
 import { useTranslation } from '../i18n';
 
@@ -120,7 +120,6 @@ const SelfServiceBarberSignup: React.FC<SelfServiceBarberSignupProps> = ({ onSuc
   const phoneDigits = (phone || '').replace(/\D/g, '');
   const phoneValid = phoneDigits.length >= MIN_PHONE_DIGITS;
 
-  const MIN_PASSWORD_LENGTH = 6;
   const step1Valid =
     (username || '').trim().length > 0 &&
     usernameExists === false &&

@@ -197,6 +197,7 @@
     "slotOverlap": "Esa hora ya no está disponible (se solapa con otra cita). Elige otra.",
     "bookingFailedWithMsg": "No se pudo agendar. {message}",
     "successConfirmed": "Tu cita en {shop} para el {date} a las {time} está confirmada. Te contactaremos al {phone} si hace falta.",
+    "successPending": "Tu cita en {shop} para el {date} a las {time} quedó pendiente de confirmación. Te contactaremos al {phone} si hace falta.",
     "backToShops": "Volver a barberías",
     "appointmentBooked": "Cita agendada"
   },
@@ -522,6 +523,12 @@
     "sendWhatsApp": "Enviar WhatsApp",
     "completeAndBill": "Completar e ir a facturación",
     "cancelAppointment": "Cancelar",
+    "tabBook": "Reservar",
+    "tabMine": "Mis citas",
+    "noMyAppointments": "No tienes citas próximas.",
+    "cancelledSuccess": "Cita cancelada.",
+    "cancelFailed": "No se pudo cancelar la cita.",
+    "cancelling": "Cancelando...",
     "waConfirmMessage": "Hola {name}, le escribimos de BarberShow para confirmar su cita el {date} a las {time}.",
     "worksOf": "Trabajos de {name}",
     "status": {

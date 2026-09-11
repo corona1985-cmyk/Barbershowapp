@@ -27,6 +27,9 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
     const [showUserModal, setShowUserModal] = useState(false);
     const [newUser, setNewUser] = useState<Partial<SystemUser>>({ username: '', role: 'support', name: '', password: '' });
     const [migrationLoading, setMigrationLoading] = useState(false);
+    const [usersLoaded, setUsersLoaded] = useState(false);
+    const [auditLoaded, setAuditLoaded] = useState(false);
+    const [financeLoaded, setFinanceLoaded] = useState(false);
 
     const gratuitoSedeCount = sedes.filter((s) => s.tier === 'gratuito').length;
     const barberiaGraceCount = sedes.filter((s) => s.tier === 'barberia' && !s.subscriptionExpiresAt).length;
@@ -45,7 +48,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
         try {
             const result = await DataService.migrateGratuitoPosToPromotionalTier();
             alert(result.message);
-            await loadData();
+            await loadOverview();
         } catch (e) {
             alert(e instanceof Error ? e.message : 'Error al migrar sedes.');
         } finally {
@@ -67,7 +70,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
         try {
             const result = await DataService.migratePromoBarberiaGracePeriod();
             alert(result.message);
-            await loadData();
+            await loadOverview();
         } catch (e) {
             alert(e instanceof Error ? e.message : 'Error al aplicar gracia.');
         } finally {
@@ -75,44 +78,62 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
         }
     };
 
-    const loadData = async () => {
-        const [statsData, sedesData, usersData, auditData, settingsData, financialDataRes] = await Promise.all([
+    const loadOverview = async () => {
+        const [statsData, sedesData, settingsData] = await Promise.all([
             DataService.getGlobalStats(),
             DataService.getPointsOfSale(),
-            DataService.getAllUsersGlobal(),
-            DataService.getAuditLogs(),
             DataService.getGlobalSettings(),
-            DataService.getGlobalFinancialHistory(),
         ]);
         setStats(statsData);
         setSedes(sedesData);
-        setUsers(usersData);
-        setAuditLogs(auditData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
         setGlobalSettings(settingsData);
+    };
+
+    const loadUsers = async () => {
+        const usersData = await DataService.getAllUsersGlobal();
+        setUsers(usersData);
+        setUsersLoaded(true);
+    };
+
+    const loadAudit = async () => {
+        const auditData = await DataService.getAuditLogs();
+        setAuditLogs(auditData);
+        setAuditLoaded(true);
+    };
+
+    const loadFinance = async () => {
+        const financialDataRes = await DataService.getGlobalFinancialHistory();
         setFinancialData(financialDataRes);
+        setFinanceLoaded(true);
     };
 
     useEffect(() => {
-        loadData();
+        loadOverview();
     }, []);
+
+    useEffect(() => {
+        if (currentModule === 'users' && !usersLoaded) loadUsers();
+        if (currentModule === 'audit' && !auditLoaded) loadAudit();
+        if (currentModule === 'finance' && !financeLoaded) loadFinance();
+    }, [currentModule, usersLoaded, auditLoaded, financeLoaded]);
 
     const handleDeleteSede = async (id: number) => {
         if (confirm('ADVERTENCIA: Esta acción eliminará la sede y sus datos. ¿Continuar?')) {
             await DataService.deletePointOfSale(id);
-            loadData();
+            loadOverview();
         }
     };
 
     const handleUpdateSedePlan = async (sede: PointOfSale, displayPlan: DisplayPlanName) => {
         const { tier, plan } = displayPlanNameToTierAndPlan(displayPlan);
         await DataService.updatePointOfSale({ ...sede, tier, plan });
-        loadData();
+        loadOverview();
     };
 
     const handleDeleteUser = async (username: string) => {
         if (confirm(`¿Eliminar usuario ${username} permanentemente?`)) {
             await DataService.deleteUser(username);
-            loadData();
+            loadUsers();
         }
     };
 
@@ -121,7 +142,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
         await DataService.saveUser(newUser as SystemUser);
         setShowUserModal(false);
         setNewUser({ username: '', role: 'support', name: '', password: '' });
-        loadData();
+        loadUsers();
     };
 
     const handleSaveSettings = async () => {
@@ -238,6 +259,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
 
     const renderUsers = () => (
         <div className="space-y-6 animate-in fade-in duration-500">
+            {!usersLoaded && <p className="text-slate-400 text-sm">Cargando usuarios…</p>}
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-white flex items-center"><Users className="mr-3 text-blue-400" /> Administración de Usuarios</h2>
                 <button onClick={() => setShowUserModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold flex items-center text-sm">
@@ -331,6 +353,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
 
     const renderFinance = () => (
         <div className="space-y-6 animate-in fade-in duration-500">
+            {!financeLoaded && <p className="text-slate-400 text-sm">Cargando finanzas…</p>}
             <h2 className="text-2xl font-bold text-white flex items-center"><DollarSign className="mr-3 text-green-500" /> Finanzas Globales</h2>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -338,6 +361,9 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                 <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
                     <h3 className="text-lg font-bold text-white mb-4 border-b border-slate-700 pb-2">Ingresos por Sede</h3>
                     <div className="space-y-4">
+                        {financialData && Object.keys(financialData.posRevenue || {}).length === 0 && (
+                            <p className="text-slate-500 text-sm">El desglose por sede se acumula a partir de las nuevas ventas.</p>
+                        )}
                         {financialData && Object.entries(financialData.posRevenue).map(([posId, amount]: [string, any]) => {
                             const pos = sedes.find(p => p.id === Number(posId));
                             const percentage = (amount / stats.totalRevenue) * 100;
@@ -360,7 +386,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
                 <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 flex flex-col h-96">
                     <h3 className="text-lg font-bold text-white mb-4 border-b border-slate-700 pb-2">Últimas Transacciones</h3>
                     <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
-                        {financialData?.sales.slice().reverse().slice(0, 20).map((sale: Sale) => (
+                        {financialData?.sales?.slice().reverse().slice(0, 20).map((sale: Sale) => (
                             <div key={sale.id} className="flex justify-between items-center p-3 bg-slate-900/50 rounded border border-slate-700">
                                 <div>
                                     <p className="text-white font-bold text-sm">Venta #{sale.numeroVenta}</p>
@@ -380,6 +406,7 @@ const MasterDashboard: React.FC<MasterDashboardProps> = ({ onLogout }) => {
 
     const renderAudit = () => (
         <div className="space-y-6 animate-in fade-in duration-500">
+            {!auditLoaded && <p className="text-slate-400 text-sm">Cargando auditoría…</p>}
             <h2 className="text-2xl font-bold text-white flex items-center"><Shield className="mr-3 text-red-500" /> Auditoría del Sistema</h2>
             <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden flex flex-col h-[700px]">
                 <div className="p-4 border-b border-slate-700 bg-slate-900/50">

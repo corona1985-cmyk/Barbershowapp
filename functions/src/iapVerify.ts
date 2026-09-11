@@ -1,6 +1,6 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { JWT } from "google-auth-library";
-import { isEmulator, resolveTierFromProductId } from "./lib";
+import { isEmulator, resolveTierFromProductId, sha256Hex } from "./lib";
 
 const PACKAGE_NAME = process.env.GOOGLE_PLAY_PACKAGE_NAME || "com.barbershow.app";
 const BUNDLE_ID = process.env.APPLE_BUNDLE_ID || "com.barbershow.app";
@@ -9,6 +9,8 @@ export type VerifiedSubscription = {
   productId: string;
   expiresAt: string;
   originalTransactionId?: string;
+  orderId?: string;
+  purchaseTokenHash?: string;
   platform: "android" | "ios";
 };
 
@@ -32,6 +34,8 @@ export async function verifyGooglePlayPurchase(productId: string, purchaseToken:
         productId,
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         platform: "android",
+        orderId: `emu-${productId}`,
+        purchaseTokenHash: sha256Hex(purchaseToken || productId).slice(0, 40),
       };
     }
     throw new HttpsError("failed-precondition", "La verificación de Google Play no está configurada.");
@@ -51,7 +55,7 @@ export async function verifyGooglePlayPurchase(productId: string, purchaseToken:
   if (!res.ok) {
     throw new HttpsError("failed-precondition", "El recibo de Google Play no es válido.");
   }
-  const json = (await res.json()) as { expiryTimeMillis?: string; paymentState?: number };
+  const json = (await res.json()) as { expiryTimeMillis?: string; paymentState?: number; orderId?: string };
   const expiryMs = Number(json.expiryTimeMillis);
   if (!Number.isFinite(expiryMs) || expiryMs <= Date.now()) {
     throw new HttpsError("failed-precondition", "La suscripción de Google Play no está activa.");
@@ -63,6 +67,8 @@ export async function verifyGooglePlayPurchase(productId: string, purchaseToken:
     productId,
     expiresAt: new Date(expiryMs).toISOString(),
     platform: "android",
+    orderId: json.orderId ? String(json.orderId) : undefined,
+    purchaseTokenHash: sha256Hex(purchaseToken).slice(0, 40),
   };
 }
 
@@ -99,6 +105,8 @@ export async function verifyApplePurchase(productId: string, receiptData: string
       productId,
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       platform: "ios",
+      originalTransactionId: `emu-ios-${productId}`,
+      purchaseTokenHash: sha256Hex(receiptData || productId).slice(0, 40),
     };
   }
   let json = await appleVerifyReceipt(receiptData, false);
@@ -127,6 +135,8 @@ export async function verifyApplePurchase(productId: string, receiptData: string
     productId: match.product_id || productId,
     expiresAt: new Date(expiryMs).toISOString(),
     originalTransactionId: match.original_transaction_id,
+    orderId: match.original_transaction_id,
+    purchaseTokenHash: sha256Hex(receiptData).slice(0, 40),
     platform: "ios",
   };
 }

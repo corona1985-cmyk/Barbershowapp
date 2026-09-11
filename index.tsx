@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { I18nProvider, translate } from './i18n';
+import { ToastHost } from './components/ToastHost';
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -53,6 +54,7 @@ root.render(
   <React.StrictMode>
     <I18nProvider>
       <ErrorBoundary>
+        <ToastHost />
         <App />
       </ErrorBoundary>
     </I18nProvider>

@@ -10,11 +10,6 @@ import { Subscriptions } from '@squareetlabs/capacitor-subscriptions';
 import type { AccountTier, PosPlan } from '../types';
 import { isTierAvailableForIAP, tierToDefaultPlan } from '../config/app';
 
-const APP_ID = 'com.barbershow.app';
-
-/** URL del endpoint que verifica el purchase token con Google Play API. Crear en functions (ver PLAY_BILLING.md). */
-const GOOGLE_VERIFY_ENDPOINT = 'https://us-central1-gen-lang-client-0624135070.cloudfunctions.net/verifyGooglePlayReceipt';
-
 /** Product IDs en Play Console / App Store Connect (deben coincidir con las suscripciones creadas). */
 const PRODUCT_IDS: Record<AccountTier, { monthly: string; yearly: string }> = {
   solo:      { monthly: 'plan_solo_monthly',      yearly: 'plan_solo_yearly' },
@@ -62,23 +57,12 @@ export function getPlayProductId(plan: AccountTier, cycle: 'mensual' | 'anual'):
 }
 
 /**
- * Inicializa billing nativo. Android: verificación Google. iOS: StoreKit 2 (sin endpoint extra).
+ * Inicializa billing nativo. No llama al HTTP público verifyGooglePlayReceipt (404 en prod).
+ * La compra y los entitlements salen del plugin; activatePlanFromPlay verifica el token.
  */
-export function initPlayBilling(verificationUrl?: string): void {
+export function initPlayBilling(_verificationUrl?: string): void {
   if (!isNativePaymentAvailable()) return;
-  if (Capacitor.getPlatform() === 'android') {
-    try {
-      Subscriptions.setGoogleVerificationDetails({
-        googleVerifyEndpoint: verificationUrl || GOOGLE_VERIFY_ENDPOINT,
-        bid: APP_ID,
-      });
-      initialized = true;
-    } catch {
-      // Plugin no disponible o error; ignorar
-    }
-  } else {
-    initialized = true;
-  }
+  initialized = true;
 }
 
 /**
