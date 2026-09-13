@@ -12,6 +12,7 @@ import {
   lockAppointmentSlot,
   releaseAppointmentSlot,
   writeAppointmentIndexes,
+  writeClientLite,
 } from "./lib";
 
 type ServiceRow = { id: number; posId?: number; name?: string; price?: number; duration?: number; barberId?: number | null };
@@ -104,6 +105,18 @@ export async function ensureClientForBooking(params: {
     puntos: 0,
     status: "active",
     whatsappOptIn: false,
+  });
+  await writeClientLite({
+    id: clientId,
+    posId: params.posId,
+    nombre: params.nombre,
+    telefono: params.telefono,
+    email: "",
+    ultimaVisita: "N/A",
+    puntos: 0,
+    status: "active",
+    whatsappOptIn: false,
+    fechaRegistro: new Date().toISOString().split("T")[0],
   });
   await indexClientPhone(params.posId, params.telefono, clientId);
   return clientId;

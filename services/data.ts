@@ -1,5 +1,5 @@
 import { ref, get, set, remove, query, orderByChild, equalTo, limitToLast } from 'firebase/database';
-import { db, getAuthIdToken, loginWithPassword, upsertStaffUser, deleteStaffUser, updateMyProfile, adminUpsertPointOfSale, adminDeletePointOfSale, adminSetPosPlan, checkUsernameAvailable, updateMyClientProfile, getPlatformStats, listDirectoryUsers, cancelMyAppointment, createClientAppointment } from './firebase';
+import { db, getAuthIdToken, loginWithPassword, upsertStaffUser, deleteStaffUser, updateMyProfile, adminUpsertPointOfSale, adminDeletePointOfSale, adminSetPosPlan, checkUsernameAvailable, updateMyClientProfile, ensureMyClientProfile, getPlatformStats, listDirectoryUsers, cancelMyAppointment, createClientAppointment, rebuildPosIndexes } from './firebase';
 import { getCachedClaims } from './session';
 import { Capacitor } from '@capacitor/core';
 import { GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER, PROMO_GRACE_PERIOD_DAYS, getFreeSignupTierAndPlan } from '../config/app';
@@ -160,6 +160,14 @@ async function syncAppointmentIndexes(
     appointmentId: apt.id,
   }, 'busySlot');
   await writeNode(byDate, true, 'apptByDate');
+}
+
+async function syncSaleIndexes(sale: Pick<Sale, 'id' | 'posId' | 'fecha'>): Promise<void> {
+  const id = Number(sale.id);
+  const posId = Number(sale.posId);
+  const fecha = String(sale.fecha || '');
+  if (!Number.isFinite(id) || !Number.isFinite(posId) || posId <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
+  await writeNode(`${ROOT}/salesByPosDate/${posId}/${fecha}/${id}`, true, 'saleByDate');
 }
 
 async function indexClientPhone(posId: number, phone: string, clientId: number | null): Promise<void> {
@@ -491,6 +499,104 @@ export function generateUniqueId(): number {
   return Date.now() * 1000 + Math.floor(Math.random() * 1000);
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_INDEX_RANGE_DAYS = 93;
+
+export function localIsoDate(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export function shiftIsoDate(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, (m || 1) - 1, (d || 1) + days);
+  return localIsoDate(dt);
+}
+
+function datesInRange(from: string, to: string): string[] {
+  if (!ISO_DATE.test(from) || !ISO_DATE.test(to) || from > to) return [];
+  const minFrom = shiftIsoDate(to, -(MAX_INDEX_RANGE_DAYS - 1));
+  let cursor = from < minFrom ? minFrom : from;
+  const out: string[] = [];
+  for (let i = 0; i < MAX_INDEX_RANGE_DAYS; i++) {
+    out.push(cursor);
+    if (cursor === to) break;
+    cursor = shiftIsoDate(cursor, 1);
+    if (cursor > to) break;
+  }
+  return out;
+}
+
+function toClientLite(client: Client): Client {
+  const photo = typeof client.photoUrl === 'string' && client.photoUrl.startsWith('https://') ? client.photoUrl : undefined;
+  const lite: Client = {
+    id: Number(client.id),
+    posId: Number(client.posId),
+    nombre: String(client.nombre || ''),
+    telefono: String(client.telefono || ''),
+    email: String(client.email || ''),
+    ultimaVisita: String(client.ultimaVisita || ''),
+    notas: String(client.notas || '').slice(0, 500),
+    fechaRegistro: String(client.fechaRegistro || ''),
+    puntos: Number(client.puntos || 0),
+    status: client.status === 'suspended' ? 'suspended' : 'active',
+  };
+  if (photo) lite.photoUrl = photo;
+  if (typeof client.whatsappOptIn === 'boolean') lite.whatsappOptIn = client.whatsappOptIn;
+  return lite;
+}
+
+async function writeClientLiteRow(client: Client): Promise<void> {
+  try {
+    const lite = toClientLite(client);
+    await writeNode(`${ROOT}/clientsLite/${lite.posId}/${lite.id}`, JSON.parse(JSON.stringify(lite)), 'clientsLite.item');
+  } catch (err) {
+    console.warn('No se pudo actualizar cliente lite:', err);
+  }
+}
+
+const dayIndexEnsured = new Set<number>();
+async function ensureDayIndexes(posId: number): Promise<void> {
+  if (!Number.isFinite(posId) || posId <= 0 || dayIndexEnsured.has(posId)) return;
+  try {
+    const ready = await readNode<boolean>(`${ROOT}/indexMeta/${posId}/ready`, 'indexMeta.ready');
+    if (ready) {
+      dayIndexEnsured.add(posId);
+      return;
+    }
+    await rebuildPosIndexes(posId);
+    const after = await readNode<boolean>(`${ROOT}/indexMeta/${posId}/ready`, 'indexMeta.ready');
+    if (after) dayIndexEnsured.add(posId);
+  } catch (err) {
+    console.warn('No se pudieron reconstruir índices de la sede:', err);
+  }
+}
+
+async function readIndexedItems<T extends { id?: number }>(
+  indexRoot: string,
+  itemRoot: string,
+  posId: number,
+  fecha: string,
+  operation: string
+): Promise<T[]> {
+  if (!Number.isFinite(posId) || !ISO_DATE.test(fecha)) return [];
+  let ids: Record<string, boolean> | null = null;
+  try {
+    ids = await readNode<Record<string, boolean> | null>(`${ROOT}/${indexRoot}/${posId}/${fecha}`, `${operation}.index`);
+  } catch {
+    return [];
+  }
+  if (!ids) return [];
+  const keys = Object.keys(ids).filter((id) => ids![id] && id !== '_ready');
+  if (!keys.length) return [];
+  const out: T[] = [];
+  const rows = await Promise.all(keys.map((id) => readNode<T>(`${ROOT}/${itemRoot}/${id}`, `${operation}.item`)));
+  for (const row of rows) {
+    if (!row) continue;
+    out.push({ ...row, id: Number(row.id) });
+  }
+  return out;
+}
+
 const CACHE_TTL_MS = 50 * 1000;
 const dataCache: Record<string, { data: unknown; ts: number }> = {};
 function cacheGet<T>(key: string): T | null {
@@ -710,24 +816,16 @@ export const DataService = {
   },
 
   getAllUsersGlobal: async (): Promise<SystemUser[]> => {
-    try {
-      const listed = await listDirectoryUsers();
-      return listed.map((u) => ({
-        username: u.username,
-        name: u.name,
-        role: u.role as SystemUser['role'],
-        posId: u.posId,
-        status: u.status as SystemUser['status'],
-        lastLogin: u.lastLogin,
-        ip: u.ip,
-      }));
-    } catch {
-      const raw = await readNode<Record<string, SystemUser>>(`${ROOT}/users`, 'getAllUsersGlobal.fallback');
-      return snapshotToUsers(raw).map((u) => {
-        const { photoUrl: _omit, ...rest } = u;
-        return rest as SystemUser;
-      });
-    }
+    const listed = await listDirectoryUsers();
+    return listed.map((u) => ({
+      username: u.username,
+      name: u.name,
+      role: u.role as SystemUser['role'],
+      posId: u.posId,
+      status: u.status as SystemUser['status'],
+      lastLogin: u.lastLogin,
+      ip: u.ip,
+    }));
   },
 
   /** Busca usuario por username sin modificar datos (para registro/comprobaciones). */
@@ -1004,10 +1102,34 @@ export const DataService = {
     const key = `clients_${ACTIVE_POS_ID}`;
     const cached = cacheGet<Client[]>(key);
     if (cached) return cached;
-    const arr = await readCollectionByPos<Client>('clients', ACTIVE_POS_ID, 'getClients');
+    let lite: Record<string, Client | boolean> | null = null;
+    try {
+      lite = await readNode<Record<string, Client | boolean> | null>(`${ROOT}/clientsLite/${ACTIVE_POS_ID}`, 'getClients.lite');
+    } catch {
+      lite = null;
+    }
+    if (lite && lite._ready === true) {
+      const out = Object.entries(lite)
+        .filter(([id, row]) => id !== '_ready' && row && typeof row === 'object')
+        .map(([, row]) => {
+          const c = row as Client;
+          return { ...toClientLite(c), id: Number(c.id) };
+        });
+      cacheSet(key, out);
+      return out;
+    }
+    const arr = await readCollectionByPos<Client>('clients', ACTIVE_POS_ID, 'getClients.backfill');
     const out = arr.map((c) => ({ ...c, id: Number(c.id) }));
-    cacheSet(key, out);
-    return out;
+    const payload: Record<string, unknown> = { _ready: true };
+    for (const c of out) payload[String(c.id)] = toClientLite(c);
+    try {
+      await writeNode(`${ROOT}/clientsLite/${ACTIVE_POS_ID}`, payload, 'getClients.liteWrite');
+    } catch (err) {
+      console.warn('No se pudo escribir índice lite de clientes:', err);
+    }
+    const liteOut = out.map((c) => toClientLite(c));
+    cacheSet(key, liteOut);
+    return liteOut;
   },
 
   /** Fuerza recarga de clientes desde Firebase (invalida caché). Para ver fotos y datos actualizados tras Mi perfil. */
@@ -1022,20 +1144,14 @@ export const DataService = {
     return DataService.getClientsWithActivity();
   },
 
-  /** Busca un cliente por teléfono en la sede activa (índice, con fallback a la lista de la sede). */
+  /** Busca un cliente por teléfono en la sede activa usando solo el índice. */
   findClientByPhone: async (phone: string): Promise<Client | null> => {
     const normalized = String(phone ?? '').replace(/\D/g, '');
-    if (normalized.length < 6) return null;
-    if (ACTIVE_POS_ID != null) {
-      const indexedId = await readNode<number>(`${ROOT}/clientsByPhone/${ACTIVE_POS_ID}/${normalized}`, 'findClientByPhone.index');
-      if (indexedId != null) {
-        const byId = await DataService.getClientById(Number(indexedId));
-        if (byId) return byId;
-      }
-    }
-    const arr = await DataService.getClients();
-    const found = arr.find((c) => String(c.telefono || '').replace(/\D/g, '') === normalized);
-    return found ? { ...found, id: Number(found.id) } : null;
+    if (normalized.length < 6 || ACTIVE_POS_ID == null) return null;
+    const indexedId = await readNode<number>(`${ROOT}/clientsByPhone/${ACTIVE_POS_ID}/${normalized}`, 'findClientByPhone.index');
+    if (indexedId == null) return null;
+    const byId = await DataService.getClientById(Number(indexedId));
+    return byId;
   },
 
   /** Solo clientes que tienen al menos una cita o una venta en esta sede (para barberos: solo de este barbero). */
@@ -1045,12 +1161,13 @@ export const DataService = {
     const key = `clientsActivity_${ACTIVE_POS_ID}_${barberId ?? 'all'}`;
     const cached = cacheGet<Client[]>(key);
     if (cached) return cached;
-    const [allClientsRaw, apptsRaw, salesRaw] = await Promise.all([
-      readCollectionByPos<Client>('clients', ACTIVE_POS_ID, 'getClientsWithActivity.clients'),
-      readCollectionByPos<Appointment>('appointments', ACTIVE_POS_ID, 'getClientsWithActivity.appointments'),
-      readCollectionByPos<Sale>('sales', ACTIVE_POS_ID, 'getClientsWithActivity.sales'),
+    const today = localIsoDate();
+    const from = shiftIsoDate(today, -90);
+    const [allClients, apptsRaw, salesRaw] = await Promise.all([
+      DataService.getClients(),
+      DataService.getAppointmentsInRange(from, today),
+      DataService.getSalesInRange(from, today),
     ]);
-    const allClients = allClientsRaw.map((c) => ({ ...c, id: Number(c.id) }));
     let appts = apptsRaw;
     let sales = salesRaw;
     if (barberId != null) {
@@ -1079,6 +1196,7 @@ export const DataService = {
     }    cacheInvalidate('clients');
     DataService.logAuditAction('create_client', 'system', `Registered client: ${client.nombre}`, effectivePosId).catch(() => {});
     await indexClientPhone(effectivePosId, String(client.telefono || ''), newClient.id);
+    await writeClientLiteRow(newClient);
     return newClient;
   },
 
@@ -1094,7 +1212,15 @@ export const DataService = {
 
   updateClient: async (client: Client): Promise<void> => {
     requireRole(['admin', 'superadmin', 'barbero']);
-    await set(ref(db, ROOT + '/clients/' + client.id), client);
+    const previous = await DataService.getClientById(client.id);
+    await writeNode(`${ROOT}/clients/${client.id}`, JSON.parse(JSON.stringify(client)), 'updateClient');
+    if (previous && String(previous.telefono || '') !== String(client.telefono || '')) {
+      await indexClientPhone(previous.posId, String(previous.telefono || ''), null);
+      await indexClientPhone(client.posId, String(client.telefono || ''), client.id);
+    } else if (!previous) {
+      await indexClientPhone(client.posId, String(client.telefono || ''), client.id);
+    }
+    await writeClientLiteRow(client);
     cacheInvalidate('clients');
   },
 
@@ -1129,36 +1255,27 @@ export const DataService = {
       const existing = await DataService.getClientById(user.clientId);
       if (existing) return existing;
     }
-    const effectivePosId = ACTIVE_POS_ID ?? 1;
-    const newClient: Client = {
-      id: generateUniqueId(),
-      posId: effectivePosId,
-      nombre: user.name || user.username || 'Cliente',
-      telefono: '',
-      email: '',
-      ultimaVisita: '',
-      notas: '',
-      fechaRegistro: new Date().toISOString().split('T')[0],
-      puntos: 0,
-      status: 'active',
-    };
-    await set(ref(db, ROOT + '/clients/' + newClient.id), newClient);
+    const result = await ensureMyClientProfile();
     cacheInvalidate('clients');
-    const userSnap = await get(ref(db, ROOT + '/users/' + user.username));
-    const existingUser = userSnap.val() as SystemUser | null;
-    if (existingUser) {
-      await set(ref(db, ROOT + '/users/' + user.username), { ...existingUser, clientId: newClient.id });
-    }
-    return newClient;
+    const created = result.client as unknown as Client;
+    const clientId = Number(created.id);
+    try {
+      const cur = DataService.getCurrentUser();
+      if (cur?.username === user.username) {
+        localStorage.setItem('currentUser', JSON.stringify({ ...cur, clientId }));
+      }
+    } catch (_) {}
+    return { ...created, id: clientId };
   },
 
   toggleClientStatus: async (id: number): Promise<void> => {
     requireRole(['admin', 'superadmin']);
-    const snap = await get(ref(db, ROOT + '/clients/' + id));
-    if (!snap.exists()) return;
-    const client = snap.val() as Client;
+    const client = await DataService.getClientById(id);
+    if (!client) return;
     client.status = client.status === 'active' ? 'suspended' : 'active';
-    await set(ref(db, ROOT + '/clients/' + id), client);
+    await writeNode(`${ROOT}/clients/${id}`, JSON.parse(JSON.stringify(client)), 'toggleClientStatus');
+    await writeClientLiteRow(client);
+    cacheInvalidate('clients');
     await DataService.logAuditAction('toggle_client', 'admin', `Toggled client ${id} status`, client.posId);
   },
 
@@ -1526,8 +1643,8 @@ export const DataService = {
     const key = `appointments_${ACTIVE_POS_ID}_${barberId ?? 'all'}`;
     const cached = cacheGet<Appointment[]>(key);
     if (cached) return cached;
-    let arr = (await readCollectionByPos<Appointment>('appointments', ACTIVE_POS_ID, 'getAppointments'))
-      .map((a) => ({ ...a, id: Number(a.id) }));
+    const today = localIsoDate();
+    let arr = await DataService.getAppointmentsInRange(shiftIsoDate(today, -90), today);
     if (barberId != null) arr = arr.filter((a) => a.barberoId === barberId);
     cacheSet(key, arr);
     return arr;
@@ -1542,20 +1659,22 @@ export const DataService = {
     return false;
   },
 
-  getAppointmentsByDate: async (fecha: string): Promise<Appointment[]> => {
-    if (ACTIVE_POS_ID == null) return [];
-    const ids = await readNode<Record<string, boolean> | null>(
-      `${ROOT}/appointmentsByPosDate/${ACTIVE_POS_ID}/${fecha}`,
-      'getAppointmentsByDate.index'
-    );
-    if (!ids) {
-      const all = await DataService.getAppointments();
-      return all.filter((a) => a.fecha === fecha);
-    }
-    const rows = await Promise.all(
-      Object.keys(ids).map((id) => readNode<Appointment>(`${ROOT}/appointments/${id}`, 'getAppointmentsByDate.item'))
-    );
-    return rows.filter((a): a is Appointment => a != null).map((a) => ({ ...a, id: Number(a.id) }));
+  getAppointmentsByDate: async (fecha: string, posId?: number): Promise<Appointment[]> => {
+    const effectivePosId = posId ?? ACTIVE_POS_ID;
+    if (effectivePosId == null) return [];
+    if (!ISO_DATE.test(fecha)) return [];
+    await ensureDayIndexes(effectivePosId);
+    return readIndexedItems<Appointment>('appointmentsByPosDate', 'appointments', effectivePosId, fecha, 'getAppointmentsByDate');
+  },
+
+  getAppointmentsInRange: async (from: string, to: string, posId?: number): Promise<Appointment[]> => {
+    const effectivePosId = posId ?? ACTIVE_POS_ID;
+    if (effectivePosId == null) return [];
+    await ensureDayIndexes(effectivePosId);
+    const dates = datesInRange(from, to);
+    if (!dates.length) return [];
+    const batches = await Promise.all(dates.map((fecha) => DataService.getAppointmentsByDate(fecha, effectivePosId)));
+    return batches.flat();
   },
 
   bookClientAppointment: async (params: {
@@ -1597,7 +1716,7 @@ export const DataService = {
       return;
     }
     requireRole(['admin', 'superadmin', 'barbero']);
-    await set(ref(db, ROOT + '/appointments/' + apt.id), apt);
+    await writeNode(`${ROOT}/appointments/${apt.id}`, JSON.parse(JSON.stringify(apt)), 'updateAppointment');
     await syncAppointmentIndexes(apt);
     cacheInvalidate('appointments');
     cacheInvalidate('clientsActivity');
@@ -1607,7 +1726,7 @@ export const DataService = {
   deleteAppointment: async (id: number): Promise<void> => {
     requireRole(['admin', 'superadmin', 'barbero']);
     const existing = await readNode<Appointment>(`${ROOT}/appointments/${id}`, 'deleteAppointment.read');
-    await remove(ref(db, ROOT + '/appointments/' + id));
+    await writeNode(`${ROOT}/appointments/${id}`, null, 'deleteAppointment');
     if (existing) await syncAppointmentIndexes(existing, true);
     cacheInvalidate('appointments');
     cacheInvalidate('clientsActivity');
@@ -1617,7 +1736,7 @@ export const DataService = {
   setAppointments: async (data: Appointment[]): Promise<void> => {
     requireRole(['admin', 'superadmin', 'barbero']);
     for (const apt of data) {
-      await set(ref(db, ROOT + '/appointments/' + apt.id), apt);
+      await writeNode(`${ROOT}/appointments/${apt.id}`, JSON.parse(JSON.stringify(apt)), 'setAppointments');
       await syncAppointmentIndexes(apt);
     }
     cacheInvalidate('appointments');
@@ -1626,33 +1745,49 @@ export const DataService = {
 
   getSales: async (): Promise<Sale[]> => {
     if (ACTIVE_POS_ID == null) return [];
+    const today = localIsoDate();
+    return DataService.getSalesInRange(shiftIsoDate(today, -90), today);
+  },
+
+  getSalesByDate: async (fecha: string, posId?: number, options?: { filterBarber?: boolean }): Promise<Sale[]> => {
+    const effectivePosId = posId ?? ACTIVE_POS_ID;
+    if (effectivePosId == null) return [];
+    if (!ISO_DATE.test(fecha)) return [];
     const role = DataService.getCurrentUserRole();
     const barberId = DataService.getCurrentBarberId();
-    if ((role === 'barbero' || role === 'empleado') && barberId == null) return [];
-    const key = `sales_${ACTIVE_POS_ID}_${barberId ?? 'all'}`;
-    const cached = cacheGet<Sale[]>(key);
-    if (cached) return cached;
-    let arr = (await readCollectionByPos<Sale>('sales', ACTIVE_POS_ID, 'getSales'))
-      .map((s) => ({ ...s, id: Number(s.id) }));
-    if (barberId != null) arr = arr.filter((s) => (s.barberoId ?? null) === barberId);
-    cacheSet(key, arr);
-    return arr;
+    const filterBarber = options?.filterBarber !== false;
+    if (filterBarber && (role === 'barbero' || role === 'empleado') && barberId == null) return [];
+    await ensureDayIndexes(effectivePosId);
+    const rows = await readIndexedItems<Sale>('salesByPosDate', 'sales', effectivePosId, fecha, 'getSalesByDate');
+    if (filterBarber && barberId != null) return rows.filter((s) => (s.barberoId ?? null) === barberId);
+    return rows;
   },
 
-  /** Ventas de una sede concreta (para reportes por sede en Multi-Sede). No depende de ACTIVE_POS_ID. */
+  getSalesInRange: async (from: string, to: string, posId?: number, options?: { filterBarber?: boolean }): Promise<Sale[]> => {
+    const effectivePosId = posId ?? ACTIVE_POS_ID;
+    if (effectivePosId == null) return [];
+    await ensureDayIndexes(effectivePosId);
+    const dates = datesInRange(from, to);
+    if (!dates.length) return [];
+    const batches = await Promise.all(dates.map((fecha) => DataService.getSalesByDate(fecha, effectivePosId, options)));
+    return batches.flat();
+  },
+
+  /** Ventas recientes de una sede (máx. 90 días). No depende de ACTIVE_POS_ID. */
   getSalesForPos: async (posId: number): Promise<Sale[]> => {
-    return (await readCollectionByPos<Sale>('sales', posId, 'getSalesForPos'))
-      .map((s) => ({ ...s, id: Number(s.id) }));
+    const today = localIsoDate();
+    return DataService.getSalesInRange(shiftIsoDate(today, -90), today, posId, { filterBarber: false });
   },
 
-  /** Citas de una sede concreta (para reportes por sede en Multi-Sede). No depende de ACTIVE_POS_ID. */
+  /** Citas recientes de una sede (máx. 90 días). No depende de ACTIVE_POS_ID. */
   getAppointmentsForPos: async (posId: number): Promise<Appointment[]> => {
-    return (await readCollectionByPos<Appointment>('appointments', posId, 'getAppointmentsForPos'))
-      .map((a) => ({ ...a, id: Number(a.id) }));
+    const today = localIsoDate();
+    return DataService.getAppointmentsInRange(shiftIsoDate(today, -90), today, posId);
   },
 
   /** Cuenta citas no canceladas del mes en curso para una sede (plan gratuito: límite 100/mes). */
   getAppointmentsCountCurrentMonth: async (posId: number): Promise<number> => {
+    await ensureDayIndexes(posId);
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
@@ -1663,16 +1798,12 @@ export const DataService = {
       dates.push(`${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
     }
     const snaps = await Promise.all(
-      dates.map((fecha) => readNode<Record<string, boolean> | null>(`${ROOT}/appointmentsByPosDate/${posId}/${fecha}`, 'countMonth'))
+      dates.map((fecha) =>
+        readNode<Record<string, boolean> | null>(`${ROOT}/appointmentsByPosDate/${posId}/${fecha}`, 'countMonth').catch(() => null)
+      )
     );
-    const hasIndex = snaps.some((s) => s != null);
-    if (!hasIndex) {
-      const list = await DataService.getAppointmentsForPos(posId);
-      const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
-      return list.filter((a) => a.fecha.startsWith(prefix) && a.estado !== 'cancelada').length;
-    }
     for (const snap of snaps) {
-      if (snap) count += Object.keys(snap).length;
+      if (snap) count += Object.keys(snap).filter((id) => snap[id]).length;
     }
     return count;
   },
@@ -1682,7 +1813,8 @@ export const DataService = {
     requireRole(['admin', 'superadmin', 'barbero']);
     if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa. No se puede registrar la venta.');
     const s = { ...sale, posId: sale.posId || ACTIVE_POS_ID, barberoId: sale.barberoId ?? DataService.getCurrentBarberId() ?? undefined };
-    await set(ref(db, ROOT + '/sales/' + s.id), s);
+    await writeNode(`${ROOT}/sales/${s.id}`, JSON.parse(JSON.stringify(s)), 'addSale');
+    await syncSaleIndexes(s);
     cacheInvalidate('sales');
     cacheInvalidate('clientsActivity');
   },
@@ -1693,7 +1825,8 @@ export const DataService = {
     if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa. No se puede registrar la venta.');
     for (const sale of data) {
       const s = { ...sale, posId: sale.posId || ACTIVE_POS_ID };
-      await set(ref(db, ROOT + '/sales/' + s.id), s);
+      await writeNode(`${ROOT}/sales/${s.id}`, JSON.parse(JSON.stringify(s)), 'setSales');
+      await syncSaleIndexes(s);
     }
     cacheInvalidate('sales');
     cacheInvalidate('clientsActivity');

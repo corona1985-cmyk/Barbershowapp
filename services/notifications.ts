@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import { DataService } from './data';
+import { DataService, localIsoDate, shiftIsoDate } from './data';
 import { Appointment, Client, Barber } from '../types';
 import { translate } from '../i18n';
 
@@ -145,7 +145,12 @@ export async function syncAppointmentNotifications(ctx: NotificationContext): Pr
 
     let appointments: Appointment[];
     try {
-        appointments = await DataService.getAppointments();
+        if (ctx.role === 'cliente') {
+            appointments = await DataService.getAppointments();
+        } else {
+            const today = localIsoDate();
+            appointments = await DataService.getAppointmentsInRange(today, shiftIsoDate(today, 14));
+        }
     } catch (err) {
         console.warn('[notifications] no se pudieron leer las citas:', err);
         return;

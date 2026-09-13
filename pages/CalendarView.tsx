@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { DataService } from '../services/data';
+import { DataService, localIsoDate } from '../services/data';
 import { Appointment, Barber, Client } from '../types';
 import { ChevronLeft, ChevronRight, User, MapPin, Loader2, X, CalendarDays, Clock, Scissors, Plus } from 'lucide-react';
 import { useTranslation } from '../i18n';
@@ -37,21 +37,30 @@ const CalendarView: React.FC<CalendarViewProps> = ({ onGoToSchedule }) => {
         t(`appointments.status.${estado}` as 'appointments.status.pendiente');
 
     useEffect(() => {
+        let cancelled = false;
         setLoading(true);
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const from = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+        const to = localIsoDate(new Date(year, month + 1, 0));
         Promise.all([
-            DataService.getAppointments(),
+            DataService.getAppointmentsInRange(from, to),
             DataService.getBarbers(),
             DataService.getPointsOfSale(),
             DataService.getClients(),
         ]).then(([appts, barbersList, posList, clientsList]) => {
+            if (cancelled) return;
             setAppointments(appts);
             setBarbers(barbersList);
             setClients(clientsList);
             const activePosId = DataService.getActivePosId();
             const pos = posList.find(p => p.id === activePosId);
             setCurrentBarberiaName(pos ? pos.name : '');
-        }).finally(() => setLoading(false));
-    }, []);
+        }).finally(() => {
+            if (!cancelled) setLoading(false);
+        });
+        return () => { cancelled = true; };
+    }, [currentDate]);
 
     useEffect(() => {
         if (isBarberoView && currentBarberId != null) setSelectedBarber(currentBarberId);

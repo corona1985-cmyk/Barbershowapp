@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { DataService } from '../services/data';
+import { DataService, localIsoDate, shiftIsoDate } from '../services/data';
 import { Sale, Appointment, Product, Client, Barber, AccountTier, PointOfSale } from '../types';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { TrendingUp, Users, Calendar, ShoppingBag, Printer, Scissors, MapPin, Loader2 } from 'lucide-react';
@@ -35,9 +35,11 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
         setLoading(true);
         setActivePosId(DataService.getActivePosId());
         const barberId = DataService.getCurrentUserRole() === 'barbero' ? DataService.getCurrentBarberId() ?? undefined : undefined;
+        const today = localIsoDate();
+        const from = shiftIsoDate(today, -90);
         Promise.all([
-            DataService.getSales(),
-            DataService.getAppointments(),
+            DataService.getSalesInRange(from, today),
+            DataService.getAppointmentsInRange(from, today),
             DataService.getProducts(barberId),
             DataService.getClients(),
         ])
@@ -70,10 +72,9 @@ const Reports: React.FC<ReportsProps> = ({ accountTier = 'solo', posListForOwner
             try {
                 const rows = await Promise.all(
                     posListForOwner.map(async (pos) => {
-                        const [s, a] = await Promise.all([
-                            DataService.getSalesForPos(pos.id),
-                            DataService.getAppointmentsForPos(pos.id),
-                        ]);
+                        const today = localIsoDate();
+                        const from = shiftIsoDate(today, -90);
+                        const s = await DataService.getSalesInRange(from, today, pos.id, { filterBarber: false });
                         const total = s.reduce((sum, sale) => sum + sale.total, 0);
                         return { posId: pos.id, posName: pos.name, total, count: s.length };
                     })

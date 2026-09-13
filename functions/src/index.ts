@@ -22,6 +22,7 @@ import {
   hashPasswordNode,
   iapReuseKeys,
   indexClientPhone,
+  findClientIdByPhone,
   ipHash,
   isEmulator,
   isPlatformRole,
@@ -43,6 +44,12 @@ import {
   syncUserClaims,
   verifyPasswordNode,
   writeAdminAudit,
+  assertStoredPhotoUrl,
+  publicAssetUrl,
+  safeCheckoutOrigin,
+  writePublicShopRecord,
+  writeDirectoryUserRecord,
+  writeClientLite,
 } from "./lib";
 import { verifyGooglePlayPurchase, verifyStorePurchase } from "./iapVerify";
 import {
@@ -89,11 +96,8 @@ function masterPassword(): string | undefined {
 }
 
 async function findClientPhoneInPos(posId: number, phone: string): Promise<boolean> {
-  const snap = await db().ref(`${ROOT}/clients`).orderByChild("posId").equalTo(posId).get();
-  if (!snap.exists()) return false;
-  const want = digitsOnly(phone);
-  const val = snap.val() as Record<string, { telefono?: string }>;
-  return Object.values(val).some((c) => digitsOnly(String(c.telefono || "")) === want);
+  const indexed = await findClientIdByPhone(posId, phone);
+  return indexed != null;
 }
 
 function isStoredHashSafe(stored: string): boolean {
@@ -466,6 +470,18 @@ export const registerClientAccount = onCall(callableOpts, async (request) => {
     status: "active",
     whatsappOptIn: false,
   });
+  await writeClientLite({
+    id: clientId,
+    posId,
+    nombre: name,
+    telefono: phoneDisplay,
+    email: "",
+    ultimaVisita: "N/A",
+    puntos: 0,
+    status: "active",
+    whatsappOptIn: false,
+    fechaRegistro: new Date().toISOString().split("T")[0],
+  });
   await indexClientPhone(posId, phoneDisplay, clientId);
   const newUser: Record<string, unknown> = {
     username,
@@ -520,6 +536,7 @@ export const upsertStaffUser = onCall(callableOpts, async (request) => {
     await migratePasswordSecret(username, existing.password);
   }
   await db().ref(`${ROOT}/users/${username}`).set(toWrite);
+  await writeDirectoryUserRecord(username, toWrite);
   if (password && password.length >= MIN_PASSWORD_LENGTH) {
     await setPasswordHash(username, hashPasswordNode(password));
   } else if (password) {
@@ -549,6 +566,7 @@ export const deleteStaffUser = onCall(callableOpts, async (request) => {
     throw new HttpsError("permission-denied", "No autorizado.");
   }
   await db().ref(`${ROOT}/users/${username}`).remove();
+  await db().ref(`${ROOT}/directoryUsers/${username}`).remove();
   await db().ref(`${ROOT}/authSecrets/${username}`).remove();
   if (target.authUid) {
     await admin.auth().deleteUser(String(target.authUid)).catch(() => undefined);
@@ -569,11 +587,12 @@ export const updateMyProfile = onCall(callableOpts, async (request) => {
     updates.name = name;
   }
   if (data?.photoUrl !== undefined) {
-    if (data.photoUrl && String(data.photoUrl).length > 500000) throw new HttpsError("invalid-argument", "Imagen demasiado grande.");
-    updates.photoUrl = data.photoUrl || null;
+    updates.photoUrl = assertStoredPhotoUrl(data.photoUrl);
   }
   if (Object.keys(updates).length) {
     await db().ref(`${ROOT}/users/${claims.username}`).update(updates);
+    const fresh = { ...(snap.val() as Record<string, unknown>), ...updates };
+    await writeDirectoryUserRecord(claims.username, fresh);
   }
   return { success: true };
 });
@@ -621,6 +640,7 @@ export const adminUpsertPointOfSale = onCall(callableOpts, async (request) => {
   if (typeof data?.lat === "number") payload.lat = data.lat;
   if (typeof data?.lng === "number") payload.lng = data.lng;
   await db().ref(`${ROOT}/pointsOfSale/${id}`).set(payload);
+  await writePublicShopRecord(payload);
   if (!existing.exists()) {
     await db().ref(`${ROOT}/settings/${id}`).set({ ...DEFAULT_SETTINGS, posId: id, storeName: name });
   }
@@ -634,6 +654,7 @@ export const adminDeletePointOfSale = onCall(callableOpts, async (request) => {
   if (!Number.isFinite(posId)) throw new HttpsError("invalid-argument", "Sede inválida.");
   await db().ref(`${ROOT}/pointsOfSale/${posId}`).remove();
   await db().ref(`${ROOT}/settings/${posId}`).remove();
+  await db().ref(`${ROOT}/publicShops/${posId}`).remove();
   await writeAdminAudit(claims.username, "delete_pos", "deleted", posId);
   return { success: true };
 });
@@ -699,6 +720,7 @@ export const deleteMyAccount = onCall(callableOpts, async (request) => {
     // feedback best-effort
   }
   await db().ref(`${ROOT}/users/${claims.username}`).remove();
+  await db().ref(`${ROOT}/directoryUsers/${claims.username}`).remove();
   await db().ref(`${ROOT}/authSecrets/${claims.username}`).remove();
   await db().ref(`${ROOT}/uidIndex/${uid}`).remove();
   await admin.auth().deleteUser(uid).catch(() => undefined);
@@ -708,17 +730,34 @@ export const deleteMyAccount = onCall(callableOpts, async (request) => {
 
 export const listPublicShops = onCall(callableOpts, async (request) => {
   assertAppCheck(request);
-  await consumeRateLimit("public-shops", ipHash(request), 60, 15 * 60 * 1000);
+  await consumeRateLimit("public-shops", ipHash(request), 30, 15 * 60 * 1000);
+  const indexed = await db().ref(`${ROOT}/publicShops`).get();
+  const current = (indexed.val() || {}) as Record<string, Record<string, unknown> | boolean>;
+  if (current._ready === true) {
+    const shops = Object.entries(current)
+      .filter(([key, shop]) => key !== "_ready" && shop && typeof shop === "object" && shop.isActive !== false)
+      .map(([, shop]) => shop as Record<string, unknown>)
+      .slice(0, 150);
+    return { shops };
+  }
   const snap = await db().ref(`${ROOT}/pointsOfSale`).get();
-  if (!snap.exists()) return { shops: [] as Record<string, unknown>[] };
+  if (!snap.exists()) {
+    await db().ref(`${ROOT}/publicShops/_ready`).set(true);
+    return { shops: [] as Record<string, unknown>[] };
+  }
   const raw = snap.val() as Record<string, Record<string, unknown>>;
-  const shops = Object.values(raw).map((p) => sanitizePublicShop(p)).filter((p): p is Record<string, unknown> => p != null);
-  return { shops };
+  const shops = Object.values(raw)
+    .map((p) => sanitizePublicShop(p))
+    .filter((p): p is Record<string, unknown> => p != null);
+  const payload: Record<string, unknown> = { _ready: true };
+  for (const shop of shops) payload[String(shop.id)] = shop;
+  await db().ref(`${ROOT}/publicShops`).set(payload);
+  return { shops: shops.slice(0, 150) };
 });
 
 export const getPublicBookingCatalog = onCall(callableOpts, async (request) => {
   assertAppCheck(request);
-  await consumeRateLimit("public-catalog", ipHash(request), 60, 15 * 60 * 1000);
+  await consumeRateLimit("public-catalog", ipHash(request), 40, 15 * 60 * 1000);
   const posId = Number((request.data as { posId?: number })?.posId);
   if (!Number.isFinite(posId)) throw new HttpsError("invalid-argument", "Sede inválida.");
   const posSnap = await db().ref(`${ROOT}/pointsOfSale/${posId}`).get();
@@ -744,10 +783,15 @@ export const getPublicBookingCatalog = onCall(callableOpts, async (request) => {
   await Promise.all(barbers.map(async (b) => {
     const g = await db().ref(`${ROOT}/barberGallery/${b.id}`).get();
     if (g.exists()) {
-      galleries[String(b.id)] = Object.values(g.val() as Record<string, unknown>).map((photo) => {
-        const p = photo as Record<string, unknown>;
-        return { id: p.id, barberId: p.barberId, imageUrl: p.imageUrl, caption: p.caption, createdAt: p.createdAt };
-      });
+      galleries[String(b.id)] = Object.values(g.val() as Record<string, unknown>)
+        .map((photo) => {
+          const p = photo as Record<string, unknown>;
+          const imageUrl = publicAssetUrl(p.imageUrl);
+          if (!imageUrl) return null;
+          return { id: p.id, barberId: p.barberId, imageUrl, caption: p.caption, createdAt: p.createdAt };
+        })
+        .filter((photo) => photo != null)
+        .slice(0, 12);
     }
   }));
   return { shop, services, barbers, busySlots, galleries };
@@ -825,6 +869,8 @@ export const stripeWebhook = onRequest({ region: "us-central1" }, async (req, re
     ? new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()).toISOString()
     : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate()).toISOString();
   await db().ref(`${ROOT}/pointsOfSale/${posId}`).update({ isActive: true, subscriptionExpiresAt: expiresAt });
+  const posFresh = await db().ref(`${ROOT}/pointsOfSale/${posId}`).get();
+  if (posFresh.exists()) await writePublicShopRecord({ ...(posFresh.val() as Record<string, unknown>), id: posId });
   await db().ref(`${ROOT}/users/${username}`).update({ status: "active" });
   const userSnap = await db().ref(`${ROOT}/users/${username}`).get();
   if (userSnap.exists()) {
@@ -839,6 +885,7 @@ export const createPlanCheckout = onCall(callableOpts, async (request) => {
   if (!isStaffRole(claims.role) && !isPlatformRole(claims.role)) {
     throw new HttpsError("permission-denied", "No autorizado.");
   }
+  await consumeRateLimit("plan-checkout", claims.username, 8, 60 * 60 * 1000);
   const data = request.data as { plan?: string; ciclo?: "mensual" | "anual"; email?: string } | undefined;
   const plan = String(data?.plan ?? "");
   const ciclo = data?.ciclo === "anual" ? "anual" : "mensual";
@@ -850,8 +897,8 @@ export const createPlanCheckout = onCall(callableOpts, async (request) => {
   const stripe = new Stripe(secret, { apiVersion: "2023-10-16" });
   const pricePerMonth = PLAN_PRICES[plan] ?? 14.95;
   const amountCents = ciclo === "anual" ? Math.round(pricePerMonth * 0.6 * 12 * 100) : Math.round(pricePerMonth * 100);
-  const origin = request.rawRequest.headers.origin || "https://localhost";
-  const baseUrl = typeof origin === "string" ? origin.replace(/\/$/, "") : "https://localhost";
+  const origin = safeCheckoutOrigin(request.rawRequest.headers.origin);
+  const baseUrl = origin.replace(/\/$/, "");
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
@@ -880,6 +927,8 @@ export {
   createClientShopOrder,
   getPlatformStats,
   listDirectoryUsers,
+  ensureMyClientProfile,
+  rebuildPosIndexes,
   onSaleCreated,
   onAppointmentCreated,
   onUserCreated,

@@ -31,7 +31,10 @@ const BarberNotificationBell: React.FC<BarberNotificationBellProps> = ({ isPlanP
         }
     };
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = (() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    })();
     const now = new Date();
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
@@ -58,19 +61,27 @@ const BarberNotificationBell: React.FC<BarberNotificationBellProps> = ({ isPlanP
 
     const loadAppointments = async () => {
         if (!canSee) return;
-        const appts = await DataService.getAppointmentsByDate(todayStr);
-        const today = appts.filter((a) => a.fecha === todayStr && a.estado !== 'cancelada');
-        setAppointments(today);
+        try {
+            const appts = await DataService.getAppointmentsByDate(todayStr);
+            const today = appts.filter((a) => a.fecha === todayStr && a.estado !== 'cancelada');
+            setAppointments(today);
+        } catch (err) {
+            console.error('Error cargando citas de la campana:', err);
+        }
     };
 
     const loadStatic = async () => {
         if (!canSee) return;
-        const [clientsList, barbersList] = await Promise.all([
-            DataService.getClients(),
-            DataService.getBarbers(),
-        ]);
-        setClients(clientsList);
-        setBarbers(barbersList);
+        try {
+            const [clientsList, barbersList] = await Promise.all([
+                DataService.getClients(),
+                DataService.getBarbers(),
+            ]);
+            setClients(clientsList);
+            setBarbers(barbersList);
+        } catch (err) {
+            console.error('Error cargando datos de la campana:', err);
+        }
     };
 
     useEffect(() => {

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { DataService } from '../services/data';
+import { DataService, shiftIsoDate } from '../services/data';
 import { Appointment, Client, PointOfSale, Sale, ViewState } from '../types';
 import {
     Ban, Calendar, CheckCircle, Clock, Edit2, Loader2, MapPin, MessageCircle,
@@ -70,14 +70,13 @@ const Clients: React.FC<ClientsProps> = ({ onChangeView, onBookClient }) => {
     const isBarbero = userRole === 'barbero';
 
     const loadLists = async (role: string) => {
-        const clientsLoader = role === 'barbero'
-            ? DataService.refreshClientsWithActivity()
-            : DataService.refreshClients();
+        const clientsLoader = DataService.refreshClients();
+        const today = getTodayLocal();
         const [clientsList, posList, apptsList, salesList] = await Promise.all([
             clientsLoader,
             DataService.getPointsOfSale(),
-            DataService.getAppointments(),
-            DataService.getSales(),
+            DataService.getAppointmentsInRange(shiftIsoDate(today, -60), shiftIsoDate(today, 45)),
+            DataService.getSalesInRange(shiftIsoDate(today, -60), today),
         ]);
         setClients(clientsList);
         setPointsOfSale(posList);

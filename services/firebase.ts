@@ -349,6 +349,13 @@ export async function updateMyClientProfile(updates: { nombre?: string; telefono
   return { client: result.data.client };
 }
 
+export async function ensureMyClientProfile(): Promise<{ client: Record<string, unknown>; claimsUpdated: boolean }> {
+  const fn = callable<Record<string, never>, { success: true; client: Record<string, unknown>; claimsUpdated: boolean }>('ensureMyClientProfile');
+  const result = await fn({});
+  if (result.data.claimsUpdated) await refreshSessionClaims();
+  return { client: result.data.client, claimsUpdated: result.data.claimsUpdated };
+}
+
 export async function createClientAppointment(params: {
   posId: number;
   barberoId: number;
@@ -431,4 +438,9 @@ export async function listDirectoryUsers(): Promise<Array<{
   }> }>('listDirectoryUsers');
   const result = await fn({});
   return result.data.users;
+}
+
+export async function rebuildPosIndexes(posId: number): Promise<void> {
+  const fn = httpsCallable<{ posId: number }, { success: true }>(functions, 'rebuildPosIndexes', { timeout: 120000 });
+  await fn({ posId });
 }

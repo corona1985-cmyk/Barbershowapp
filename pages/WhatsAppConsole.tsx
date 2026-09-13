@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DataService } from '../services/data';
+import { DataService, localIsoDate } from '../services/data';
 import { Appointment, Barber, Client, NotificationLog } from '../types';
 import { MessageCircle, CheckCircle, AlertCircle, Clock, Calendar, ExternalLink, User, Scissors, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTranslation } from '../i18n';
@@ -33,7 +33,7 @@ const WhatsAppConsole: React.FC = () => {
     const [barbers, setBarbers] = useState<Barber[]>([]);
     const [pointsOfSale, setPointsOfSale] = useState<{ id: number; name: string }[]>([]);
     const [selectedBarberId, setSelectedBarberId] = useState<number>(0);
-    const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState<string>(() => localIsoDate());
     /** Clientes resueltos por ID cuando no están en la lista (ej. eliminados); evita "Desconocido". */
     const [resolvedClients, setResolvedClients] = useState<Record<number, Client | null>>({});
     /** Historial de envíos: abierto/cerrado. */
@@ -68,7 +68,7 @@ const WhatsAppConsole: React.FC = () => {
 
     useEffect(() => {
         (async () => {
-            const all = await DataService.getAppointments();
+            const all = await DataService.getAppointmentsByDate(selectedDate);
             const filtered = all.filter(a => {
                 if (a.fecha !== selectedDate) return false;
                 if (selectedBarberId !== 0 && a.barberoId !== selectedBarberId) return false;
@@ -123,7 +123,7 @@ const WhatsAppConsole: React.FC = () => {
     const handleCancelAppointment = async (apt: Appointment) => {
         if (!confirm(t('whatsapp.cancelConfirm'))) return;
         await DataService.updateAppointment({ ...apt, estado: 'cancelada' });
-        const all = await DataService.getAppointments();
+        const all = await DataService.getAppointmentsByDate(selectedDate);
         const filtered = all.filter(a => {
             if (a.fecha !== selectedDate) return false;
             if (selectedBarberId !== 0 && a.barberoId !== selectedBarberId) return false;

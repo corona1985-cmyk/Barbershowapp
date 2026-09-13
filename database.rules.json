@@ -59,8 +59,8 @@
       },
       "settings": {
         "$posId": {
-          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && auth.token.posId == $posId))",
-          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && auth.token.posId == $posId)) && newData.hasChildren(['taxRate', 'storeName', 'currencySymbol']) && newData.child('taxRate').isNumber() && newData.child('storeName').isString() && newData.child('storeName').val().length <= 120"
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))",
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId)) && newData.hasChildren(['taxRate', 'storeName', 'currencySymbol']) && newData.child('taxRate').isNumber() && newData.child('storeName').isString() && newData.child('storeName').val().length <= 120"
         }
       },
       "clients": {
@@ -154,8 +154,8 @@
         "$posId": {
           "$fecha": {
             "$key": {
-              ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && auth.token.posId == $posId))",
-              ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && auth.token.posId == $posId))"
+              ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))",
+              ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))"
             }
           }
         }
@@ -163,9 +163,19 @@
       "appointmentsByPosDate": {
         "$posId": {
           "$fecha": {
+            ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))",
             "$id": {
-              ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && auth.token.posId == $posId))",
-              ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && auth.token.posId == $posId))"
+              ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))"
+            }
+          }
+        }
+      },
+      "salesByPosDate": {
+        "$posId": {
+          "$fecha": {
+            ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))",
+            "$id": {
+              ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))"
             }
           }
         }
@@ -173,10 +183,34 @@
       "clientsByPhone": {
         "$posId": {
           "$digits": {
-            ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && auth.token.posId == $posId))",
-            ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && auth.token.posId == $posId))"
+            ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))",
+            ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))"
           }
         }
+      },
+      "clientsLite": {
+        "$posId": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))",
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))"
+        }
+      },
+      "indexMeta": {
+        "$posId": {
+          ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))",
+          ".write": false
+        }
+      },
+      "publicShops": {
+        ".read": false,
+        ".write": false
+      },
+      "directoryUsers": {
+        ".read": false,
+        ".write": false
+      },
+      "directoryMeta": {
+        ".read": false,
+        ".write": false
       }
     }
   }

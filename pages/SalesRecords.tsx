@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { DataService } from '../services/data';
+import { DataService, localIsoDate, shiftIsoDate } from '../services/data';
 import { Sale, Client, Barber, AccountTier } from '../types';
 import { Scissors, Loader2, Calendar, ChevronDown, ChevronUp, User, Clock, Package } from 'lucide-react';
 import { useTranslation } from '../i18n';
@@ -14,8 +14,8 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
     const [clients, setClients] = useState<Client[]>([]);
     const [barbers, setBarbers] = useState<Barber[]>([]);
     const [loading, setLoading] = useState(true);
-    const [dateFrom, setDateFrom] = useState('');
-    const [dateTo, setDateTo] = useState('');
+    const [dateFrom, setDateFrom] = useState(() => shiftIsoDate(localIsoDate(), -90));
+    const [dateTo, setDateTo] = useState(() => localIsoDate());
     const [expandedId, setExpandedId] = useState<number | null>(null);
 
     const showBarbero = accountTier === 'barberia' || accountTier === 'multisede';
@@ -24,8 +24,10 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
         (async () => {
             setLoading(true);
             try {
+                const to = dateTo || localIsoDate();
+                const from = dateFrom || shiftIsoDate(to, -90);
                 const [s, c, b] = await Promise.all([
-                    DataService.getSales(),
+                    DataService.getSalesInRange(from, to),
                     DataService.getClients(),
                     showBarbero ? DataService.getBarbers() : Promise.resolve([]),
                 ]);
@@ -36,7 +38,7 @@ const SalesRecords: React.FC<SalesRecordsProps> = ({ accountTier = 'solo' }) => 
                 setLoading(false);
             }
         })();
-    }, [showBarbero]);
+    }, [showBarbero, dateFrom, dateTo]);
 
     const getClientName = (clienteId: number | null) => {
         if (clienteId == null) return t('salesRecords.walkInClient');

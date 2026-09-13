@@ -46,16 +46,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
         setLoading(true);
         try {
             const barberId = DataService.getCurrentBarberId();
+            const todayStr = getTodayLocal();
             const productsLoader = barberId != null ? DataService.getProducts(barberId) : DataService.getProducts();
-            const clientsLoader = barberId != null ? DataService.getClientsWithActivity() : DataService.getClients();
             const timeoutPromise = new Promise<never>((_, reject) =>
                 setTimeout(() => reject(new Error(t('common.timeout'))), LOAD_TIMEOUT_MS)
             );
             const settled = await Promise.race([
                 Promise.allSettled([
-                    clientsLoader,
-                    DataService.getAppointments(),
-                    DataService.getSales(),
+                    DataService.getClients(),
+                    DataService.getAppointmentsByDate(todayStr),
+                    DataService.getSalesByDate(todayStr),
                     productsLoader,
                     DataService.getPointsOfSale(),
                 ]),
@@ -66,7 +66,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
             }
             const [clients, appointments, sales, products, posList] = settled.map((item) =>
                 item.status === 'fulfilled' ? item.value : []
-            ) as [Client[], Appointment[], Awaited<ReturnType<typeof DataService.getSales>>, Awaited<ReturnType<typeof DataService.getProducts>>, PointOfSale[]];
+            ) as [Client[], Appointment[], Awaited<ReturnType<typeof DataService.getSalesByDate>>, Awaited<ReturnType<typeof DataService.getProducts>>, PointOfSale[]];
             const anyOk = settled.some((item) => item.status === 'fulfilled');
             if (!anyOk) throw new Error(t('dashboard.loadFailed'));
             const clientsSafe = Array.isArray(clients) ? clients : [];
@@ -75,7 +75,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
             const productsSafe = Array.isArray(products) ? products : [];
             const posListSafe = Array.isArray(posList) ? posList : [];
             setPointsOfSale(posListSafe);
-            const todayStr = getTodayLocal();
             const mine = (list: Appointment[]) =>
                 barberId != null ? list.filter(a => a.barberoId === barberId) : list;
             const todayAll = mine(appointmentsSafe.filter(a => a.fecha === todayStr && a.estado !== 'cancelada'));
@@ -105,13 +104,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onChangeView }) => {
                 salesToday: todaySales,
                 lowStock
             });
-            const recentSales = salesSafe.slice(-3).map(s => ({
-                type: 'sale',
-                text: t('dashboard.saleNumber', { number: s.numeroVenta }),
-                time: s.hora,
-                amount: s.total
-            }));
-            setActivities(recentSales.reverse());
+            const recentSales = [...salesSafe]
+                .sort((a, b) => String(a.hora || '').localeCompare(String(b.hora || '')))
+                .slice(-3)
+                .reverse()
+                .map(s => ({
+                    type: 'sale',
+                    text: t('dashboard.saleNumber', { number: s.numeroVenta }),
+                    time: s.hora,
+                    amount: s.total
+                }));
+            setActivities(recentSales);
         } catch (err) {
             console.error('Error cargando panel:', err);
             setLoadError(true);

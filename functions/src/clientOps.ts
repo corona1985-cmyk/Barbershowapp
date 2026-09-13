@@ -14,13 +14,21 @@ import {
   isPlatformRole,
   requireAuth,
   sanitizePublicShop,
+  syncUserClaims,
   canClientOrderAtPos,
   canListDirectoryUsers,
   toDirectoryUser,
   appendRecentSales,
   normalizeRecentSales,
-  writeAppointmentIndexes,
+  writeSaleIndexes,
   releaseAppointmentSlot,
+  assertStoredPhotoUrl,
+  publicAssetUrl,
+  writeClientLite,
+  writeDirectoryUserRecord,
+  writePublicShopRecord,
+  writeAppointmentIndexes,
+  isStaffRole,
   type DirectoryUser,
   type RecentSaleSummary,
 } from "./lib";
@@ -54,8 +62,7 @@ export const updateMyClientProfile = onCall(callableOpts, async (request) => {
     updates.telefono = telefono;
   }
   if (data?.photoUrl !== undefined) {
-    if (data.photoUrl && String(data.photoUrl).length > 500000) throw new HttpsError("invalid-argument", "Imagen demasiado grande.");
-    updates.photoUrl = data.photoUrl || null;
+    updates.photoUrl = assertStoredPhotoUrl(data.photoUrl);
   }
   if (Object.keys(updates).length) {
     await db().ref(`${ROOT}/clients/${claims.clientId}`).update(updates);
@@ -74,7 +81,85 @@ export const updateMyClientProfile = onCall(callableOpts, async (request) => {
     await db().ref(`${ROOT}/users/${claims.username}`).update(userUpdates);
   }
   const fresh = { ...current, ...updates };
+  await writeClientLite(fresh);
   return { success: true as const, client: fresh };
+});
+
+export const ensureMyClientProfile = onCall(callableOpts, async (request) => {
+  const { uid, claims } = requireAuth(request);
+  if (claims.role !== "cliente") throw new HttpsError("permission-denied", "Solo clientes.");
+
+  const returnExisting = async (clientId: number, claimsUpdated: boolean) => {
+    const snap = await db().ref(`${ROOT}/clients/${clientId}`).get();
+    if (!snap.exists()) return null;
+    return { success: true as const, client: snap.val() as Record<string, unknown>, claimsUpdated };
+  };
+
+  if (claims.clientId != null) {
+    const existing = await returnExisting(Number(claims.clientId), false);
+    if (existing) return existing;
+  }
+
+  const userRef = db().ref(`${ROOT}/users/${claims.username}`);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists()) throw new HttpsError("not-found", "Usuario no encontrado.");
+  const user = userSnap.val() as Record<string, unknown>;
+  const linkedId = Number(user.clientId);
+  if (Number.isFinite(linkedId) && linkedId > 0) {
+    const existing = await returnExisting(linkedId, false);
+    if (existing) {
+      if (Number(claims.clientId) !== linkedId) {
+        await syncUserClaims(uid, user, claims.username);
+        return { ...existing, claimsUpdated: true };
+      }
+      return existing;
+    }
+  }
+
+  await consumeRateLimit("ensure-client-profile", claims.username, 8, 60 * 60 * 1000);
+
+  const posId = Number(user.posId ?? claims.posId);
+  if (!Number.isFinite(posId) || posId <= 0) {
+    throw new HttpsError("failed-precondition", "No hay sede vinculada para crear el perfil.");
+  }
+
+  const reservedId = Number.isFinite(linkedId) && linkedId > 0 ? linkedId : generateUniqueId();
+  const tx = await userRef.child("clientId").transaction((cur) => {
+    const n = Number(cur);
+    if (Number.isFinite(n) && n > 0) return n;
+    return reservedId;
+  });
+  const clientId = Number(tx.snapshot.val());
+  if (!Number.isFinite(clientId) || clientId <= 0) {
+    throw new HttpsError("internal", "No se pudo asignar el perfil.");
+  }
+
+  const raced = await returnExisting(clientId, false);
+  if (raced) {
+    if (Number(claims.clientId) !== clientId) {
+      await syncUserClaims(uid, { ...user, clientId }, claims.username);
+      return { ...raced, claimsUpdated: true };
+    }
+    return raced;
+  }
+
+  const client = {
+    id: clientId,
+    posId,
+    nombre: String(user.name || claims.username),
+    telefono: "",
+    email: "",
+    ultimaVisita: "N/A",
+    notas: "Perfil de cuenta",
+    fechaRegistro: new Date().toISOString().split("T")[0],
+    puntos: 0,
+    status: "active",
+    whatsappOptIn: false,
+  };
+  await db().ref(`${ROOT}/clients/${clientId}`).set(client);
+  await writeClientLite(client);
+  await syncUserClaims(uid, { ...user, clientId }, claims.username);
+  return { success: true as const, client, claimsUpdated: true };
 });
 
 export const createClientAppointment = onCall(callableOpts, async (request) => {
@@ -130,7 +215,7 @@ export const cancelMyAppointment = onCall(callableOpts, async (request) => {
 
 export const getShopCatalog = onCall(callableOpts, async (request) => {
   assertAppCheck(request);
-  await consumeRateLimit("shop-catalog", ipHash(request), 60, 15 * 60 * 1000);
+  await consumeRateLimit("shop-catalog", ipHash(request), 40, 15 * 60 * 1000);
   const posId = Number((request.data as { posId?: number })?.posId);
   if (!Number.isFinite(posId)) throw new HttpsError("invalid-argument", "Sede inválida.");
   const posSnap = await db().ref(`${ROOT}/pointsOfSale/${posId}`).get();
@@ -146,7 +231,7 @@ export const getShopCatalog = onCall(callableOpts, async (request) => {
     producto: String(p.producto || ""),
     precioVenta: Number(p.precioVenta || 0),
     stock: Number(p.stock || 0),
-    photoUrl: typeof p.photoUrl === "string" ? p.photoUrl : null,
+    photoUrl: publicAssetUrl(p.photoUrl),
   }));
   const settings = settingsSnap.exists() ? settingsSnap.val() as { taxRate?: number; currencySymbol?: string } : {};
   return {
@@ -211,6 +296,7 @@ export const createClientShopOrder = onCall(callableOpts, async (request) => {
   const saleId = generateUniqueId();
   const saleNumber = `ORD${String(saleId).padStart(6, "0")}`;
   const now = new Date();
+  const saleFecha = now.toISOString().split("T")[0];
   const decremented: Array<{ id: number; quantity: number }> = [];
   try {
     for (const line of lines) {
@@ -234,7 +320,7 @@ export const createClientShopOrder = onCall(callableOpts, async (request) => {
       subtotal,
       iva: tax,
       total,
-      fecha: now.toISOString().split("T")[0],
+      fecha: saleFecha,
       hora: now.toISOString().slice(11, 16),
       notas: "Pedido online",
       estado: "completada",
@@ -248,6 +334,7 @@ export const createClientShopOrder = onCall(callableOpts, async (request) => {
     }
     throw err;
   }
+  await writeSaleIndexes({ id: saleId, posId, fecha: saleFecha });
   if (claims.clientId != null) {
     const points = Math.max(0, Math.floor(total / 10));
     if (points > 0) {
@@ -288,15 +375,90 @@ export const listDirectoryUsers = onCall(callableOpts, async (request) => {
     throw new HttpsError("permission-denied", "No autorizado.");
   }
   await consumeRateLimit("list-users", claims.username, 20, 15 * 60 * 1000);
+  const readySnap = await db().ref(`${ROOT}/directoryMeta/ready`).get();
+  if (readySnap.val() === true) {
+    const snap = await db().ref(`${ROOT}/directoryUsers`).get();
+    const users: DirectoryUser[] = [];
+    snap.forEach((child) => {
+      users.push(toDirectoryUser(String(child.key), (child.val() || {}) as Record<string, unknown>));
+      return users.length >= 2000;
+    });
+    return { users };
+  }
   const snap = await db().ref(`${ROOT}/users`).get();
   const users: DirectoryUser[] = [];
+  const payload: Record<string, DirectoryUser> = {};
   snap.forEach((child) => {
     const raw = (child.val() || {}) as Record<string, unknown>;
-    users.push(toDirectoryUser(String(child.key), raw));
+    const row = toDirectoryUser(String(child.key), raw);
+    users.push(row);
+    payload[row.username] = row;
     return users.length >= 2000;
   });
+  if (Object.keys(payload).length) {
+    await db().ref(`${ROOT}/directoryUsers`).update(payload);
+  }
+  await db().ref(`${ROOT}/directoryMeta/ready`).set(true);
   return { users };
 });
+
+export const rebuildPosIndexes = onCall(
+  { region: "us-central1", timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    const { claims } = requireAuth(request);
+    if (!isStaffRole(claims.role) && !isPlatformRole(claims.role)) {
+      throw new HttpsError("permission-denied", "No autorizado.");
+    }
+    const posId = Number((request.data as { posId?: number })?.posId ?? claims.posId);
+    if (!Number.isFinite(posId) || posId <= 0) throw new HttpsError("invalid-argument", "Sede inválida.");
+    if (!isPlatformRole(claims.role) && Number(claims.posId) !== posId) {
+      throw new HttpsError("permission-denied", "No autorizado.");
+    }
+    const metaRef = db().ref(`${ROOT}/indexMeta/${posId}`);
+    if ((await metaRef.child("ready").get()).val() === true) {
+      return { success: true as const, skipped: true };
+    }
+    await consumeRateLimit("rebuild-pos-indexes", `${claims.username}:${posId}`, 4, 60 * 60 * 1000);
+    const lock = await metaRef.child("building").transaction((cur) => {
+      if (cur === true) return;
+      return true;
+    });
+    if (!lock.committed) return { success: true as const, skipped: true };
+    try {
+      if ((await metaRef.child("ready").get()).val() === true) {
+        return { success: true as const, skipped: true };
+      }
+      const [apptsSnap, salesSnap] = await Promise.all([
+        db().ref(`${ROOT}/appointments`).orderByChild("posId").equalTo(posId).get(),
+        db().ref(`${ROOT}/sales`).orderByChild("posId").equalTo(posId).get(),
+      ]);
+      const appts = apptsSnap.exists() ? Object.values(apptsSnap.val() as Record<string, Record<string, unknown>>) : [];
+      const sales = salesSnap.exists() ? Object.values(salesSnap.val() as Record<string, Record<string, unknown>>) : [];
+      for (let i = 0; i < appts.length; i += 25) {
+        await Promise.all(appts.slice(i, i + 25).map((apt) => writeAppointmentIndexes({
+          id: Number(apt.id),
+          posId: Number(apt.posId),
+          barberoId: Number(apt.barberoId),
+          fecha: String(apt.fecha || ""),
+          hora: String(apt.hora || ""),
+          duracionTotal: Number(apt.duracionTotal || 30),
+          estado: String(apt.estado || "pendiente"),
+        })));
+      }
+      for (let i = 0; i < sales.length; i += 25) {
+        await Promise.all(sales.slice(i, i + 25).map((sale) => writeSaleIndexes({
+          id: Number(sale.id),
+          posId: Number(sale.posId),
+          fecha: String(sale.fecha || ""),
+        })));
+      }
+      await metaRef.update({ ready: true, rebuiltAt: new Date().toISOString() });
+      return { success: true as const, appointments: appts.length, sales: sales.length };
+    } finally {
+      await metaRef.child("building").remove();
+    }
+  }
+);
 
 export const onSaleCreated = onValueCreated(
   { ref: "/barbershow/sales/{id}", region: "us-central1" },
@@ -328,6 +490,11 @@ export const onSaleCreated = onValueCreated(
     if (sale?.hora) summary.hora = String(sale.hora);
     if (sale?.numeroVenta) summary.numeroVenta = String(sale.numeroVenta);
     if (sale?.metodoPago) summary.metodoPago = String(sale.metodoPago);
+    await writeSaleIndexes({
+      id: Number(sale?.id || event.params.id),
+      posId,
+      fecha: String(sale?.fecha || ""),
+    });
     await db().ref(`${ROOT}/platformStats/recentSales`).transaction((cur) => appendRecentSales(cur, summary));
   }
 );
@@ -341,15 +508,18 @@ export const onAppointmentCreated = onValueCreated(
 
 export const onUserCreated = onValueCreated(
   { ref: "/barbershow/users/{username}", region: "us-central1" },
-  async () => {
+  async (event) => {
     await bumpPlatformStat("totalUsers", 1);
+    await writeDirectoryUserRecord(event.params.username, event.data.val() as Record<string, unknown>);
   }
 );
 
 export const onPosCreated = onValueCreated(
   { ref: "/barbershow/pointsOfSale/{id}", region: "us-central1" },
-  async () => {
+  async (event) => {
     await bumpPlatformStat("totalSedes", 1);
+    const val = (event.data.val() || {}) as Record<string, unknown>;
+    await writePublicShopRecord({ ...val, id: Number(event.params.id) });
   }
 );
 

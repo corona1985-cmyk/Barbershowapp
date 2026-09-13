@@ -143,6 +143,28 @@ describe('RTDB rules', () => {
     }));
   });
 
+  it('staff lee el índice de ventas de su sede por fecha, no el de otra sede', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('barbershow/salesByPosDate/5/2026-09-12/88').set(true);
+      await ctx.database().ref('barbershow/salesByPosDate/9/2026-09-12/99').set(true);
+    });
+    const admin = authed('u1', { username: 'alice', role: 'admin', posId: 5 });
+    await assertSucceeds(admin.ref('barbershow/salesByPosDate/5/2026-09-12').get());
+    await assertFails(admin.ref('barbershow/salesByPosDate/9/2026-09-12').get());
+    await assertFails(admin.ref('barbershow/salesByPosDate/5').get());
+  });
+
+  it('staff lee el índice de citas de su sede por fecha, no el de otra sede', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('barbershow/appointmentsByPosDate/5/2026-09-12/71').set(true);
+      await ctx.database().ref('barbershow/appointmentsByPosDate/9/2026-09-12/99').set(true);
+    });
+    const admin = authed('u1', { username: 'alice', role: 'admin', posId: 5 });
+    await assertSucceeds(admin.ref('barbershow/appointmentsByPosDate/5/2026-09-12').get());
+    await assertFails(admin.ref('barbershow/appointmentsByPosDate/9/2026-09-12').get());
+    await assertFails(admin.ref('barbershow/appointmentsByPosDate/5').get());
+  });
+
   it('cliente lee su propia cita y no productos de la sede', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx.database().ref('barbershow/appointments/73').set({
@@ -155,5 +177,38 @@ describe('RTDB rules', () => {
     const client = authed('c1', { username: 'carla', role: 'cliente', posId: 5, clientId: 80 });
     await assertSucceeds(client.ref('barbershow/appointments/73').get());
     await assertFails(client.ref('barbershow/products/1').get());
+  });
+
+  it('staff lee clientsLite de su sede y no de otra', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('barbershow/clientsLite/5/_ready').set(true);
+      await ctx.database().ref('barbershow/clientsLite/5/10').set({
+        id: 10, posId: 5, nombre: 'Ana', status: 'active',
+      });
+      await ctx.database().ref('barbershow/clientsLite/9/11').set({
+        id: 11, posId: 9, nombre: 'Bob', status: 'active',
+      });
+    });
+    const admin = authed('u1', { username: 'alice', role: 'admin', posId: 5 });
+    await assertSucceeds(admin.ref('barbershow/clientsLite/5').get());
+    await assertFails(admin.ref('barbershow/clientsLite/9').get());
+  });
+
+  it('staff lee indexMeta de su sede; cliente no escribe ni lee', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('barbershow/indexMeta/5/ready').set(true);
+    });
+    const admin = authed('u1', { username: 'alice', role: 'admin', posId: 5 });
+    const client = authed('c1', { username: 'carla', role: 'cliente', posId: 5, clientId: 80 });
+    await assertSucceeds(admin.ref('barbershow/indexMeta/5/ready').get());
+    await assertFails(admin.ref('barbershow/indexMeta/5/ready').set(true));
+    await assertFails(client.ref('barbershow/indexMeta/5').get());
+  });
+
+  it('publicShops y directoryUsers son deny-all en el cliente', async () => {
+    const admin = authed('u1', { username: 'alice', role: 'admin', posId: 5 });
+    await assertFails(admin.ref('barbershow/publicShops').get());
+    await assertFails(admin.ref('barbershow/directoryUsers').get());
+    await assertFails(admin.ref('barbershow/directoryMeta/ready').get());
   });
 });

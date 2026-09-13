@@ -116,4 +116,38 @@ describe('security helpers', () => {
     assert.equal(fromObject.length, 1);
     assert.equal(fromObject[0].id, 1);
   });
+
+  it('rechaza fotos enormes o data URL que no son imagen', () => {
+    assert.equal(lib.assertStoredPhotoUrl(null), null);
+    assert.equal(lib.assertStoredPhotoUrl('https://cdn.example.com/a.jpg'), 'https://cdn.example.com/a.jpg');
+    assert.throws(() => lib.assertStoredPhotoUrl('data:text/html,x'), /imagen/i);
+    assert.throws(() => lib.assertStoredPhotoUrl(`data:image/jpeg,${'a'.repeat(90_000)}`), /grande/i);
+    assert.equal(lib.publicAssetUrl('data:image/jpeg;base64,xxxx'), null);
+    assert.equal(lib.publicAssetUrl('https://cdn.example.com/p.webp'), 'https://cdn.example.com/p.webp');
+  });
+
+  it('omite fotos data URL en clientes lite', () => {
+    const lite = lib.toClientLite({
+      id: 1,
+      posId: 5,
+      nombre: 'Ana',
+      telefono: '809',
+      photoUrl: 'data:image/jpeg;base64,xxxx',
+      notas: 'VIP',
+      status: 'active',
+    });
+    assert.ok(lite);
+    assert.equal(lite.photoUrl, undefined);
+    assert.equal(lite.nombre, 'Ana');
+    assert.equal(lite.notas, 'VIP');
+    const withHttps = lib.toClientLite({
+      id: 1, posId: 5, nombre: 'Ana', photoUrl: 'https://cdn.example.com/a.jpg',
+    });
+    assert.equal(withHttps.photoUrl, 'https://cdn.example.com/a.jpg');
+  });
+
+  it('solo redirige Stripe a orígenes conocidos', () => {
+    assert.equal(lib.safeCheckoutOrigin('https://evil.example'), 'https://barbershow.net');
+    assert.equal(lib.safeCheckoutOrigin('https://barbershow.net'), 'https://barbershow.net');
+  });
 });

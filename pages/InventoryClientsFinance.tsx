@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DataService } from '../services/data';
+import { DataService, localIsoDate } from '../services/data';
 import { Product, FinanceRecord, Sale } from '../types';
 import { Plus, X, Edit2, Loader2, Package } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -334,7 +334,7 @@ function buildChartData(sales: Sale[], financeRecords: FinanceRecord[], days: nu
     for (let i = days - 1; i >= 0; i--) {
         const d = new Date(today);
         d.setDate(d.getDate() - i);
-        const key = d.toISOString().split('T')[0];
+        const key = localIsoDate(d);
         ingresosByDate[key] = 0;
         egresosByDate[key] = 0;
     }
@@ -347,7 +347,7 @@ function buildChartData(sales: Sale[], financeRecords: FinanceRecord[], days: nu
     for (let i = days - 1; i >= 0; i--) {
         const d = new Date(today);
         d.setDate(d.getDate() - i);
-        const key = d.toISOString().split('T')[0];
+        const key = localIsoDate(d);
         result.push({
             name: DAY_NAMES[d.getDay()] + ' ' + key.slice(5),
             ingresos: ingresosByDate[key] || 0,
@@ -362,14 +362,16 @@ export const Finance: React.FC = () => {
     const [financeRecords, setFinanceRecords] = useState<FinanceRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [showGastoModal, setShowGastoModal] = useState(false);
-    const [gastoFecha, setGastoFecha] = useState(() => new Date().toISOString().split('T')[0]);
+    const [gastoFecha, setGastoFecha] = useState(() => localIsoDate());
     const [gastoDescripcion, setGastoDescripcion] = useState('');
     const [gastoMonto, setGastoMonto] = useState('');
 
     const loadData = async () => {
         setLoading(true);
         try {
-            const [s, f] = await Promise.all([DataService.getSales(), DataService.getFinances()]);
+            const today = localIsoDate();
+            const monthStart = localIsoDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+            const [s, f] = await Promise.all([DataService.getSalesInRange(monthStart, today), DataService.getFinances()]);
             setSales(s);
             setFinanceRecords(f);
         } finally {
@@ -382,10 +384,8 @@ export const Finance: React.FC = () => {
     }, []);
 
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
-    const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
+    const firstDay = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    const lastDay = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 
     const salesThisMonth = sales.filter((s) => s.estado === 'completada' && s.fecha >= firstDay && s.fecha <= lastDay);
     const ingresosMes = salesThisMonth.reduce((sum, s) => sum + s.total, 0);

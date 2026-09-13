@@ -81,9 +81,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ onChangeView, onCompleteFor
               : Promise.resolve(null);
             const clientsLoader = role === 'cliente'
               ? Promise.resolve([] as Client[])
-              : role === 'barbero'
-                ? DataService.getClientsWithActivity()
-                : DataService.getClients();
+              : DataService.getClients();
             const barbersLoader = role === 'cliente' ? Promise.resolve([] as Barber[]) : DataService.getBarbers();
             const servicesLoader = role === 'cliente' ? Promise.resolve([] as Service[]) : DataService.getServices();
             const apptsLoader = role === 'cliente'

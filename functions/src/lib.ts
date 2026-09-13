@@ -49,6 +49,92 @@ export function appCheckEnforced(): boolean {
   return process.env.ENFORCE_APP_CHECK === "true";
 }
 
+const MAX_STORED_PHOTO_CHARS = 80_000;
+
+export function assertStoredPhotoUrl(raw: unknown): string | null {
+  if (raw == null || raw === "") return null;
+  const value = String(raw);
+  if (value.length > MAX_STORED_PHOTO_CHARS) {
+    throw new HttpsError("invalid-argument", "Imagen demasiado grande.");
+  }
+  if (value.startsWith("data:image/jpeg") || value.startsWith("data:image/png") || value.startsWith("data:image/webp")) {
+    return value;
+  }
+  if (/^https:\/\//i.test(value) && value.length <= 2048 && !/\s/.test(value)) return value;
+  throw new HttpsError("invalid-argument", "URL de imagen no válida.");
+}
+
+export function publicAssetUrl(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  if (/^https:\/\//i.test(raw) && raw.length <= 2048 && !/\s/.test(raw)) return raw;
+  return null;
+}
+
+export function toClientLite(client: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
+  if (!client) return null;
+  const id = Number(client.id);
+  const posId = Number(client.posId);
+  if (!Number.isFinite(id) || !Number.isFinite(posId) || posId <= 0) return null;
+  const photo = publicAssetUrl(client.photoUrl);
+  const out: Record<string, unknown> = {
+    id,
+    posId,
+    nombre: String(client.nombre || ""),
+    telefono: String(client.telefono || ""),
+    email: String(client.email || ""),
+    ultimaVisita: String(client.ultimaVisita || ""),
+    notas: String(client.notas || "").slice(0, 500),
+    puntos: Number(client.puntos || 0),
+    status: client.status === "suspended" ? "suspended" : "active",
+    fechaRegistro: String(client.fechaRegistro || ""),
+  };
+  if (photo) out.photoUrl = photo;
+  if (typeof client.whatsappOptIn === "boolean") out.whatsappOptIn = client.whatsappOptIn;
+  return out;
+}
+
+export async function writeClientLite(client: Record<string, unknown>): Promise<void> {
+  const lite = toClientLite(client);
+  if (!lite) return;
+  await db().ref(`${ROOT}/clientsLite/${lite.posId}/${lite.id}`).set(lite);
+}
+
+export async function writePublicShopRecord(pos: Record<string, unknown> | null | undefined): Promise<void> {
+  const id = Number(pos?.id);
+  if (!Number.isFinite(id) || id <= 0) return;
+  const shop = sanitizePublicShop(pos);
+  const ref = db().ref(`${ROOT}/publicShops/${id}`);
+  if (!shop) {
+    await ref.remove();
+    return;
+  }
+  await ref.set(shop);
+}
+
+export async function writeDirectoryUserRecord(username: string, user: Record<string, unknown> | null | undefined): Promise<void> {
+  const key = String(username || "").trim().toLowerCase();
+  if (!key || key.startsWith("_")) return;
+  const ref = db().ref(`${ROOT}/directoryUsers/${key}`);
+  if (!user) {
+    await ref.remove();
+    return;
+  }
+  await ref.set(toDirectoryUser(key, user));
+}
+
+export function safeCheckoutOrigin(originHeader: string | string[] | undefined): string {
+  const origin = String(Array.isArray(originHeader) ? originHeader[0] : originHeader || "").replace(/\/$/, "");
+  const allowed = new Set([
+    "https://barbershow.net",
+    "https://www.barbershow.net",
+    "https://gen-lang-client-0624135070.web.app",
+    "https://gen-lang-client-0624135070.firebaseapp.com",
+  ]);
+  if (allowed.has(origin)) return origin;
+  if (isEmulator() && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return origin;
+  return "https://barbershow.net";
+}
+
 export function assertAppCheck(request: CallableRequest): void {
   if (appCheckEnforced() && !request.app) {
     throw new HttpsError("failed-precondition", "App Check requerido.");
@@ -431,10 +517,7 @@ export async function resolveUsernameKey(username: string): Promise<string | nul
     const exact = await db().ref(`${ROOT}/users/${search}`).get();
     if (exact.exists()) return search;
   }
-  const all = await db().ref(`${ROOT}/users`).get();
-  if (!all.exists()) return null;
-  const keys = Object.keys(all.val() as Record<string, unknown>);
-  return keys.find((k) => k.toLowerCase() === lower) ?? null;
+  return null;
 }
 
 export type PasswordHashSource = "authSecrets" | "users.password" | "none";
@@ -601,6 +684,14 @@ export async function writeAppointmentIndexes(apt: {
     appointmentId: apt.id,
   });
   await db().ref(byDatePath).set(true);
+}
+
+export async function writeSaleIndexes(sale: { id: number; posId: number; fecha: string }): Promise<void> {
+  const id = Number(sale.id);
+  const posId = Number(sale.posId);
+  const fecha = String(sale.fecha || "");
+  if (!Number.isFinite(id) || !Number.isFinite(posId) || posId <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
+  await db().ref(`${ROOT}/salesByPosDate/${posId}/${fecha}/${id}`).set(true);
 }
 
 export async function indexClientPhone(posId: number, phone: string, clientId: number | null): Promise<void> {
