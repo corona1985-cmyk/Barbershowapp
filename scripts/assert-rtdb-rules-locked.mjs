@@ -21,7 +21,13 @@ if (barbershow['.write'] === true || barbershow['.write'] === 'true') fail('barb
 if (rules.rules['.read'] === true || rules.rules['.read'] === 'true') fail('raíz .read pública');
 if (rules.rules['.write'] === true || rules.rules['.write'] === 'true') fail('raíz .write pública');
 
-const allowedPublicRead = new Set(['globalSettings']);
+const allowedPublicRead = new Set(['globalSettings', 'publicShops']);
+const allowedPublicReadPaths = new Set(['barbershow/busySlots/$posId/$fecha']);
+
+function isAllowedPublicRead(path) {
+  const leaf = path.split('/').pop();
+  return allowedPublicRead.has(leaf) || allowedPublicReadPaths.has(path);
+}
 
 function walk(node, path) {
   if (!node || typeof node !== 'object') return;
@@ -31,13 +37,8 @@ function walk(node, path) {
   }
   if (Object.prototype.hasOwnProperty.call(node, '.read')) {
     const r = node['.read'];
-    if (r === true || r === 'true') {
-      const leaf = path.split('/').pop();
-      if (!allowedPublicRead.has(leaf)) fail(`read público no justificado en ${path || '/'}`);
-    }
-    if (typeof r === 'string' && r.trim() === 'true') {
-      const leaf = path.split('/').pop();
-      if (!allowedPublicRead.has(leaf)) fail(`read público no justificado en ${path || '/'}`);
+    if (r === true || r === 'true' || (typeof r === 'string' && r.trim() === 'true')) {
+      if (!isAllowedPublicRead(path)) fail(`read público no justificado en ${path || '/'}`);
     }
   }
   for (const [k, v] of Object.entries(node)) {

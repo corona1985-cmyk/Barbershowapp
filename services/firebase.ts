@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getDatabase, connectDatabaseEmulator } from 'firebase/database';
+import { getDatabase, connectDatabaseEmulator, ref, get, query, orderByChild, equalTo } from 'firebase/database';
 import {
   getAuth,
   signInAnonymously,
@@ -303,10 +303,38 @@ export async function deleteMyAccount(payload: {
   await signOutSession();
 }
 
+const PUBLIC_ROOT = 'barbershow';
+
+function toPublicShop(raw: unknown): PointOfSale | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const pos = raw as Record<string, unknown>;
+  if (pos.isActive === false) return null;
+  const id = Number(pos.id);
+  if (!Number.isFinite(id)) return null;
+  return {
+    id,
+    name: String(pos.name || ''),
+    address: String(pos.address || ''),
+    country: typeof pos.country === 'string' ? pos.country : undefined,
+    city: typeof pos.city === 'string' ? pos.city : undefined,
+    barrio: typeof pos.barrio === 'string' ? pos.barrio : undefined,
+    lat: typeof pos.lat === 'number' ? pos.lat : undefined,
+    lng: typeof pos.lng === 'number' ? pos.lng : undefined,
+    ownerId: '',
+    isActive: pos.isActive !== false,
+    about: typeof pos.about === 'string' ? pos.about : undefined,
+    highlights: Array.isArray(pos.highlights) ? pos.highlights.filter((x): x is string => typeof x === 'string') : undefined,
+  };
+}
+
 export async function listPublicShops(): Promise<PointOfSale[]> {
-  const fn = callable<Record<string, never>, { shops: PointOfSale[] }>('listPublicShops');
-  const result = await fn({});
-  return result.data.shops || [];
+  const snap = await get(ref(db, `${PUBLIC_ROOT}/publicShops`));
+  const raw = (snap.val() || {}) as Record<string, unknown>;
+  return Object.entries(raw)
+    .filter(([key, shop]) => key !== '_ready' && shop && typeof shop === 'object')
+    .map(([, shop]) => toPublicShop(shop))
+    .filter((shop): shop is PointOfSale => shop != null)
+    .slice(0, 150);
 }
 
 export type PublicBusySlot = Pick<Appointment, 'barberoId' | 'fecha' | 'hora' | 'duracionTotal' | 'estado'>;
@@ -318,15 +346,54 @@ export async function getPublicBookingCatalog(posId: number): Promise<{
   busySlots: PublicBusySlot[];
   galleries: Record<string, BarberGalleryPhoto[]>;
 }> {
-  const fn = callable<{ posId: number }, {
-    shop: PointOfSale;
-    services: Service[];
-    barbers: Barber[];
-    busySlots: PublicBusySlot[];
-    galleries: Record<string, BarberGalleryPhoto[]>;
-  }>('getPublicBookingCatalog');
-  const result = await fn({ posId });
-  return result.data;
+  const shopSnap = await get(ref(db, `${PUBLIC_ROOT}/publicShops/${posId}`));
+  const shop = toPublicShop(shopSnap.val());
+  if (!shop) throw new Error('Barbería no encontrada.');
+  const [servicesSnap, barbersSnap] = await Promise.all([
+    get(query(ref(db, `${PUBLIC_ROOT}/services`), orderByChild('posId'), equalTo(posId))),
+    get(query(ref(db, `${PUBLIC_ROOT}/barbers`), orderByChild('posId'), equalTo(posId))),
+  ]);
+  const services = Object.values((servicesSnap.val() || {}) as Record<string, Record<string, unknown>>).map((s) => ({
+    id: Number(s.id),
+    posId,
+    name: String(s.name || ''),
+    price: Number(s.price || 0),
+    duration: Number(s.duration || 30),
+    barberId: s.barberId == null ? null : Number(s.barberId),
+  })) as Service[];
+  const barbers = Object.values((barbersSnap.val() || {}) as Record<string, Record<string, unknown>>)
+    .filter((b) => b && b.active !== false)
+    .map((b) => ({
+      id: Number(b.id),
+      posId,
+      name: String(b.name || ''),
+      specialty: String(b.specialty || ''),
+      active: true,
+      workingHours: b.workingHours || undefined,
+      lunchBreak: b.lunchBreak || undefined,
+      blockedHours: b.blockedHours || undefined,
+    })) as Barber[];
+  const dayMs = 24 * 60 * 60 * 1000;
+  const dates: string[] = [];
+  for (let i = -1; i <= 21; i += 1) {
+    dates.push(new Date(Date.now() + i * dayMs).toISOString().slice(0, 10));
+  }
+  const slotSnaps = await Promise.all(dates.map((fecha) => get(ref(db, `${PUBLIC_ROOT}/busySlots/${posId}/${fecha}`))));
+  const busySlots: PublicBusySlot[] = [];
+  for (const snap of slotSnaps) {
+    if (!snap.exists()) continue;
+    for (const row of Object.values(snap.val() as Record<string, Record<string, unknown>>)) {
+      if (!row || row.estado === 'cancelada') continue;
+      busySlots.push({
+        barberoId: Number(row.barberoId),
+        fecha: String(row.fecha),
+        hora: String(row.hora),
+        duracionTotal: Number(row.duracionTotal || 30),
+        estado: String(row.estado || 'pendiente'),
+      } as PublicBusySlot);
+    }
+  }
+  return { shop, services, barbers, busySlots, galleries: {} };
 }
 
 export async function createGuestAppointment(params: {

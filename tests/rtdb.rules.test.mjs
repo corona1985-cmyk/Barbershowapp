@@ -34,9 +34,10 @@ describe('RTDB rules', () => {
     await assertFails(db.ref('barbershow/users/alice').set({ role: 'admin' }));
   });
 
-  it('permite lectura pública solo de globalSettings', async () => {
+  it('permite lectura pública de globalSettings y publicShops', async () => {
     const db = testEnv.unauthenticatedContext().database();
     await assertSucceeds(db.ref('barbershow/globalSettings').get());
+    await assertSucceeds(db.ref('barbershow/publicShops').get());
     await assertFails(db.ref('barbershow/pointsOfSale').get());
   });
 
@@ -205,9 +206,9 @@ describe('RTDB rules', () => {
     await assertFails(client.ref('barbershow/indexMeta/5').get());
   });
 
-  it('publicShops y directoryUsers son deny-all en el cliente', async () => {
+  it('directoryUsers sigue deny-all; publicShops es lectura pública', async () => {
     const admin = authed('u1', { username: 'alice', role: 'admin', posId: 5 });
-    await assertFails(admin.ref('barbershow/publicShops').get());
+    await assertSucceeds(admin.ref('barbershow/publicShops').get());
     await assertFails(admin.ref('barbershow/directoryUsers').get());
     await assertFails(admin.ref('barbershow/directoryMeta/ready').get());
   });
