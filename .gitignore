@@ -16,6 +16,9 @@ firebase-debug.log
 ui-debug.log
 database-debug.log
 
+# Compilado de Cloud Functions (CI y firebase predeploy lo generan)
+functions/lib/
+
 # Credenciales Twilio (no subir a Git)
 configurar-twilio.ps1
 
