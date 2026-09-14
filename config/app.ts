@@ -26,6 +26,9 @@ export const GLOBAL_FREE_MODE = envFlag('VITE_GLOBAL_FREE_MODE', true, false);
 
 export const MIN_PASSWORD_LENGTH = 10;
 
+/** Tras este número de inicios fallidos se muestra la ayuda para recuperar contraseña. */
+export const LOGIN_FAILED_ATTEMPTS_HINT = 5;
+
 /** Permite autoregistro de barberías en app móvil nativa (con IAP cuando aplique). */
 export const ALLOW_NATIVE_BARBER_SIGNUP = true;
 

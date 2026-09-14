@@ -122,3 +122,145 @@ input[type="date"] {
 .signup-scroll::-webkit-scrollbar-track {
     background: transparent;
 }
+
+/* Login: fondo vivo, orbes y detalles de barbería */
+@keyframes login-gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+@keyframes login-orb {
+    0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.4; }
+    50% { transform: translate(18px, -22px) scale(1.12); opacity: 0.7; }
+}
+@keyframes login-float {
+    0%, 100% { transform: translateY(0) rotate(-12deg); }
+    50% { transform: translateY(-16px) rotate(10deg); }
+}
+@keyframes login-float-alt {
+    0%, 100% { transform: translateY(0) rotate(18deg); }
+    50% { transform: translateY(14px) rotate(-8deg); }
+}
+@keyframes login-glow {
+    0%, 100% { box-shadow: 0 8px 24px rgba(255, 212, 39, 0.28), 0 0 0 0 rgba(255, 212, 39, 0.35); }
+    50% { box-shadow: 0 10px 32px rgba(255, 212, 39, 0.45), 0 0 28px 6px rgba(255, 212, 39, 0.22); }
+}
+@keyframes login-pulse-ring {
+    0% { transform: scale(1); opacity: 0.45; }
+    70% { transform: scale(1.35); opacity: 0; }
+    100% { transform: scale(1.35); opacity: 0; }
+}
+@keyframes login-wiggle {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-8deg); }
+    75% { transform: rotate(8deg); }
+}
+@keyframes login-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-7px); }
+    40% { transform: translateX(7px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+}
+@keyframes login-stripe {
+    0% { background-position: 0 0; }
+    100% { background-position: 40px 0; }
+}
+@keyframes login-card-in {
+    from { opacity: 0; transform: translateY(18px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.login-hero-bg {
+    background: linear-gradient(135deg, #070b16 0%, #0f172a 28%, #1e293b 58%, #0b1220 100%);
+    background-size: 220% 220%;
+    animation: login-gradient-shift 16s ease infinite;
+}
+.login-atmosphere {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+.login-orb {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(8px);
+    animation: login-orb 9s ease-in-out infinite;
+}
+.login-orb-a {
+    width: 280px;
+    height: 280px;
+    top: -60px;
+    right: -40px;
+    background: radial-gradient(circle, rgba(255, 212, 39, 0.28), transparent 70%);
+}
+.login-orb-b {
+    width: 220px;
+    height: 220px;
+    bottom: 8%;
+    left: -50px;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.18), transparent 70%);
+    animation-delay: -3s;
+}
+.login-orb-c {
+    width: 160px;
+    height: 160px;
+    top: 42%;
+    right: 12%;
+    background: radial-gradient(circle, rgba(255, 212, 39, 0.16), transparent 70%);
+    animation-delay: -6s;
+}
+.login-deco-scissors {
+    position: absolute;
+    color: rgba(255, 255, 255, 0.06);
+}
+.login-deco-1 {
+    top: 18%;
+    left: 8%;
+    animation: login-float 7s ease-in-out infinite;
+}
+.login-deco-2 {
+    bottom: 16%;
+    right: 10%;
+    animation: login-float-alt 8s ease-in-out infinite;
+}
+.login-logo-glow {
+    animation: login-glow 2.8s ease-in-out infinite;
+}
+.login-pulse-ring {
+    animation: login-pulse-ring 2.4s ease-out infinite;
+}
+.login-scissors-wiggle {
+    animation: login-wiggle 3.6s ease-in-out infinite;
+}
+.login-shake {
+    animation: login-shake 0.42s ease;
+}
+.login-barber-stripe {
+    height: 8px;
+    background-image: repeating-linear-gradient(
+        115deg,
+        #ffd427 0 14px,
+        #0f172a 14px 28px
+    );
+    background-size: 40px 100%;
+    animation: login-stripe 0.9s linear infinite;
+}
+.login-card-in {
+    animation: login-card-in 0.45s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .login-hero-bg,
+    .login-orb,
+    .login-deco-1,
+    .login-deco-2,
+    .login-logo-glow,
+    .login-pulse-ring,
+    .login-scissors-wiggle,
+    .login-shake,
+    .login-barber-stripe,
+    .login-card-in {
+        animation: none !important;
+    }
+}

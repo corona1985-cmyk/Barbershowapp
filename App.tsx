@@ -20,7 +20,7 @@ import {
 import { initLocalNotifications, syncAppointmentNotifications, stopAppointmentNotifications } from './services/notifications';
 import LegalDocumentPage from './pages/LegalDocumentPage';
 import { getLegalDocumentFromUrl, LegalDocumentType } from './utils/legal';
-import { GLOBAL_FREE_MODE, MIN_PASSWORD_LENGTH } from './config/app';
+import { GLOBAL_FREE_MODE, LOGIN_FAILED_ATTEMPTS_HINT, MIN_PASSWORD_LENGTH } from './config/app';
 import { sanitizeViewForRole, defaultViewForRole } from './config/views';
 import { isIOSAccountCreationAllowed } from './utils/platform';
 import { useTranslation, translate } from './i18n';
@@ -74,6 +74,7 @@ const App: React.FC = () => {
     const [password, setPassword] = useState('');
     const [loginError, setLoginError] = useState('');
     const [loginLoading, setLoginLoading] = useState(false);
+    const [failedLoginAttempts, setFailedLoginAttempts] = useState(0);
     
     // Registration State
     const [isRegistering, setIsRegistering] = useState(false);
@@ -474,6 +475,21 @@ const App: React.FC = () => {
         })();
     }, []);
 
+    const noteFailedLoginAttempt = () => {
+        setFailedLoginAttempts((n) => n + 1);
+    };
+
+    const isRateLimitedLoginMessage = (message: string) =>
+        /demasiados intentos|too many|muitos/i.test(message);
+
+    const sanitizeLoginError = (raw: string) => {
+        const trimmed = raw.trim();
+        if (!trimmed || /^(internal|unknown)$/i.test(trimmed)) {
+            return translate('errors.wrongPassword');
+        }
+        return raw;
+    };
+
     const handleLogin = async (e: React.FormEvent, credentials?: { username: string; password: string }) => {
         e.preventDefault();
         setLoginError('');
@@ -497,16 +513,24 @@ const App: React.FC = () => {
                 } catch (e) {
                     setLoginLoading(false);
                     if (e instanceof Error && e.message === 'NO_PASSWORD_SET') {
+                        noteFailedLoginAttempt();
                         setLoginError(translate('errors.noPasswordAssigned'));
                     } else if (e instanceof Error && e.message === 'ACCOUNT_DEACTIVATED') {
                         setLoginError(accountDeactivatedMessage);
                     } else {
-                        setLoginError(e instanceof Error ? e.message : translate('errors.connectionRetry'));
+                        const raw = e instanceof Error ? e.message : translate('errors.connectionRetry');
+                        setLoginError(sanitizeLoginError(raw));
+                        if (isRateLimitedLoginMessage(raw)) {
+                            setFailedLoginAttempts((n) => Math.max(n, LOGIN_FAILED_ATTEMPTS_HINT));
+                        } else if (!/conexi[oó]n|connection|internet|firebase/i.test(raw)) {
+                            noteFailedLoginAttempt();
+                        }
                     }
                     return;
                 }
                 if (!user) {
                     setLoginLoading(false);
+                    noteFailedLoginAttempt();
                     setLoginError(translate('errors.wrongPassword'));
                     return;
                 }
@@ -514,6 +538,7 @@ const App: React.FC = () => {
 
                 if (!user) {
                     setLoginLoading(false);
+                    noteFailedLoginAttempt();
                     setLoginError(translate('errors.invalidCredentials'));
                     return;
                 }
@@ -532,6 +557,7 @@ const App: React.FC = () => {
                 }
 
             const role = user.role === 'empleado' ? 'barbero' : user.role;
+            setFailedLoginAttempts(0);
             const userData = { username: user.username, role, name: user.name, photoUrl: (user as any).photoUrl, posId: user.posId, barberId: (user as any).barberId, clientId: (user as any).clientId, loginTime: new Date().toISOString() };
             localStorage.setItem('currentUser', JSON.stringify(userData));
             setIsAuthenticated(true);
@@ -654,6 +680,7 @@ const App: React.FC = () => {
         setIsRegistering(false);
         setIsBarberRegistering(false);
         setLoginError('');
+        setFailedLoginAttempts(0);
     };
 
     const handleLoginBack = () => {
@@ -661,6 +688,7 @@ const App: React.FC = () => {
         setIsRegistering(false);
         setIsBarberRegistering(false);
         setLoginError('');
+        setFailedLoginAttempts(0);
         if (loginReturnTarget === 'landing') {
             setShowLandingPage(true);
             setShowBarberiasGuest(false);
@@ -692,6 +720,7 @@ const App: React.FC = () => {
         setUsername('');
         setPassword('');
         setLoginError('');
+        setFailedLoginAttempts(0);
         setRenewalError('');
         setCurrentView(defaultViewForRole(userRole));
         DataService.setActivePosId(null);
@@ -893,6 +922,7 @@ const App: React.FC = () => {
                 connectionError={connectionError}
                 loginError={loginError}
                 loginLoading={loginLoading}
+                failedLoginAttempts={failedLoginAttempts}
                 username={username}
                 password={password}
                 regName={regName}
