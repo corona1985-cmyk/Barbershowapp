@@ -6,6 +6,7 @@ import {
     Phone, Plus, RefreshCw, Search, Star, StickyNote, Trophy, Upload, User, Users, X,
 } from 'lucide-react';
 import { useTranslation } from '../i18n';
+import { MEDIA_LIMITS, compressImageFile } from '../utils/storedMedia';
 
 function phoneDigits(phone: string | number | null | undefined): string {
     return String(phone ?? '').replace(/\D/g, '');
@@ -127,14 +128,19 @@ const Clients: React.FC<ClientsProps> = ({ onChangeView, onBookClient }) => {
         }
     };
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setCurrentClient(prev => ({ ...prev, photoUrl: reader.result as string }));
-            };
-            reader.readAsDataURL(file);
+        e.target.value = '';
+        if (!file) return;
+        setSaveError('');
+        try {
+            const photoUrl = await compressImageFile(file, {
+                maxPx: MEDIA_LIMITS.profileMaxPx,
+                quality: MEDIA_LIMITS.profileQuality,
+            });
+            setCurrentClient(prev => ({ ...prev, photoUrl }));
+        } catch (err) {
+            setSaveError(err instanceof Error ? err.message : t('crm.saveFailed'));
         }
     };
 
@@ -636,6 +642,7 @@ const Clients: React.FC<ClientsProps> = ({ onChangeView, onBookClient }) => {
                                     <div className="flex-1">
                                         <input
                                             type="text"
+                                            maxLength={MEDIA_LIMITS.maxHttpsUrlChars}
                                             className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ffd427] mb-2"
                                             placeholder={t('crm.photoUrlPlaceholder')}
                                             value={currentClient.photoUrl}
@@ -657,7 +664,7 @@ const Clients: React.FC<ClientsProps> = ({ onChangeView, onBookClient }) => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                                <input type="email" className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427]" value={currentClient.email} onChange={e => setCurrentClient({...currentClient, email: e.target.value})} />
+                                        <input type="email" maxLength={MEDIA_LIMITS.maxEmailChars} className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427]" value={currentClient.email} onChange={e => setCurrentClient({...currentClient, email: e.target.value})} />
                             </div>
                             {isAdmin && (
                             <div className="grid grid-cols-2 gap-4">
@@ -686,7 +693,14 @@ const Clients: React.FC<ClientsProps> = ({ onChangeView, onBookClient }) => {
                             )}
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">{t('crm.notes')}</label>
-                                <textarea className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427]" rows={2} placeholder={t('crm.notesPlaceholder')} value={currentClient.notas} onChange={e => setCurrentClient({...currentClient, notas: e.target.value})}></textarea>
+                                <textarea
+                                    className="w-full border border-slate-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#ffd427]"
+                                    rows={2}
+                                    maxLength={MEDIA_LIMITS.maxNotesChars}
+                                    placeholder={t('crm.notesPlaceholder')}
+                                    value={currentClient.notas}
+                                    onChange={e => setCurrentClient({...currentClient, notas: e.target.value})}
+                                ></textarea>
                             </div>
                             <div className="pt-4 flex justify-end space-x-3 border-t border-slate-100 mt-2">
                                 <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg">{t('common.cancel')}</button>

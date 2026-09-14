@@ -6,6 +6,7 @@ import { ViewState } from '../types';
 import DeactivateAccountSection from '../components/account/DeactivateAccountSection';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useTranslation } from '../i18n';
+import { MEDIA_LIMITS, compressImageFile } from '../utils/storedMedia';
 
 interface ClientProfileProps {
   onChangeView: (view: ViewState) => void;
@@ -65,46 +66,20 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
     loadProfile();
   }, []);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file || !file.type.startsWith('image/')) return;
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const max = 400;
-      let w = img.width;
-      let h = img.height;
-      if (w > max || h > max) {
-        if (w > h) {
-          h = Math.round((h * max) / w);
-          w = max;
-        } else {
-          w = Math.round((w * max) / h);
-          h = max;
-        }
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        const reader = new FileReader();
-        reader.onloadend = () => setPhotoUrl(reader.result as string);
-        reader.readAsDataURL(file);
-        return;
-      }
-      ctx.drawImage(img, 0, 0, w, h);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+    setError('');
+    try {
+      const dataUrl = await compressImageFile(file, {
+        maxPx: MEDIA_LIMITS.profileMaxPx,
+        quality: MEDIA_LIMITS.profileQuality,
+      });
       setPhotoUrl(dataUrl);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      const reader = new FileReader();
-      reader.onloadend = () => setPhotoUrl(reader.result as string);
-      reader.readAsDataURL(file);
-    };
-    img.src = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('errors.saveFailed'));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -217,6 +192,7 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ onChangeView, onProfileUp
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ffd427] text-sm"
                   placeholder={t('profile.photoUrlPlaceholder')}
                   value={photoUrl}
+                  maxLength={MEDIA_LIMITS.maxHttpsUrlChars}
                   onChange={(e) => setPhotoUrl(e.target.value)}
                 />
                 <p className="text-xs text-slate-500 mt-1">{t('profile.photoHint')}</p>

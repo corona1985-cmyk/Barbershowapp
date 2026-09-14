@@ -11,6 +11,7 @@ import {
 import { initializeFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getAnalytics, isSupported, logEvent } from 'firebase/analytics';
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { Capacitor } from '@capacitor/core';
 import { FUNCTIONS_REGION, getFirebaseWebConfig, getRecaptchaSiteKey, useFirebaseEmulators } from '../config/firebaseEnv';
@@ -29,6 +30,7 @@ export const firestore = initializeFirestore(
     : { experimentalAutoDetectLongPolling: true }
 );
 export const functions = getFunctions(app, FUNCTIONS_REGION);
+export const storage = getStorage(app);
 
 const usingEmulators = useFirebaseEmulators();
 if (usingEmulators && typeof window !== 'undefined' && !(window as unknown as { __bsEmu?: boolean }).__bsEmu) {
@@ -37,6 +39,7 @@ if (usingEmulators && typeof window !== 'undefined' && !(window as unknown as { 
   connectDatabaseEmulator(db, '127.0.0.1', 9000);
   connectFunctionsEmulator(functions, '127.0.0.1', 5001);
   connectFirestoreEmulator(firestore, '127.0.0.1', 8080);
+  connectStorageEmulator(storage, '127.0.0.1', 9199);
 }
 
 const recaptchaKey = getRecaptchaSiteKey();

@@ -30,9 +30,10 @@ if (/\b(database|firestore|hosting|storage|rules)\b/i.test(extra)) {
 }
 
 console.log(`[deploy] Functions only → ${project} (sin rules, sin hosting, sin prod)`);
+const env = { ...process.env, FUNCTIONS_DISCOVERY_TIMEOUT: process.env.FUNCTIONS_DISCOVERY_TIMEOUT || '60' };
 const result = spawnSync(
   'npx',
   ['firebase', 'deploy', '--only', 'functions', '--project', project],
-  { stdio: 'inherit', shell: process.platform === 'win32' }
+  { stdio: 'inherit', shell: process.platform === 'win32', env }
 );
 process.exit(result.status ?? 1);

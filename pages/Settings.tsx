@@ -4,6 +4,7 @@ import { AppSettings, SystemUser, Service, UserRole, Barber, BarberWorkingHours,
 import { Save, Plus, Trash2, Edit2, Shield, Scissors, UserCog, Settings as SettingsIcon, UserCheck, Power, QrCode, Download, Printer, Percent, Clock, CalendarOff, ImagePlus, CreditCard, Loader2, CheckCircle, AlertCircle, X, Copy, Link2, MapPin, FileText, Languages, Users, Award } from 'lucide-react';
 import CertificationsEditor from '../components/settings/CertificationsEditor';
 import { PROFILE_LIMITS, sanitizeCertifications, sanitizeHighlights } from '../utils/professionalProfile';
+import { MEDIA_LIMITS, compressImageFile } from '../utils/storedMedia';
 import { Capacitor } from '@capacitor/core';
 import { handlePrintQR as handlePrintQRNative } from '../utils/print';
 import { DEFAULT_PUBLIC_APP_URL, GLOBAL_FREE_MODE, isPromotionalFreeTier } from '../config/app';
@@ -1504,7 +1505,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
                     <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                       <ImagePlus size={20} /> Galería de trabajos
                     </h3>
-                    <p className="text-sm text-slate-500 mt-0.5">Los clientes las ven al elegirte para una cita. Usa fotos claras, de frente.</p>
+                    <p className="text-sm text-slate-500 mt-0.5">Los clientes las ven al elegirte para una cita. Máximo {MEDIA_LIMITS.maxGalleryPhotos} fotos, en Cloud Storage.</p>
                   </div>
                   {galleryPhotos.length === 0 ? (
                     <EmptyState
@@ -1536,11 +1537,17 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
                       ))}
                     </div>
                   )}
-                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 space-y-3">
+                  {galleryPhotos.length >= MEDIA_LIMITS.maxGalleryPhotos ? (
+                    <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                      Llegaste al máximo de {MEDIA_LIMITS.maxGalleryPhotos} fotos. Elimina una para publicar otra.
+                    </p>
+                  ) : null}
+                  <div className={`rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 space-y-3 ${galleryPhotos.length >= MEDIA_LIMITS.maxGalleryPhotos ? 'opacity-60 pointer-events-none' : ''}`}>
                     <p className="text-sm font-medium text-slate-700">Agregar foto</p>
                     <input
                       type="text"
                       className={INPUT_CLASS}
+                      maxLength={MEDIA_LIMITS.maxCaptionChars}
                       placeholder="Descripción corta (opcional)"
                       value={galleryCaption}
                       onChange={(e) => setGalleryCaption(e.target.value)}
@@ -1555,51 +1562,21 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
                           disabled={galleryUploading}
                           onChange={async (e) => {
                             const file = e.target.files?.[0];
+                            e.target.value = '';
                             if (!file || !file.type.startsWith('image/')) return;
+                            if (galleryPhotos.length >= MEDIA_LIMITS.maxGalleryPhotos) {
+                              showFeedback('error', `La galería admite máximo ${MEDIA_LIMITS.maxGalleryPhotos} fotos.`);
+                              return;
+                            }
                             setGalleryUploading(true);
-                            const compressToDataUrl = (): Promise<string> =>
-                              new Promise((resolve, reject) => {
-                                const img = new Image();
-                                const objectUrl = URL.createObjectURL(file);
-                                img.onload = () => {
-                                  URL.revokeObjectURL(objectUrl);
-                                  const max = 500;
-                                  let w = img.width,
-                                    h = img.height;
-                                  if (w > max || h > max) {
-                                    if (w > h) {
-                                      h = Math.round((h * max) / w);
-                                      w = max;
-                                    } else {
-                                      w = Math.round((w * max) / h);
-                                      h = max;
-                                    }
-                                  }
-                                  const canvas = document.createElement('canvas');
-                                  canvas.width = w;
-                                  canvas.height = h;
-                                  const ctx = canvas.getContext('2d');
-                                  if (!ctx) {
-                                    const reader = new FileReader();
-                                    reader.onloadend = () => resolve(reader.result as string);
-                                    reader.readAsDataURL(file);
-                                    return;
-                                  }
-                                  ctx.drawImage(img, 0, 0, w, h);
-                                  resolve(canvas.toDataURL('image/jpeg', 0.75));
-                                };
-                                img.onerror = () => {
-                                  URL.revokeObjectURL(objectUrl);
-                                  reject(new Error('No se pudo leer la imagen.'));
-                                };
-                                img.src = objectUrl;
-                              });
                             try {
-                              const dataUrl = await compressToDataUrl();
+                              const dataUrl = await compressImageFile(file, {
+                                maxPx: MEDIA_LIMITS.galleryMaxPx,
+                                quality: MEDIA_LIMITS.galleryQuality,
+                              });
                               const photo = await DataService.addBarberGalleryPhoto(myBarberId, { imageUrl: dataUrl, caption: galleryCaption || undefined });
                               setGalleryPhotos((prev) => [photo, ...prev]);
                               setGalleryCaption('');
-                              e.target.value = '';
                               showFeedback('success', 'Foto publicada.');
                             } catch (err) {
                               showFeedback('error', err instanceof Error ? err.message : 'Error al subir.');
@@ -1614,6 +1591,7 @@ const Settings: React.FC<SettingsProps> = ({ accountTier = 'barberia', onAccount
                         type="url"
                         className={`${INPUT_CLASS} max-w-xs`}
                         placeholder="Pega URL de imagen"
+                        maxLength={MEDIA_LIMITS.maxHttpsUrlChars}
                         value={galleryUrl}
                         onChange={(e) => setGalleryUrl(e.target.value)}
                       />

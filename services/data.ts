@@ -1,5 +1,5 @@
 import { ref, get, set, remove, query, orderByChild, equalTo, limitToLast } from 'firebase/database';
-import { db, getAuthIdToken, loginWithPassword, upsertStaffUser, deleteStaffUser, updateMyProfile, adminUpsertPointOfSale, adminDeletePointOfSale, adminSetPosPlan, checkUsernameAvailable, updateMyClientProfile, ensureMyClientProfile, getPlatformStats, listDirectoryUsers, cancelMyAppointment, createClientAppointment, rebuildPosIndexes } from './firebase';
+import { db, getAuthIdToken, loginWithPassword, upsertStaffUser, deleteStaffUser, updateMyProfile, adminUpsertPointOfSale, adminDeletePointOfSale, adminSetPosPlan, checkUsernameAvailable, updateMyClientProfile, ensureMyClientProfile, getPlatformStats, listDirectoryUsers, cancelMyAppointment, createClientAppointment, rebuildPosIndexes, auth } from './firebase';
 import { getCachedClaims } from './session';
 import { Capacitor } from '@capacitor/core';
 import { GLOBAL_FREE_MODE, PROMOTIONAL_FREE_TIER, PROMO_GRACE_PERIOD_DAYS, getFreeSignupTierAndPlan } from '../config/app';
@@ -31,6 +31,12 @@ import {
   sanitizeProfileText,
   sanitizeYearsExperience,
 } from '../utils/professionalProfile';
+import {
+  MEDIA_LIMITS,
+  assertStoredPhotoUrl,
+  sanitizeOptionalPhotoUrl,
+} from '../utils/storedMedia';
+import { deleteStoredPhoto, persistPhotoToStorage } from './storageMedia';
 
 const ROOT = 'barbershow';
 const RTDB_BASE_URL = 'https://gen-lang-client-0624135070-default-rtdb.firebaseio.com';
@@ -64,7 +70,7 @@ async function resolveUsernameKey(username: string): Promise<string | null> {
 
 /** Evita cargar en memoria fotos base64 enormes durante el login (ralentizan o agotan el timeout). */
 function withoutOversizedProfileBlob(user: SystemUser): SystemUser {
-  if (typeof user.photoUrl === 'string' && user.photoUrl.length > 100_000) {
+  if (typeof user.photoUrl === 'string' && user.photoUrl.length > MEDIA_LIMITS.maxStoredPhotoChars) {
     console.warn(
       `[Auth] photoUrl muy grande en usuario "${user.username}" (${Math.round(user.photoUrl.length / 1024)} KB). ` +
         'Omitida en sesión; sube la foto de nuevo desde Configuración para guardarla como URL.'
@@ -526,6 +532,50 @@ function datesInRange(from: string, to: string): string[] {
   return out;
 }
 
+function sanitizeClientForStorage(client: Client, previous: Client | null, strictNewPhoto: boolean): Client {
+  const next: Client = {
+    ...client,
+    nombre: String(client.nombre || '').slice(0, 120),
+    email: String(client.email || '').slice(0, MEDIA_LIMITS.maxEmailChars),
+    notas: String(client.notas || '').slice(0, MEDIA_LIMITS.maxNotesChars),
+    telefono: String(client.telefono ?? '').slice(0, 40),
+  };
+  const incoming = client.photoUrl;
+  const changed = (incoming || '') !== (previous?.photoUrl || '');
+  const photoUrl = changed && strictNewPhoto
+    ? assertStoredPhotoUrl(incoming)
+    : sanitizeOptionalPhotoUrl(incoming);
+  if (photoUrl) next.photoUrl = photoUrl;
+  else delete next.photoUrl;
+  return next;
+}
+
+function sanitizeProductForStorage<T extends Product>(product: T): T {
+  const next = { ...product, producto: String(product.producto || '').slice(0, 120) };
+  const withPhoto = next as T & { photoUrl?: string };
+  if (withPhoto.photoUrl != null) {
+    const photoUrl = sanitizeOptionalPhotoUrl(withPhoto.photoUrl);
+    if (photoUrl) withPhoto.photoUrl = photoUrl;
+    else delete withPhoto.photoUrl;
+  }
+  return next;
+}
+
+async function persistClientPhoto(client: Client): Promise<Client> {
+  if (!client.photoUrl || client.photoUrl.startsWith('https://')) return client;
+  const url = await persistPhotoToStorage(client.photoUrl, {
+    category: 'clients',
+    ownerId: String(client.id),
+    posId: Number(client.posId) || ACTIVE_POS_ID || 0,
+  });
+  if (!url) {
+    const next = { ...client };
+    delete next.photoUrl;
+    return next;
+  }
+  return { ...client, photoUrl: url };
+}
+
 function toClientLite(client: Client): Client {
   const photo = typeof client.photoUrl === 'string' && client.photoUrl.startsWith('https://') ? client.photoUrl : undefined;
   const lite: Client = {
@@ -901,8 +951,21 @@ export const DataService = {
   updateCurrentUserProfile: async (updates: { name?: string; photoUrl?: string | null }): Promise<void> => {
     const current = DataService.getCurrentUser();
     if (!current?.username) throw new Error('No hay sesión iniciada.');
-    await updateMyProfile(updates);
-    const nextUser = { ...current, ...updates };
+    let nextUpdates = updates;
+    if (updates.photoUrl) {
+      const uid = auth.currentUser?.uid;
+      if (!uid) throw new Error('Inicia sesión para guardar la imagen.');
+      nextUpdates = {
+        ...updates,
+        photoUrl: await persistPhotoToStorage(updates.photoUrl, {
+          category: 'profiles',
+          ownerId: uid,
+          posId: Number(current.posId) || ACTIVE_POS_ID || 0,
+        }),
+      };
+    }
+    await updateMyProfile(nextUpdates);
+    const nextUser = { ...current, ...nextUpdates };
     try {
       localStorage.setItem('currentUser', JSON.stringify(nextUser));
     } catch (_) {}
@@ -1185,7 +1248,12 @@ export const DataService = {
   addClient: async (client: Omit<Client, 'id' | 'posId'>): Promise<Client> => {
     if (DataService.getCurrentUserRole() !== '') requireRole(['admin', 'superadmin', 'barbero', 'cliente']);
     const effectivePosId = ACTIVE_POS_ID ?? 1;
-    const newClient = { ...client, id: generateUniqueId(), posId: effectivePosId } as Client;    if (Capacitor.isNativePlatform()) {
+    const newClient = await persistClientPhoto(sanitizeClientForStorage(
+      { ...client, id: generateUniqueId(), posId: effectivePosId } as Client,
+      null,
+      true
+    ));
+    if (Capacitor.isNativePlatform()) {
       await nativeRtdbSet(`${ROOT}/clients/${newClient.id}`, newClient, 'addClient');
     } else {
       await withTimeout(
@@ -1193,7 +1261,8 @@ export const DataService = {
         FIREBASE_TIMEOUT_MS,
         'addClient'
       );
-    }    cacheInvalidate('clients');
+    }
+    cacheInvalidate('clients');
     DataService.logAuditAction('create_client', 'system', `Registered client: ${client.nombre}`, effectivePosId).catch(() => {});
     await indexClientPhone(effectivePosId, String(client.telefono || ''), newClient.id);
     await writeClientLiteRow(newClient);
@@ -1213,14 +1282,15 @@ export const DataService = {
   updateClient: async (client: Client): Promise<void> => {
     requireRole(['admin', 'superadmin', 'barbero']);
     const previous = await DataService.getClientById(client.id);
-    await writeNode(`${ROOT}/clients/${client.id}`, JSON.parse(JSON.stringify(client)), 'updateClient');
-    if (previous && String(previous.telefono || '') !== String(client.telefono || '')) {
+    const sanitized = await persistClientPhoto(sanitizeClientForStorage(client, previous, true));
+    await writeNode(`${ROOT}/clients/${sanitized.id}`, JSON.parse(JSON.stringify(sanitized)), 'updateClient');
+    if (previous && String(previous.telefono || '') !== String(sanitized.telefono || '')) {
       await indexClientPhone(previous.posId, String(previous.telefono || ''), null);
-      await indexClientPhone(client.posId, String(client.telefono || ''), client.id);
+      await indexClientPhone(sanitized.posId, String(sanitized.telefono || ''), sanitized.id);
     } else if (!previous) {
-      await indexClientPhone(client.posId, String(client.telefono || ''), client.id);
+      await indexClientPhone(sanitized.posId, String(sanitized.telefono || ''), sanitized.id);
     }
-    await writeClientLiteRow(client);
+    await writeClientLiteRow(sanitized);
     cacheInvalidate('clients');
   },
 
@@ -1235,7 +1305,19 @@ export const DataService = {
   updateClientProfileForCurrentUser: async (updates: { nombre?: string; telefono?: string; photoUrl?: string | null }): Promise<void> => {
     const user = DataService.getCurrentUser();
     if (!user || user.role !== 'cliente') throw new Error('Solo los clientes pueden editar su perfil aquí.');
-    const result = await updateMyClientProfile(updates);
+    let nextUpdates = updates;
+    if (updates.photoUrl) {
+      const ownerId = user.clientId != null ? String(user.clientId) : (auth.currentUser?.uid || user.username);
+      nextUpdates = {
+        ...updates,
+        photoUrl: await persistPhotoToStorage(updates.photoUrl, {
+          category: user.clientId != null ? 'clients' : 'profiles',
+          ownerId,
+          posId: Number(user.posId) || ACTIVE_POS_ID || 0,
+        }),
+      };
+    }
+    const result = await updateMyClientProfile(nextUpdates);
     cacheInvalidate('clients');
     const nameValue = String(result.client.nombre || user.name);
     const photoValue = (result.client.photoUrl as string | null | undefined) ?? null;
@@ -1273,8 +1355,9 @@ export const DataService = {
     const client = await DataService.getClientById(id);
     if (!client) return;
     client.status = client.status === 'active' ? 'suspended' : 'active';
-    await writeNode(`${ROOT}/clients/${id}`, JSON.parse(JSON.stringify(client)), 'toggleClientStatus');
-    await writeClientLiteRow(client);
+    const sanitized = await persistClientPhoto(sanitizeClientForStorage(client, client, false));
+    await writeNode(`${ROOT}/clients/${id}`, JSON.parse(JSON.stringify(sanitized)), 'toggleClientStatus');
+    await writeClientLiteRow(sanitized);
     cacheInvalidate('clients');
     await DataService.logAuditAction('toggle_client', 'admin', `Toggled client ${id} status`, client.posId);
   },
@@ -1296,7 +1379,8 @@ export const DataService = {
     requireRole(['admin', 'superadmin', 'barbero']);
     if (ACTIVE_POS_ID == null) throw new Error('No hay sede activa.');
     for (const product of data) {
-      await set(ref(db, ROOT + '/products/' + product.id), { ...product, posId: product.posId || ACTIVE_POS_ID });
+      const sanitized = sanitizeProductForStorage({ ...product, posId: product.posId || ACTIVE_POS_ID });
+      await set(ref(db, ROOT + '/products/' + sanitized.id), sanitized);
     }
   },
 
@@ -1305,7 +1389,12 @@ export const DataService = {
     if (ACTIVE_POS_ID == null) throw new Error('No Active POS');
     const role = DataService.getCurrentUserRole();
     const barberId = role === 'barbero' ? DataService.getCurrentBarberId() ?? undefined : undefined;
-    const newProduct = { ...product, id: generateUniqueId(), posId: ACTIVE_POS_ID, barberId: barberId ?? null } as Product;
+    const newProduct = sanitizeProductForStorage({
+      ...product,
+      id: generateUniqueId(),
+      posId: ACTIVE_POS_ID,
+      barberId: barberId ?? null,
+    } as Product);
     await set(ref(db, ROOT + '/products/' + newProduct.id), newProduct);
     await DataService.logAuditAction('create_product', role === 'barbero' ? 'barbero' : 'admin', `Created product: ${product.producto}`, ACTIVE_POS_ID);
     return newProduct;
@@ -1318,7 +1407,8 @@ export const DataService = {
     if (role === 'barbero' && barberId != null && product.barberId !== barberId) {
       throw new Error('Solo puedes editar tus propios productos.');
     }
-    await set(ref(db, ROOT + '/products/' + product.id), product);
+    const sanitized = sanitizeProductForStorage(product);
+    await set(ref(db, ROOT + '/products/' + sanitized.id), sanitized);
   },
 
   getCart: (): CartItem[] => {
@@ -1574,16 +1664,30 @@ export const DataService = {
     if (role !== 'barbero') requireRole(['admin', 'superadmin']);
     const posId = ACTIVE_POS_ID;
     if (posId == null) throw new Error('No hay sede activa.');
-    const imageUrl = data.imageUrl?.trim();
-    if (!imageUrl) throw new Error('Indica una imagen (sube un archivo o pega una URL).');
+    const existing = await DataService.getBarberGallery(barberId);
+    if (existing.length >= MEDIA_LIMITS.maxGalleryPhotos) {
+      throw new Error(`La galería admite máximo ${MEDIA_LIMITS.maxGalleryPhotos} fotos. Elimina una para agregar otra.`);
+    }
     const id = generateUniqueId();
+    const rawUrl = assertStoredPhotoUrl(data.imageUrl?.trim(), true);
+    if (!rawUrl) throw new Error('Indica una imagen (sube un archivo o pega una URL).');
+    const imageUrl = rawUrl.startsWith('https://')
+      ? rawUrl
+      : await persistPhotoToStorage(rawUrl, {
+          category: 'gallery',
+          ownerId: String(barberId),
+          posId,
+          fileId: String(id),
+        });
+    if (!imageUrl) throw new Error('Indica una imagen (sube un archivo o pega una URL).');
+    const caption = data.caption?.trim().slice(0, MEDIA_LIMITS.maxCaptionChars) || undefined;
     const photo: BarberGalleryPhoto = {
       id,
       barberId,
       posId,
       imageUrl,
       serviceId: data.serviceId ?? null,
-      caption: data.caption?.trim() || undefined,
+      caption,
       createdAt: new Date().toISOString(),
     };
     const payload = JSON.parse(JSON.stringify(photo)) as Record<string, unknown>;
@@ -1596,7 +1700,9 @@ export const DataService = {
     const currentBarberId = DataService.getCurrentBarberId();
     if (role === 'barbero' && currentBarberId !== barberId) throw new Error('Solo puedes eliminar fotos de tu propia galería.');
     if (role !== 'barbero') requireRole(['admin', 'superadmin']);
+    const previous = await readNode<BarberGalleryPhoto>(`${ROOT}/barberGallery/${barberId}/${photoId}`, 'deleteBarberGalleryPhoto');
     await remove(ref(db, ROOT + '/barberGallery/' + barberId + '/' + photoId));
+    await deleteStoredPhoto(previous?.imageUrl);
   },
 
   deleteBarber: async (id: number): Promise<void> => {
@@ -1863,7 +1969,11 @@ export const DataService = {
 
   logNotification: async (log: Omit<NotificationLog, 'id'>): Promise<void> => {
     const id = generateUniqueId();
-    await set(ref(db, ROOT + '/notificationLogs/' + id), { ...log, id });
+    await set(ref(db, ROOT + '/notificationLogs/' + id), {
+      ...log,
+      id,
+      message: String(log.message || '').slice(0, 1000),
+    });
     await DataService.logAuditAction('send_notification', 'system', `Notification to client ${log.clientId}`, log.posId);
   },
 

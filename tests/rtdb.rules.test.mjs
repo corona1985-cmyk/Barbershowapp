@@ -206,6 +206,37 @@ describe('RTDB rules', () => {
     await assertFails(client.ref('barbershow/indexMeta/5').get());
   });
 
+  it('rechaza photoUrl inflado en clients y acepta https corto', async () => {
+    const admin = authed('u1', { username: 'alice', role: 'admin', posId: 5 });
+    await assertFails(admin.ref('barbershow/clients/12').set({
+      id: 12, posId: 5, nombre: 'Ana', status: 'active',
+      photoUrl: `data:image/jpeg;base64,${'A'.repeat(80_010)}`,
+    }));
+    await assertSucceeds(admin.ref('barbershow/clients/13').set({
+      id: 13, posId: 5, nombre: 'Ana', status: 'active',
+      photoUrl: 'https://cdn.example.com/a.jpg',
+    }));
+  });
+
+  it('rechaza notas de cliente demasiado largas', async () => {
+    const admin = authed('u1', { username: 'alice', role: 'admin', posId: 5 });
+    await assertFails(admin.ref('barbershow/clients/14').set({
+      id: 14, posId: 5, nombre: 'Ana', status: 'active',
+      notas: 'x'.repeat(501),
+    }));
+  });
+
+  it('rechaza galería con imageUrl inflado y acepta URL corta', async () => {
+    const admin = authed('u1', { username: 'alice', role: 'admin', posId: 5 });
+    const barberId = 5001;
+    await assertFails(admin.ref(`barbershow/barberGallery/${barberId}/1726000000999`).set({
+      id: 1726000000999, barberId, posId: 5, imageUrl: `data:image/jpeg;base64,${'A'.repeat(80_010)}`,
+    }));
+    await assertSucceeds(admin.ref(`barbershow/barberGallery/${barberId}/1726000001000`).set({
+      id: 1726000001000, barberId, posId: 5, imageUrl: 'https://cdn.example.com/cut.jpg', caption: 'Fade',
+    }));
+  });
+
   it('directoryUsers sigue deny-all; publicShops es lectura pública', async () => {
     const admin = authed('u1', { username: 'alice', role: 'admin', posId: 5 });
     await assertSucceeds(admin.ref('barbershow/publicShops').get());

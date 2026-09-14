@@ -68,7 +68,16 @@
         ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || (query.orderByChild === 'posId' && query.equalTo === auth.token.posId && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado')))",
         "$id": {
           ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && data.child('posId').val() === auth.token.posId) || (auth.token.role === 'cliente' && data.child('id').val() === auth.token.clientId))",
-          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && newData.exists() && newData.hasChildren(['id', 'posId', 'nombre', 'status']) && newData.child('nombre').isString() && newData.child('nombre').val().length > 0 && newData.child('nombre').val().length <= 120 && newData.child('status').val().matches(/^(active|suspended)$/) && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && newData.child('posId').val() === auth.token.posId && (!data.exists() || data.child('posId').val() === newData.child('posId').val()) && (!data.exists() || newData.child('id').val() === data.child('id').val())))"
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && newData.exists() && newData.hasChildren(['id', 'posId', 'nombre', 'status']) && newData.child('nombre').isString() && newData.child('nombre').val().length > 0 && newData.child('nombre').val().length <= 120 && newData.child('status').val().matches(/^(active|suspended)$/) && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && newData.child('posId').val() === auth.token.posId && (!data.exists() || data.child('posId').val() === newData.child('posId').val()) && (!data.exists() || newData.child('id').val() === data.child('id').val())))",
+          "photoUrl": {
+            ".validate": "!newData.exists() || newData.val() == null || (newData.isString() && newData.val().length <= 80000)"
+          },
+          "notas": {
+            ".validate": "!newData.exists() || newData.val() == null || (newData.isString() && newData.val().length <= 500)"
+          },
+          "email": {
+            ".validate": "!newData.exists() || newData.val() == null || (newData.isString() && newData.val().length <= 120)"
+          }
         }
       },
       "products": {
@@ -76,7 +85,13 @@
         ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || (query.orderByChild === 'posId' && query.equalTo === auth.token.posId && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado')))",
         "$id": {
           ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && data.child('posId').val() === auth.token.posId))",
-          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && (!newData.exists() ? (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || data.child('posId').val() === auth.token.posId) : (newData.hasChildren(['id', 'posId', 'producto', 'precioVenta']) && newData.child('posId').val() === auth.token.posId && (!data.exists() || data.child('posId').val() === newData.child('posId').val())))"
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && (!newData.exists() ? (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || data.child('posId').val() === auth.token.posId) : (newData.hasChildren(['id', 'posId', 'producto', 'precioVenta']) && newData.child('posId').val() === auth.token.posId && (!data.exists() || data.child('posId').val() === newData.child('posId').val())))",
+          "photoUrl": {
+            ".validate": "!newData.exists() || newData.val() == null || (newData.isString() && newData.val().length <= 80000)"
+          },
+          "producto": {
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().length > 0 && newData.val().length <= 120)"
+          }
         }
       },
       "services": {
@@ -92,7 +107,10 @@
         ".read": "(auth == null && query.orderByChild === 'posId') || (auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || (query.orderByChild === 'posId' && query.equalTo === auth.token.posId && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado'))))",
         "$id": {
           ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && data.child('posId').val() === auth.token.posId))",
-          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (!newData.exists() ? (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno') && data.child('posId').val() === auth.token.posId)) : (newData.hasChildren(['id', 'posId', 'name', 'active']) && newData.child('name').isString() && newData.child('name').val().length <= 120 && (!data.exists() || data.child('posId').val() === newData.child('posId').val()) && (((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || newData.child('posId').val() === auth.token.posId)) || ((auth.token.role === 'barbero' || auth.token.role === 'empleado') && auth.token.barberId == $id && newData.child('posId').val() === auth.token.posId && newData.child('active').val() === data.child('active').val() && newData.child('name').val() === data.child('name').val()))))"
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (!newData.exists() ? (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno') && data.child('posId').val() === auth.token.posId)) : (newData.hasChildren(['id', 'posId', 'name', 'active']) && newData.child('name').isString() && newData.child('name').val().length <= 120 && (!data.exists() || data.child('posId').val() === newData.child('posId').val()) && (((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || newData.child('posId').val() === auth.token.posId)) || ((auth.token.role === 'barbero' || auth.token.role === 'empleado') && auth.token.barberId == $id && newData.child('posId').val() === auth.token.posId && newData.child('active').val() === data.child('active').val() && newData.child('name').val() === data.child('name').val()))))",
+          "bio": {
+            ".validate": "!newData.exists() || newData.val() == null || (newData.isString() && newData.val().length <= 800)"
+          }
         }
       },
       "appointments": {
@@ -133,7 +151,10 @@
         ".indexOn": ["posId"],
         ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || (query.orderByChild === 'posId' && query.equalTo === auth.token.posId && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado')))",
         "$id": {
-          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && newData.exists() && newData.child('posId').val() === auth.token.posId"
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && newData.exists() && newData.child('posId').val() === auth.token.posId",
+          "message": {
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 1000)"
+          }
         }
       },
       "clientPreferences": {
@@ -146,7 +167,13 @@
         "$barberId": {
           "$photoId": {
             ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && data.child('posId').val() === auth.token.posId))",
-            ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && (!newData.exists() || (newData.child('barberId').val() == $barberId && newData.child('posId').val() === auth.token.posId && ((auth.token.role !== 'barbero' && auth.token.role !== 'empleado') || auth.token.barberId == $barberId)))"
+            ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'platform_owner' || auth.token.role === 'superadmin') && (!newData.exists() || (newData.child('barberId').val() + '' === $barberId && newData.child('posId').val() === auth.token.posId && newData.child('imageUrl').isString() && newData.child('imageUrl').val().length > 0 && newData.child('imageUrl').val().length <= 80000 && (!newData.hasChild('caption') || newData.child('caption').val() == null || (newData.child('caption').isString() && newData.child('caption').val().length <= 120)) && ((auth.token.role !== 'barbero' && auth.token.role !== 'empleado') || auth.token.barberId + '' === $barberId)))",
+            "imageUrl": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length > 0 && newData.val().length <= 80000)"
+            },
+            "caption": {
+              ".validate": "!newData.exists() || newData.val() == null || (newData.isString() && newData.val().length <= 120)"
+            }
           }
         }
       },
@@ -192,7 +219,15 @@
       "clientsLite": {
         "$posId": {
           ".read": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))",
-          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))"
+          ".write": "auth != null && auth.token.firebase.sign_in_provider !== 'anonymous' && (auth.token.role === 'platform_owner' || auth.token.role === 'superadmin' || ((auth.token.role === 'admin' || auth.token.role === 'dueno' || auth.token.role === 'barbero' || auth.token.role === 'empleado') && (auth.token.posId + '') === $posId))",
+          "$id": {
+            "photoUrl": {
+              ".validate": "!newData.exists() || newData.val() == null || (newData.isString() && newData.val().length <= 80000)"
+            },
+            "notas": {
+              ".validate": "!newData.exists() || newData.val() == null || (newData.isString() && newData.val().length <= 500)"
+            }
+          }
         }
       },
       "indexMeta": {

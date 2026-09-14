@@ -50,6 +50,7 @@ import {
   writePublicShopRecord,
   writeDirectoryUserRecord,
   writeClientLite,
+  ensureAdmin,
 } from "./lib";
 import { verifyGooglePlayPurchase, verifyStorePurchase } from "./iapVerify";
 import {
@@ -61,11 +62,12 @@ import {
   resolveServicesFromIds,
 } from "./booking";
 
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
-
 const callableOpts = { region: "us-central1" as const };
+
+function authAdmin() {
+  ensureAdmin();
+  return admin.auth();
+}
 
 function getFreeSignupTierAndPlan(): { tier: string; plan: string } {
   if (parseGlobalFreeMode(process.env.GLOBAL_FREE_MODE, isEmulator())) {
@@ -164,13 +166,13 @@ export const authenticateMasterWithPassword = onCall(callableOpts, async (reques
   }
   const uid = "bs_master_platform";
   try {
-    await admin.auth().createUser({ uid, displayName: MASTER_USER.name, disabled: false });
+    await authAdmin().createUser({ uid, displayName: MASTER_USER.name, disabled: false });
   } catch (err: unknown) {
     const code = (err as { code?: string }).code;
     if (code !== "auth/uid-already-exists") throw err;
   }
-  await admin.auth().setCustomUserClaims(uid, { role: "platform_owner", username: "master" });
-  const customToken = await admin.auth().createCustomToken(uid, { role: "platform_owner", username: "master" });
+  await authAdmin().setCustomUserClaims(uid, { role: "platform_owner", username: "master" });
+  const customToken = await authAdmin().createCustomToken(uid, { role: "platform_owner", username: "master" });
   await migrateAllLegacyPasswordSecrets().catch(() => 0);
   await writeAdminAudit("master", "master_login", "master_ok");
   return { customToken, user: MASTER_USER };
@@ -569,7 +571,7 @@ export const deleteStaffUser = onCall(callableOpts, async (request) => {
   await db().ref(`${ROOT}/directoryUsers/${username}`).remove();
   await db().ref(`${ROOT}/authSecrets/${username}`).remove();
   if (target.authUid) {
-    await admin.auth().deleteUser(String(target.authUid)).catch(() => undefined);
+    await authAdmin().deleteUser(String(target.authUid)).catch(() => undefined);
   }
   await writeAdminAudit(claims.username, "delete_user", username, targetPos);
   return { success: true };
@@ -723,7 +725,7 @@ export const deleteMyAccount = onCall(callableOpts, async (request) => {
   await db().ref(`${ROOT}/directoryUsers/${claims.username}`).remove();
   await db().ref(`${ROOT}/authSecrets/${claims.username}`).remove();
   await db().ref(`${ROOT}/uidIndex/${uid}`).remove();
-  await admin.auth().deleteUser(uid).catch(() => undefined);
+  await authAdmin().deleteUser(uid).catch(() => undefined);
   await writeAdminAudit(claims.username, "delete_account", "self");
   return { success: true };
 });
@@ -934,3 +936,4 @@ export {
   onUserCreated,
   onPosCreated,
 } from "./clientOps";
+export { pruneInflationLogs } from "./retention";

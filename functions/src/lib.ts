@@ -49,6 +49,7 @@ export function appCheckEnforced(): boolean {
   return process.env.ENFORCE_APP_CHECK === "true";
 }
 
+/** Tope de foto en RTDB. Mantener alineado con utils/storedMedia.ts y database.rules.json. */
 const MAX_STORED_PHOTO_CHARS = 80_000;
 
 export function assertStoredPhotoUrl(raw: unknown): string | null {
@@ -397,12 +398,25 @@ export function ipHash(request: CallableRequest): string {
   return sha256Hex(clientIp(request)).slice(0, 32);
 }
 
+export function ensureAdmin(): void {
+  if (!admin.apps.length) {
+    admin.initializeApp();
+  }
+}
+
 export function db(): admin.database.Database {
+  ensureAdmin();
   return admin.database();
 }
 
 export function firestore(): admin.firestore.Firestore {
+  ensureAdmin();
   return admin.firestore();
+}
+
+function authAdmin() {
+  ensureAdmin();
+  return admin.auth();
 }
 
 export type SessionClaims = {
@@ -595,18 +609,18 @@ export async function syncUserClaims(uid: string, user: Record<string, unknown>,
   if (claims.posId != null && Number.isFinite(claims.posId)) payload.posId = claims.posId;
   if (claims.barberId != null && Number.isFinite(claims.barberId)) payload.barberId = claims.barberId;
   if (claims.clientId != null && Number.isFinite(claims.clientId)) payload.clientId = claims.clientId;
-  await admin.auth().setCustomUserClaims(uid, payload);
+  await authAdmin().setCustomUserClaims(uid, payload);
   return claims;
 }
 
 export async function ensureAuthUser(username: string, displayName: string, existingUid?: string | null): Promise<string> {
   const uid = existingUid || uidForUsername(username);
   try {
-    await admin.auth().createUser({ uid, displayName: displayName || username, disabled: false });
+    await authAdmin().createUser({ uid, displayName: displayName || username, disabled: false });
   } catch (err: unknown) {
     const code = (err as { code?: string }).code;
     if (code !== "auth/uid-already-exists" && code !== "auth/email-already-exists") {
-      const existing = await admin.auth().getUser(uid).catch(() => null);
+      const existing = await authAdmin().getUser(uid).catch(() => null);
       if (!existing) throw err;
     }
   }
@@ -625,7 +639,7 @@ export async function mintCustomTokenForUser(usernameKey: string, user: Record<s
   if (claims.posId != null && Number.isFinite(claims.posId)) extra.posId = claims.posId;
   if (claims.barberId != null && Number.isFinite(claims.barberId)) extra.barberId = claims.barberId;
   if (claims.clientId != null && Number.isFinite(claims.clientId)) extra.clientId = claims.clientId;
-  const customToken = await admin.auth().createCustomToken(uid, extra);
+  const customToken = await authAdmin().createCustomToken(uid, extra);
   return { customToken, user: publicUser(user, usernameKey) };
 }
 

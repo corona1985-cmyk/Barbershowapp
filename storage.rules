@@ -1,0 +1,58 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    function role() {
+      return request.auth.token.role;
+    }
+    function isPlatform() {
+      return role() == 'platform_owner' || role() == 'superadmin';
+    }
+    function isStaffOf(posId) {
+      return (role() == 'admin' || role() == 'dueno' || role() == 'barbero' || role() == 'empleado')
+        && string(request.auth.token.posId) == posId;
+    }
+    function isImage() {
+      return request.resource.contentType == 'image/jpeg'
+        || request.resource.contentType == 'image/png'
+        || request.resource.contentType == 'image/webp';
+    }
+    function sized() {
+      return request.resource.size < 400 * 1024;
+    }
+    function safeName(fileName) {
+      return fileName.matches('^[A-Za-z0-9._-]+\\.(jpg|jpeg|png|webp)$');
+    }
+
+    match /media/{posId}/{category}/{ownerId}/{fileName} {
+      allow read: if true;
+      allow create, update: if signedIn()
+        && isImage()
+        && sized()
+        && safeName(fileName)
+        && category.matches('^(clients|gallery|profiles)$')
+        && (
+          isPlatform()
+          || (category == 'profiles' && ownerId == request.auth.uid)
+          || (category == 'clients' && role() == 'cliente' && string(request.auth.token.clientId) == ownerId)
+          || (category == 'clients' && isStaffOf(posId))
+          || (
+            category == 'gallery'
+            && (isPlatform() || isStaffOf(posId))
+            && (role() == 'admin' || role() == 'dueno' || role() == 'platform_owner' || role() == 'superadmin'
+              || (role() == 'barbero' && string(request.auth.token.barberId) == ownerId))
+          )
+        );
+      allow delete: if signedIn()
+        && (
+          isPlatform()
+          || isStaffOf(posId)
+          || (category == 'profiles' && ownerId == request.auth.uid)
+          || (category == 'clients' && role() == 'cliente' && string(request.auth.token.clientId) == ownerId)
+        );
+    }
+  }
+}
